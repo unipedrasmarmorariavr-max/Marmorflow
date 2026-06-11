@@ -279,7 +279,7 @@
         <div class="kanban-title">Pedidos em Andamento</div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <input type="text" class="search-input" placeholder="🔍 Buscar..." id="search-kanban" oninput="filterKanban()" style="width:190px;">
-          <button class="btn-new" onclick="openNewOrder()" id="btn-new-order">＋ Novo Pedido</button>
+          <button class="btn-new" onclick="openNewOrder()" id="btn-new-order" style="display:flex!important;">＋ Novo Pedido</button>
         </div>
       </div>
       <div class="kanban-board" id="kanban-board"></div>
@@ -1053,7 +1053,7 @@ function entrar() {
   var p = PROFILES[currentUser];
   document.getElementById('user-info').innerHTML = p.icon + ' Olá, <strong>' + p.name + '</strong>';
   var btnNew = document.getElementById('btn-new-order');
-  if (btnNew) btnNew.style.display = p.canCreate ? 'flex' : 'none';
+  if (btnNew) btnNew.style.cssText = p.canCreate ? 'display:flex!important;' : 'display:none!important;';
   // Show dashboard/materiais only for dono
   var tabDash = document.getElementById('tab-dashboard');
   var tabMat = document.getElementById('tab-materiais');

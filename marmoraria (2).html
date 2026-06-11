@@ -386,6 +386,34 @@
     </div>
     <div class="modal-body">
       <div style="background:var(--cream);border-radius:10px;padding:14px;margin-bottom:20px;" id="comercial-resumo"></div>
+      <div class="form-section">Itens Deixados pelo Cliente</div>
+      <div style="background:var(--cream);border-radius:10px;padding:14px;margin-bottom:4px;">
+        <div style="font-size:12px;color:var(--stone-light);margin-bottom:12px;">Marque os itens que o cliente deixou na marmoraria:</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" id="checklist-itens">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--stone);cursor:pointer;">
+            <input type="checkbox" id="chk-cuba" style="width:16px;height:16px;accent-color:var(--gold);"> Cuba
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--stone);cursor:pointer;">
+            <input type="checkbox" id="chk-torre" style="width:16px;height:16px;accent-color:var(--gold);"> Tomada de Torre
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--stone);cursor:pointer;">
+            <input type="checkbox" id="chk-lixeira" style="width:16px;height:16px;accent-color:var(--gold);"> Lixeira
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--stone);cursor:pointer;">
+            <input type="checkbox" id="chk-calha" style="width:16px;height:16px;accent-color:var(--gold);"> Calha Úmida
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--stone);cursor:pointer;">
+            <input type="checkbox" id="chk-dispenser" style="width:16px;height:16px;accent-color:var(--gold);"> Dispenser
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--stone);cursor:pointer;">
+            <input type="checkbox" id="chk-valvula" style="width:16px;height:16px;accent-color:var(--gold);"> Válvula
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--stone);cursor:pointer;">
+            <input type="checkbox" id="chk-torneira" style="width:16px;height:16px;accent-color:var(--gold);"> Torneira
+          </label>
+        </div>
+      </div>
+
       <div class="form-section">Informações Comerciais</div>
       <div class="form-grid">
         <div class="form-group"><label class="form-label">Metragem Total (m²)</label><input type="text" class="form-input" id="c-metragem" placeholder="Ex: 4,5"></div>
@@ -759,10 +787,18 @@ function abrirFecharPedido(id) {
   document.getElementById('modal-comercial-title').textContent='Fechar Pedido';
   document.getElementById('modal-comercial-sub').textContent=id+' — '+o.cliente;
   document.getElementById('comercial-resumo').innerHTML=`
-    <div style="font-size:12px;color:var(--stone-light);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Resumo da Medição</div>
-    <div style="font-size:13px;color:var(--stone);"><strong>${o.cliente}</strong> · ${o.peca||''}${o.material?' — '+o.material:''}</div>
-    ${o.endereco?`<div style="font-size:12px;color:var(--stone-light);margin-top:4px;">📍 ${o.endereco}</div>`:''}
-    ${o.tipoentrega?`<div style="font-size:12px;color:var(--stone-light);margin-top:2px;">${TIPO_LABELS[o.tipoentrega]||o.tipoentrega}</div>`:''}`;
+    <div style="font-size:12px;color:var(--stone-light);margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">📐 Dados da Medição</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;">
+      <div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;letter-spacing:0.5px;">Cliente</div><div style="font-weight:600;color:var(--stone);">${o.cliente}</div></div>
+      <div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;letter-spacing:0.5px;">Telefone</div><div style="color:var(--stone);">${o.telefone||'—'}</div></div>
+      <div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;letter-spacing:0.5px;">Tipo de Peça</div><div style="color:var(--stone);">${o.peca||'—'}</div></div>
+      <div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;letter-spacing:0.5px;">Material</div><div style="color:var(--stone);">${o.material||'—'}</div></div>
+      ${o.endereco?`<div style="grid-column:1/-1;"><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;letter-spacing:0.5px;">Endereço</div><div style="color:var(--stone);">${o.endereco}</div></div>`:''}
+      ${o.acesso?`<div style="grid-column:1/-1;"><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;letter-spacing:0.5px;">Acesso</div><div style="color:var(--stone);">${o.acesso}${o.andar?' · '+o.andar:''}</div></div>`:''}
+      ${o.tipoentrega?`<div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;letter-spacing:0.5px;">Conclusão</div><div style="color:var(--stone);">${TIPO_LABELS[o.tipoentrega]||o.tipoentrega}</div></div>`:''}
+      ${o.obs?`<div style="grid-column:1/-1;"><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;letter-spacing:0.5px;">Observações</div><div style="color:var(--stone);">${o.obs}</div></div>`:''}
+      ${o.obsAcesso?`<div style="grid-column:1/-1;"><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;letter-spacing:0.5px;">Obs. Acesso</div><div style="color:var(--stone);">${o.obsAcesso}</div></div>`:''}
+    </div>`;
   document.getElementById('c-metragem').value=o.metragem||'';
   document.getElementById('c-valor').value=o.valor||'';
   document.getElementById('c-dataentrega').value=o.dataentrega||'';
@@ -772,6 +808,10 @@ function abrirFecharPedido(id) {
   document.getElementById('c-origem').value=o.origem||'';
   document.getElementById('c-origem-nome').value=o.origemNome||'';
   toggleOrigem();
+  const itens = o.itensCliente||{};
+  ['cuba','torre','lixeira','calha','dispenser','valvula','torneira'].forEach(k=>{
+    const el=document.getElementById('chk-'+k); if(el) el.checked=itens[k]||false;
+  });
   closeModal('modal-detail');
   openModal('modal-comercial');
 }
@@ -797,6 +837,15 @@ async function fecharPedido() {
     origem:document.getElementById('c-origem').value,
     origemNome:document.getElementById('c-origem-nome').value.trim(),
     vendedor:document.getElementById('c-vendedor').value.trim(),
+    itensCliente: {
+      cuba: document.getElementById('chk-cuba')?.checked||false,
+      torre: document.getElementById('chk-torre')?.checked||false,
+      lixeira: document.getElementById('chk-lixeira')?.checked||false,
+      calha: document.getElementById('chk-calha')?.checked||false,
+      dispenser: document.getElementById('chk-dispenser')?.checked||false,
+      valvula: document.getElementById('chk-valvula')?.checked||false,
+      torneira: document.getElementById('chk-torneira')?.checked||false,
+    },
     stage: order.stage==='medicao' ? 'negociacao' : order.stage,
     history
   };
@@ -1021,12 +1070,6 @@ function entrar() {
   var isProducao = perfil==='producao';
   if (tabAgenda) tabAgenda.style.display = (isDono||isComercial||isProducao) ? 'block' : 'none';
   if (isFinanceiro) { showTab('financeiro'); }
-  if (isProducao) {
-    // Producao sees only agenda and kanban
-    var tabPortalP = document.getElementById('tab-portal');
-    if (tabPortalP) tabPortalP.style.display = 'none';
-    showTab('agenda');
-  }
   loadOrders().then(function() { renderKanban(); });
 }
 

@@ -1091,7 +1091,7 @@ function renderDashboard() {
 
   const medicoes = orders.filter(o => o.stage==='medicao').length;
   const negociando = orders.filter(o => o.stage==='negociacao');
-  const fechados = orders.filter(o => ['fechado','corte','acabamento','pronto','entregue'].includes(o.stage));
+  const fechados = orders.filter(o => ['fechado','corte','acabamento','pronto','entregue'].includes(o.stage) && !o.ref_fechado);
   const producao = orders.filter(o => ['corte','acabamento','pronto'].includes(o.stage));
   const entregues = orders.filter(o => o.stage==='entregue');
 
@@ -1292,7 +1292,7 @@ async function renderFinanceiro() {
   const saldo = totalEntradas - totalSaidas;
 
   // Total vendido from orders
-  const fechados = orders.filter(o => ['fechado','corte','acabamento','pronto','entregue'].includes(o.stage));
+  const fechados = orders.filter(o => ['fechado','corte','acabamento','pronto','entregue'].includes(o.stage) && !o.ref_fechado);
   const totalVendido = fechados.reduce((s,o) => s + (parseFloat((o.valor||'0').replace(',','.').replace(/[^0-9.]/g,''))||0), 0);
 
   // Saldo por banco

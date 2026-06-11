@@ -267,6 +267,7 @@
   </div>
   <div class="tabs">
     <button class="tab-btn active" onclick="showTab('kanban')" id="tab-kanban">📋 Pedidos</button>
+    <button class="tab-btn" onclick="showTab('agenda')" id="tab-agenda">📅 Agenda</button>
     <button class="tab-btn" onclick="showTab('portal')" id="tab-portal">🔗 Link Cliente</button>
     <button class="tab-btn" onclick="showTab('dashboard')" id="tab-dashboard">📊 Dashboard</button>
     <button class="tab-btn" onclick="showTab('materiais')" id="tab-materiais">🪨 Materiais</button>
@@ -288,6 +289,9 @@
     </div>
     <div class="panel" id="panel-materiais">
       <div id="materiais-content"></div>
+    </div>
+    <div class="panel" id="panel-agenda">
+      <div id="agenda-content"></div>
     </div>
     <div class="panel" id="panel-financeiro">
       <div id="financeiro-content"></div>
@@ -597,6 +601,7 @@ function showTab(tab) {
   if (tab==='dashboard') renderDashboard();
   if (tab==='materiais') renderMateriais();
   if (tab==='financeiro') renderFinanceiro();
+  if (tab==='agenda') renderAgenda();
 }
 
 // ============ KANBAN ============
@@ -1005,14 +1010,23 @@ function entrar() {
   var tabMat = document.getElementById('tab-materiais');
   var tabFin = document.getElementById('tab-financeiro');
   var tabPortal = document.getElementById('tab-portal');
+  var tabAgenda = document.getElementById('tab-agenda');
   var isDono = perfil==='dono';
   var isFinanceiro = perfil==='financeiro';
+  var isComercial = perfil==='comercial';
   if (tabDash) tabDash.style.display = isDono ? 'block' : 'none';
   if (tabMat) tabMat.style.display = isDono ? 'block' : 'none';
   if (tabFin) tabFin.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
   if (tabPortal) tabPortal.style.display = isDono ? 'block' : 'none';
-  // Financeiro sees only financeiro tab by default
+  var isProducao = perfil==='producao';
+  if (tabAgenda) tabAgenda.style.display = (isDono||isComercial||isProducao) ? 'block' : 'none';
   if (isFinanceiro) { showTab('financeiro'); }
+  if (isProducao) {
+    // Producao sees only agenda and kanban
+    var tabPortalP = document.getElementById('tab-portal');
+    if (tabPortalP) tabPortalP.style.display = 'none';
+    showTab('agenda');
+  }
   loadOrders().then(function() { renderKanban(); });
 }
 
@@ -1413,6 +1427,204 @@ async function deletarTransacao(id) {
   await getSB().from('transacoes').delete().eq('id', id);
   renderFinanceiro();
   showNotif('Lançamento excluído','error');
+}
+
+
+// ============ AGENDA DE INSTALAÇÃO ============
+
+function calcProximoDiaUtil(dataBase, diasUteis) {
+  // Calcula N dias úteis a partir de uma data
+  let d = new Date(dataBase + 'T12:00:00');
+  let count = 0;
+  while (count < diasUteis) {
+    d.setDate(d.getDate() + 1);
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) count++; // pula sab e dom
+  }
+  return d;
+}
+
+function isDiaUtil(date) {
+  const dow = date.getDay();
+  return dow !== 0 && dow !== 6;
+}
+
+function dateToStr(d) {
+  return d.toISOString().slice(0,10);
+}
+
+function getDiasOcupados() {
+  // Pega todos os pedidos com instalação e data de entrega
+  return orders
+    .filter(o => (o.tipoentrega === 'entrega_instalacao' || o.tipoentrega === 'so_instalacao') && o.dataentrega && !['entregue'].includes(o.stage))
+    .map(o => ({ data: o.dataentrega, id: o.id, cliente: o.cliente, peca: o.peca }));
+}
+
+function proximoDiaLivre(dataDesejada) {
+  const ocupados = getDiasOcupados().map(d => d.data);
+  let d = new Date(dataDesejada + 'T12:00:00');
+  let tentativas = 0;
+  while (ocupados.includes(dateToStr(d)) || !isDiaUtil(d)) {
+    d.setDate(d.getDate() + 1);
+    tentativas++;
+    if (tentativas > 60) break; // segurança
+  }
+  return dateToStr(d);
+}
+
+function calcDataInstalacao(diasUteis) {
+  const hoje = new Date();
+  const dataCalculada = calcProximoDiaUtil(dateToStr(hoje), diasUteis || 15);
+  const dataDesejada = dateToStr(dataCalculada);
+  const ocupados = getDiasOcupados().map(d => d.data);
+  
+  if (ocupados.includes(dataDesejada)) {
+    // Dia ocupado — busca próximo livre
+    return { data: proximoDiaLivre(dataDesejada), conflito: true, dataOriginal: dataDesejada };
+  }
+  return { data: dataDesejada, conflito: false };
+}
+
+function renderAgenda() {
+  const el = document.getElementById('agenda-content');
+  if (!el) return;
+
+  const ocupados = getDiasOcupados();
+  const hoje = new Date();
+  hoje.setHours(0,0,0,0);
+
+  // Gera próximos 45 dias úteis
+  const dias = [];
+  let d = new Date(hoje);
+  let count = 0;
+  while (count < 45) {
+    d.setDate(d.getDate() + 1);
+    if (isDiaUtil(d)) {
+      const ds = dateToStr(d);
+      const pedido = ocupados.find(o => o.data === ds);
+      dias.push({ data: ds, pedido: pedido || null, passado: d < hoje });
+      count++;
+    }
+  }
+
+  // Agrupar por semana
+  const semanas = [];
+  let semana = [];
+  dias.forEach((dia, i) => {
+    semana.push(dia);
+    if (semana.length === 5 || i === dias.length - 1) {
+      semanas.push([...semana]);
+      semana = [];
+    }
+  });
+
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const diasSemana = ['Seg','Ter','Qua','Qui','Sex'];
+
+  const calHTML = semanas.map(semana => `
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px;">
+      ${semana.map(dia => {
+        const d = new Date(dia.data + 'T12:00:00');
+        const isHoje = dateToStr(d) === dateToStr(new Date());
+        const dow = d.getDay(); // 1=seg, 5=sex
+        const nomeDia = diasSemana[dow-1];
+        const bg = dia.pedido ? '#F2E8E8' : '#E8F2EC';
+        const border = isHoje ? '2px solid #B8965A' : '1px solid transparent';
+        const cor = dia.pedido ? '#B85A4A' : '#4A7C59';
+        return `
+          <div style="background:${bg};border-radius:10px;padding:10px;border:${border};min-height:80px;">
+            <div style="font-size:10px;color:var(--stone-light);margin-bottom:2px;">${nomeDia} ${isHoje?'• HOJE':''}</div>
+            <div style="font-size:16px;font-weight:700;color:${cor};margin-bottom:4px;">${d.getDate()} ${meses[d.getMonth()]}</div>
+            ${dia.pedido ? `
+              <div style="font-size:10px;font-weight:600;color:#B85A4A;">🔧 ${dia.pedido.cliente}</div>
+              <div style="font-size:10px;color:var(--stone-light);">${dia.pedido.peca||''} · ${dia.pedido.id}</div>
+            ` : `<div style="font-size:10px;color:#4A7C59;">✓ Livre</div>`}
+          </div>`;
+      }).join('')}
+    </div>`).join('');
+
+  const livres = dias.filter(d => !d.pedido).length;
+  const ocupadosCont = dias.filter(d => d.pedido).length;
+
+  el.innerHTML = `
+    <div style="max-width:900px;margin:0 auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+        <div>
+          <div style="font-family:'DM Serif Display',serif;font-size:24px;color:var(--stone);">📅 Agenda de Instalação</div>
+          <div style="font-size:13px;color:var(--stone-light);margin-top:4px;">1 instalação por dia útil — próximos 45 dias</div>
+        </div>
+        <div style="display:flex;gap:16px;">
+          <div style="text-align:center;background:#E8F2EC;border-radius:10px;padding:10px 16px;">
+            <div style="font-size:20px;font-weight:700;color:#4A7C59;">${livres}</div>
+            <div style="font-size:11px;color:var(--stone-light);">Dias livres</div>
+          </div>
+          <div style="text-align:center;background:#F2E8E8;border-radius:10px;padding:10px 16px;">
+            <div style="font-size:20px;font-weight:700;color:#B85A4A;">${ocupadosCont}</div>
+            <div style="font-size:11px;color:var(--stone-light);">Agendados</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:white;border-radius:16px;padding:20px;box-shadow:var(--shadow);margin-bottom:20px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:16px;">Calendário</div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">
+          ${diasSemana.map(d=>`<div style="text-align:center;font-size:11px;font-weight:700;color:var(--stone-light);text-transform:uppercase;letter-spacing:0.5px;">${d}</div>`).join('')}
+        </div>
+        ${calHTML}
+      </div>
+
+      <div style="background:white;border-radius:16px;padding:20px;box-shadow:var(--shadow);">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:16px;">Próximas Instalações</div>
+        ${ocupados.filter(o => o.data >= dateToStr(hoje)).sort((a,b)=>a.data.localeCompare(b.data)).map(o => {
+          const d = new Date(o.data + 'T12:00:00');
+          const diasRestantes = Math.ceil((d-hoje)/(1000*60*60*24));
+          return `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--cream-dark);">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--stone);">${o.cliente} · ${o.id}</div>
+                <div style="font-size:11px;color:var(--stone-light);">${o.peca||''}</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:13px;font-weight:700;color:${diasRestantes<=3?'#B85A4A':diasRestantes<=7?'#B8760A':'#4A7C59'};">${d.getDate()}/${d.getMonth()+1}</div>
+                <div style="font-size:11px;color:var(--stone-light);">${diasRestantes===0?'Hoje':diasRestantes===1?'Amanhã':diasRestantes+' dias'}</div>
+              </div>
+            </div>`;
+        }).join('') || '<div style="color:var(--stone-light);font-size:13px;">Nenhuma instalação agendada.</div>'}
+      </div>
+    </div>`;
+}
+
+// Atualiza modal comercial para mostrar alerta de conflito
+function atualizarDataComConflito() {
+  const tipoEntrega = document.getElementById('c-tipoentrega')?.value;
+  const dataInput = document.getElementById('c-dataentrega');
+  const avisoEl = document.getElementById('aviso-conflito');
+  if (!avisoEl || !dataInput) return;
+
+  if (tipoEntrega !== 'entrega_instalacao' && tipoEntrega !== 'so_instalacao') {
+    avisoEl.style.display = 'none';
+    return;
+  }
+
+  const data = dataInput.value;
+  if (!data) { avisoEl.style.display = 'none'; return; }
+
+  const ocupados = getDiasOcupados().map(d => d.data);
+  const pedidoNoDia = getDiasOcupados().find(d => d.data === data);
+
+  if (pedidoNoDia) {
+    const livre = proximoDiaLivre(data);
+    const d = new Date(livre + 'T12:00:00');
+    avisoEl.style.display = 'block';
+    avisoEl.innerHTML = `⚠️ <strong>Dia ocupado!</strong> ${pedidoNoDia.cliente} já está agendado nessa data.<br>
+      Próximo dia livre: <strong>${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}</strong>
+      <button onclick="document.getElementById('c-dataentrega').value='${livre}';atualizarDataComConflito();" 
+        style="margin-left:10px;background:var(--gold);color:white;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">
+        Usar essa data
+      </button>`;
+  } else {
+    avisoEl.style.display = 'none';
+  }
 }
 
 </script>

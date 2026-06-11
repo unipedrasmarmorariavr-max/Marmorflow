@@ -483,7 +483,7 @@ const PINS = { dono:'1234', medidor:'2222', comercial:'3333', producao:'4444', f
 const PROFILES = {
   dono:       { name:'Dono',       icon:'👑', canCreate:true,  canDelete:true,  canEdit:true,  canMoveAll:true,  canFechar:true,  canFinanceiro:true  },
   medidor:    { name:'Medidor',    icon:'📐', canCreate:true,  canDelete:false, canEdit:true,  canMoveAll:false, canFechar:false, canFinanceiro:false },
-  comercial:  { name:'Comercial',  icon:'💼', canCreate:false, canDelete:false, canEdit:false, canMoveAll:true,  canFechar:true,  canFinanceiro:false },
+  comercial:  { name:'Comercial',  icon:'💼', canCreate:true,  canDelete:false, canEdit:false, canMoveAll:true,  canFechar:true,  canFinanceiro:false },
   producao:   { name:'Produção',   icon:'⚙️', canCreate:false, canDelete:false, canEdit:false, canMoveAll:false, canFechar:false, canFinanceiro:false },
   financeiro: { name:'Financeiro', icon:'💰', canCreate:false, canDelete:false, canEdit:false, canMoveAll:false, canFechar:false, canFinanceiro:true  }
 };
@@ -1053,7 +1053,7 @@ function entrar() {
   var p = PROFILES[currentUser];
   document.getElementById('user-info').innerHTML = p.icon + ' Olá, <strong>' + p.name + '</strong>';
   var btnNew = document.getElementById('btn-new-order');
-  if (btnNew && !p.canCreate) btnNew.style.display = 'none';
+  if (btnNew) btnNew.style.display = p.canCreate ? 'flex' : 'none';
   // Show dashboard/materiais only for dono
   var tabDash = document.getElementById('tab-dashboard');
   var tabMat = document.getElementById('tab-materiais');

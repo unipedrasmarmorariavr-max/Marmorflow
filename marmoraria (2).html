@@ -696,6 +696,12 @@ async function drop(e,stage) {
 
   // When dragging to Pedido Fechado → also create copy in Em Corte
   if (stage==='fechado') {
+    // Bloqueia se não tiver dados comerciais preenchidos
+    if (!order.valor || !order.dataentrega) {
+      showNotif('⚠️ Preencha os dados comerciais (valor e data de entrega) antes de fechar o pedido!','error');
+      abrirFecharPedido(id);
+      return;
+    }
     history.push({stage:'fechado',date:hoje});
     order.stage='fechado'; order.history=history;
     await getSB().from('pedidos').update({stage:'fechado',history}).eq('id',id);

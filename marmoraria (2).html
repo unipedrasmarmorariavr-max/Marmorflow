@@ -1497,10 +1497,18 @@ function dateToStr(d) {
 }
 
 function getDiasOcupados() {
-  // Pega todos os pedidos com instalação e data de entrega
-  return orders
-    .filter(o => (o.tipoentrega === 'entrega_instalacao' || o.tipoentrega === 'so_instalacao') && o.dataentrega && !['entregue'].includes(o.stage))
+  // Pega cópias em produção (corte/acabamento/pronto) que têm instalação
+  const prodOcupados = orders
+    .filter(o => o.ref_fechado && (o.tipoentrega === 'entrega_instalacao' || o.tipoentrega === 'so_instalacao') && o.dataentrega && !['entregue'].includes(o.stage))
+    .map(o => ({ data: o.dataentrega, id: o.ref_fechado||o.id, cliente: o.cliente, peca: o.peca }));
+  
+  // Também pega pedidos fechados com instalação que ainda não têm cópia em produção
+  const fechOcupados = orders
+    .filter(o => o.stage === 'fechado' && (o.tipoentrega === 'entrega_instalacao' || o.tipoentrega === 'so_instalacao') && o.dataentrega)
+    .filter(o => !prodOcupados.some(p => p.id === o.id))
     .map(o => ({ data: o.dataentrega, id: o.id, cliente: o.cliente, peca: o.peca }));
+
+  return [...prodOcupados, ...fechOcupados];
 }
 
 function proximoDiaLivre(dataDesejada) {

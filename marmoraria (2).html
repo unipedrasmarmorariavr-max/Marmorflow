@@ -1513,7 +1513,9 @@ function getDiasOcupados() {
       vistos.add(chave);
       return true;
     })
-    .map(o => ({ data: o.dataentrega, id: o.id, cliente: o.cliente, peca: o.peca }));
+    // FIX: normaliza a data para "YYYY-MM-DD" cortando os 10 primeiros caracteres
+    // (Supabase pode retornar "2026-06-20T00:00:00+00:00" que quebra a comparação)
+    .map(o => ({ data: (o.dataentrega||'').substring(0,10), id: o.id, cliente: o.cliente, peca: o.peca }));
 }
 
 function proximoDiaLivre(dataDesejada) {

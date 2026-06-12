@@ -418,7 +418,7 @@
       <div class="form-grid">
         <div class="form-group"><label class="form-label">Metragem Total (m²)</label><input type="text" class="form-input" id="c-metragem" placeholder="Ex: 4,5"></div>
         <div class="form-group"><label class="form-label">Valor (R$) *</label><input type="text" class="form-input" id="c-valor" placeholder="0,00"></div>
-        <div class="form-group"><label class="form-label">Data de Entrega *</label><input type="date" class="form-input" id="c-dataentrega"></div>
+        <div class="form-group"><label class="form-label">Data de Entrega <span style="font-size:10px;color:var(--stone-light);font-weight:400;">(definida ao fechar)</span></label><input type="date" class="form-input" id="c-dataentrega" placeholder="Será sugerida ao fechar"></div>
         <div class="form-group"><label class="form-label">Urgente?</label>
           <select class="form-select" id="c-urgente"><option value="nao">Não</option><option value="sim">⚠️ Sim — prioridade máxima</option></select>
         </div>
@@ -694,26 +694,15 @@ async function drop(e,stage) {
   const history=order.history||[];
   const hoje=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
 
-  // When dragging to Pedido Fechado → also create copy in Em Corte
+  // When dragging to Pedido Fechado → abre modal de confirmação de data
   if (stage==='fechado') {
-    // Bloqueia se não tiver dados comerciais preenchidos
-    if (!order.valor || !order.dataentrega) {
-      showNotif('⚠️ Preencha os dados comerciais (valor e data de entrega) antes de fechar o pedido!','error');
+    if (!order.valor) {
+      showNotif('⚠️ Preencha os dados comerciais (valor) antes de fechar o pedido!','error');
       abrirFecharPedido(id);
       return;
     }
-    history.push({stage:'fechado',date:hoje});
-    order.stage='fechado'; order.history=history;
-    await getSB().from('pedidos').update({stage:'fechado',history}).eq('id',id);
-    // Create copy in Em Corte
-    const novoId=await nextId();
-    const historyCorte=[...history,{stage:'corte',date:hoje}];
-    const copia={...order, id:novoId, stage:'corte', history:historyCorte, ref_fechado:id};
-    delete copia.created_at;
-    await getSB().from('pedidos').insert(copia);
-    await loadOrders();
-    renderKanban(document.getElementById('search-kanban').value);
-    showNotif(`Pedido fechado! Cópia ${novoId} enviada para Corte automaticamente 🎉`,'success');
+    // Abre modal de escolha de data antes de confirmar
+    abrirModalConfirmarData(id);
     return;
   }
 
@@ -826,7 +815,6 @@ async function fecharPedido() {
   const valor=document.getElementById('c-valor').value.trim();
   const dataentrega=document.getElementById('c-dataentrega').value;
   if (!valor){showNotif('Informe o valor do pedido','error');return;}
-  if (!dataentrega){showNotif('Informe a data de entrega','error');return;}
   const order=orders.find(o=>o.id===fechandoId); if(!order) return;
   showLoading('Salvando dados...');
   const hoje=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
@@ -835,6 +823,9 @@ async function fecharPedido() {
   if (order.stage==='medicao' && !history.some(h=>h.stage==='negociacao')) {
     history.push({stage:'negociacao',date:hoje});
   }
+  // Nunca regride o stage de um pedido já fechado/em produção
+  const stagesAvancados = ['fechado','corte','acabamento','pronto','entregue'];
+  const novoStage = stagesAvancados.includes(order.stage) ? order.stage : (order.stage==='medicao' ? 'negociacao' : order.stage);
   const dadosComerciais={
     metragem:document.getElementById('c-metragem').value.trim(),
     valor, dataentrega,
@@ -852,15 +843,17 @@ async function fecharPedido() {
       valvula: document.getElementById('chk-valvula')?.checked||false,
       torneira: document.getElementById('chk-torneira')?.checked||false,
     },
-    stage: order.stage==='medicao' ? 'negociacao' : order.stage,
+    stage: novoStage,
     history
   };
-  await getSB().from('pedidos').update(dadosComerciais).eq('id',fechandoId);
+  const { error } = await getSB().from('pedidos').update(dadosComerciais).eq('id',fechandoId);
   hideLoading();
+  if (error) { showNotif('Erro ao salvar: ' + error.message, 'error'); return; }
   await loadOrders();
   renderKanban(document.getElementById('search-kanban').value);
   closeModal('modal-comercial');
-  showNotif('Dados salvos! Arraste para Pedido Fechado quando o cliente confirmar. ✓','success');
+  const jáFechado = stagesAvancados.includes(order.stage);
+  showNotif(jáFechado ? 'Dados comerciais atualizados! ✓' : 'Dados salvos! Arraste para Pedido Fechado quando o cliente confirmar. ✓','success');
 }
 
 // ============ DELETE ============
@@ -1691,6 +1684,191 @@ function atualizarDataComConflito() {
   }
 }
 
+
+// ─── MODAL CONFIRMAR DATA AO FECHAR PEDIDO ───────────────────────────────────
+
+let fechandoIdDrop = null; // id do pedido sendo fechado via drag
+
+function abrirModalConfirmarData(id) {
+  const order = orders.find(o => o.id === id);
+  if (!order) return;
+  fechandoIdDrop = id;
+
+  document.getElementById('confirmar-data-sub').textContent = id + ' — ' + order.cliente;
+
+  // Gera as próximas 6 datas úteis livres a partir de hoje
+  const ocupados = getDiasOcupados().map(d => d.data);
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const diasSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const sugestoes = [];
+  let d = new Date();
+  d.setHours(12,0,0,0);
+  let tentativas = 0;
+  while (sugestoes.length < 6 && tentativas < 120) {
+    d.setDate(d.getDate() + 1);
+    tentativas++;
+    const ds = dateToStr(d);
+    if (isDiaUtil(d) && !ocupados.includes(ds)) {
+      sugestoes.push({ data: ds, diaSemana: diasSemana[d.getDay()], dia: d.getDate(), mes: meses[d.getMonth()], ano: d.getFullYear() });
+    }
+  }
+
+  // Calcula dias úteis a partir de hoje para cada sugestão
+  const container = document.getElementById('sugestoes-datas');
+  container.innerHTML = sugestoes.map((s, i) => {
+    const diasUteis = calcDiasUteisEntre(dateToStr(new Date()), s.data);
+    const destaque = i === 0 ? `background:var(--green);color:white;` : `background:var(--cream);color:var(--stone);`;
+    const badge = diasUteis <= 15 ? `<span style="font-size:10px;background:rgba(0,0,0,0.1);padding:2px 8px;border-radius:20px;">${diasUteis} dias úteis</span>` : `<span style="font-size:10px;opacity:0.7;">${diasUteis} dias úteis</span>`;
+    return `
+      <div onclick="selecionarDataSugerida('${s.data}', this)"
+        style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:10px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;${i===0?'border-color:var(--green);background:var(--green-light);':''}"
+        data-data="${s.data}">
+        <div>
+          <span style="font-size:13px;font-weight:600;">${s.diaSemana}, ${s.dia} ${s.mes}</span>
+          ${i===0 ? '<span style="font-size:10px;color:var(--green);font-weight:700;margin-left:8px;">⭐ Mais próximo</span>' : ''}
+        </div>
+        <span style="font-size:11px;color:var(--stone-light);">${diasUteis} dias úteis</span>
+      </div>`;
+  }).join('');
+
+  // Pré-seleciona a primeira sugestão
+  if (sugestoes.length > 0) {
+    document.getElementById('data-manual-fechamento').value = sugestoes[0].data;
+  }
+
+  // Listener para input manual
+  const inputManual = document.getElementById('data-manual-fechamento');
+  inputManual.onchange = () => {
+    // Desmarca sugestões
+    document.querySelectorAll('#sugestoes-datas > div').forEach(el => {
+      el.style.borderColor = 'transparent';
+      el.style.background = 'var(--cream)';
+    });
+    validarDataManual(inputManual.value);
+  };
+
+  openModal('modal-confirmar-data');
+}
+
+function selecionarDataSugerida(data, el) {
+  // Visual: marca o selecionado
+  document.querySelectorAll('#sugestoes-datas > div').forEach(d => {
+    d.style.borderColor = 'transparent';
+    d.style.background = 'var(--cream)';
+  });
+  el.style.borderColor = 'var(--green)';
+  el.style.background = 'var(--green-light)';
+  document.getElementById('data-manual-fechamento').value = data;
+  document.getElementById('aviso-data-manual').style.display = 'none';
+}
+
+function validarDataManual(data) {
+  const aviso = document.getElementById('aviso-data-manual');
+  if (!data) { aviso.style.display = 'none'; return; }
+  const ocupados = getDiasOcupados().map(d => d.data);
+  const d = new Date(data + 'T12:00:00');
+  if (!isDiaUtil(d)) {
+    aviso.textContent = '⚠️ Este dia é fim de semana. Escolha um dia útil.';
+    aviso.style.display = 'block';
+  } else if (ocupados.includes(data)) {
+    aviso.textContent = '⚠️ Este dia já tem instalação agendada. Escolha outro.';
+    aviso.style.display = 'block';
+  } else {
+    aviso.style.display = 'none';
+  }
+}
+
+function calcDiasUteisEntre(dataInicio, dataFim) {
+  let d = new Date(dataInicio + 'T12:00:00');
+  const fim = new Date(dataFim + 'T12:00:00');
+  let count = 0;
+  while (d < fim) {
+    d.setDate(d.getDate() + 1);
+    if (isDiaUtil(d)) count++;
+  }
+  return count;
+}
+
+async function confirmarFechamentoComData() {
+  const dataEscolhida = document.getElementById('data-manual-fechamento').value;
+  if (!dataEscolhida) { showNotif('Escolha uma data de instalação','error'); return; }
+
+  const ocupados = getDiasOcupados().map(d => d.data);
+  const d = new Date(dataEscolhida + 'T12:00:00');
+  if (!isDiaUtil(d)) { showNotif('Escolha um dia útil (segunda a sexta)','error'); return; }
+  if (ocupados.includes(dataEscolhida)) { showNotif('Este dia já tem instalação. Escolha outro.','error'); return; }
+
+  const id = fechandoIdDrop;
+  const order = orders.find(o => o.id === id);
+  if (!order) return;
+
+  showLoading('Fechando pedido...');
+  const hoje = new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+  const history = order.history || [];
+  history.push({stage:'fechado', date:hoje});
+
+  // Salva data + stage fechado no pedido original
+  const { error } = await getSB().from('pedidos')
+    .update({ stage:'fechado', history, dataentrega: dataEscolhida })
+    .eq('id', id);
+
+  if (error) { hideLoading(); showNotif('Erro: ' + error.message, 'error'); return; }
+
+  // Cria cópia em Em Corte com a mesma data
+  order.dataentrega = dataEscolhida;
+  order.stage = 'fechado';
+  order.history = history;
+  const novoId = await nextId();
+  const historyCorte = [...history, {stage:'corte', date:hoje}];
+  const copia = {...order, id:novoId, stage:'corte', history:historyCorte, ref_fechado:id, dataentrega:dataEscolhida};
+  delete copia.created_at;
+  await getSB().from('pedidos').insert(copia);
+
+  hideLoading();
+  closeModal('modal-confirmar-data');
+  await loadOrders();
+  renderKanban(document.getElementById('search-kanban').value);
+
+  const diasUteis = calcDiasUteisEntre(dateToStr(new Date()), dataEscolhida);
+  showNotif(`Pedido fechado! Instalação em ${diasUteis} dias úteis 🎉`, 'success');
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 </script>
+
+<!-- MODAL CONFIRMAR DATA DE INSTALAÇÃO -->
+<div class="modal-overlay" id="modal-confirmar-data">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">📅 Confirmar Data de Instalação</div>
+        <div id="confirmar-data-sub" style="font-size:12px;color:var(--gold);margin-top:2px;"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-confirmar-data')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--green-light);border-radius:10px;padding:14px;margin-bottom:16px;border-left:3px solid var(--green);">
+        <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:4px;">✅ Cliente confirmou o pedido!</div>
+        <div style="font-size:12px;color:var(--stone-light);">Escolha a data de instalação. Só dias úteis livres são mostrados.</div>
+      </div>
+
+      <!-- Sugestões de datas -->
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:10px;">Próximos dias disponíveis</div>
+      <div id="sugestoes-datas" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;"></div>
+
+      <!-- Ou escolher manualmente -->
+      <div style="border-top:1px solid var(--cream-dark);padding-top:16px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--stone-light);margin-bottom:8px;">Ou escolha outra data</div>
+        <input type="date" class="form-input" id="data-manual-fechamento" style="max-width:200px;">
+        <div id="aviso-data-manual" style="font-size:11px;color:var(--red);margin-top:6px;display:none;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('modal-confirmar-data')">Cancelar</button>
+      <button class="btn-primary" onclick="confirmarFechamentoComData()" style="width:auto;padding:10px 28px;background:var(--green);">🔒 Fechar Pedido</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

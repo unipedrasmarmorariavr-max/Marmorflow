@@ -1497,18 +1497,23 @@ function dateToStr(d) {
 }
 
 function getDiasOcupados() {
-  // Pega cópias em produção (corte/acabamento/pronto) que têm instalação
-  const prodOcupados = orders
-    .filter(o => o.ref_fechado && (o.tipoentrega === 'entrega_instalacao' || o.tipoentrega === 'so_instalacao') && o.dataentrega && !['entregue'].includes(o.stage))
-    .map(o => ({ data: o.dataentrega, id: o.ref_fechado||o.id, cliente: o.cliente, peca: o.peca }));
-  
-  // Também pega pedidos fechados com instalação que ainda não têm cópia em produção
-  const fechOcupados = orders
-    .filter(o => o.stage === 'fechado' && (o.tipoentrega === 'entrega_instalacao' || o.tipoentrega === 'so_instalacao') && o.dataentrega)
-    .filter(o => !prodOcupados.some(p => p.id === o.id))
+  // Pega todos os pedidos ativos com instalação e data — sem duplicar
+  const vistos = new Set();
+  return orders
+    .filter(o => {
+      const temInstalacao = o.tipoentrega === 'entrega_instalacao' || o.tipoentrega === 'so_instalacao';
+      const ativo = !['entregue'].includes(o.stage);
+      const temData = !!o.dataentrega;
+      return temInstalacao && ativo && temData;
+    })
+    .filter(o => {
+      // Remove duplicatas — se for cópia (ref_fechado), usa o id original como chave
+      const chave = o.ref_fechado || o.id;
+      if (vistos.has(chave)) return false;
+      vistos.add(chave);
+      return true;
+    })
     .map(o => ({ data: o.dataentrega, id: o.id, cliente: o.cliente, peca: o.peca }));
-
-  return [...prodOcupados, ...fechOcupados];
 }
 
 function proximoDiaLivre(dataDesejada) {

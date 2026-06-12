@@ -803,7 +803,7 @@ function abrirFecharPedido(id) {
   document.getElementById('c-origem').value=o.origem||'';
   document.getElementById('c-origem-nome').value=o.origemNome||'';
   toggleOrigem();
-  const itens = o.itensCliente||{};
+  const itens = (typeof o.itens_cliente === 'string' ? JSON.parse(o.itens_cliente||'{}') : o.itens_cliente||o.itensCliente||{});
   ['cuba','torre','lixeira','calha','dispenser','valvula','torneira'].forEach(k=>{
     const el=document.getElementById('chk-'+k); if(el) el.checked=itens[k]||false;
   });
@@ -834,15 +834,6 @@ async function fecharPedido() {
     origem:document.getElementById('c-origem').value,
     origemNome:document.getElementById('c-origem-nome').value.trim(),
     vendedor:document.getElementById('c-vendedor').value.trim(),
-    itensCliente: {
-      cuba: document.getElementById('chk-cuba')?.checked||false,
-      torre: document.getElementById('chk-torre')?.checked||false,
-      lixeira: document.getElementById('chk-lixeira')?.checked||false,
-      calha: document.getElementById('chk-calha')?.checked||false,
-      dispenser: document.getElementById('chk-dispenser')?.checked||false,
-      valvula: document.getElementById('chk-valvula')?.checked||false,
-      torneira: document.getElementById('chk-torneira')?.checked||false,
-    },
     stage: novoStage,
     history
   };

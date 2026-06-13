@@ -508,8 +508,20 @@ window.addEventListener('DOMContentLoaded', async () => {
   const params = new URLSearchParams(window.location.search);
   const pedidoId = params.get('pedido');
   if (pedidoId) {
+    // Esconde login e mostra portal imediatamente
     document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'none';
     document.getElementById('cliente-view').style.display = 'block';
+    // Aguarda Supabase inicializar antes de buscar
+    let tentativas = 0;
+    while (tentativas < 20) {
+      try {
+        const sb = getSB();
+        if (sb) break;
+      } catch(e) {}
+      await new Promise(r => setTimeout(r, 100));
+      tentativas++;
+    }
     await mostrarPedidoCliente(pedidoId);
   }
 });
@@ -983,7 +995,10 @@ function openDetail(id) {
 
 // ============ LINK CLIENTE ============
 function copiarLinkCliente(id) {
-  const link=`${window.location.origin}${window.location.pathname}?pedido=${id}`;
+  // Se for cópia em corte, usa pedido original no link
+  const order = orders.find(o => o.id === id);
+  const idReal = (order && order.ref_fechado) ? order.ref_fechado : id;
+  const link=`${window.location.origin}${window.location.pathname}?pedido=${idReal}`;
   navigator.clipboard.writeText(link).then(()=>showNotif('Link copiado! ✓','success')).catch(()=>prompt('Copie o link:',link));
 }
 function gerarLinkCliente() {

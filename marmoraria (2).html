@@ -127,8 +127,9 @@
   .detail-val{font-size:12px;color:var(--stone);font-weight:500;flex:1;}
   .status-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;}
   .images-protected{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;}
-  .images-protected img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;pointer-events:none;user-select:none;-webkit-user-drag:none;cursor:zoom-in;}
-  .images-protected img:hover{opacity:0.85;}
+  .images-protected img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;pointer-events:none;user-select:none;-webkit-user-drag:none;}
+  .img-zoom-wrap{cursor:zoom-in;border-radius:8px;overflow:hidden;transition:opacity 0.15s;}
+  .img-zoom-wrap:hover{opacity:0.85;}
   .no-download-notice{font-size:10px;color:var(--stone-light);margin-top:4px;font-style:italic;}
 
   /* TIMELINE */
@@ -577,12 +578,12 @@ async function mostrarPedidoCliente(id) {
       ${croquiImgs.length>0?`
         <div style="font-size:12px;font-weight:600;color:var(--stone);margin-bottom:8px;">Croqui / Medição</div>
         <div class="images-protected" style="margin-bottom:16px;">
-          ${croquiImgs.map(img=>`<img src="${img}" oncontextmenu="return false;" onclick="openLightbox('${img}')" style="cursor:zoom-in;" title="Toque para ampliar">`).join('')}
+          ${croquiImgs.map(img=>`<div class="img-zoom-wrap" onclick="openLightbox('${img}')"><img src="${img}" oncontextmenu="return false;"></div>`).join('')}
         </div>`:''}
       ${localImgs.length>0?`
         <div style="font-size:12px;font-weight:600;color:var(--stone);margin-bottom:8px;">Fotos do Local</div>
         <div class="images-protected">
-          ${localImgs.map(img=>`<img src="${img}" oncontextmenu="return false;" onclick="openLightbox('${img}')" style="cursor:zoom-in;" title="Toque para ampliar">`).join('')}
+          ${localImgs.map(img=>`<div class="img-zoom-wrap" onclick="openLightbox('${img}')"><img src="${img}" oncontextmenu="return false;"></div>`).join('')}
         </div>`:''}
       <div class="no-download-notice" style="margin-top:10px;">🔒 Visualização apenas — toque para ampliar</div>
     </div>` : '';
@@ -888,8 +889,8 @@ function openDetail(id) {
     const hist=history.find(h=>h.stage===s.id);
     return `<div class="tl-item ${cls}"><div class="tl-line"><div class="tl-dot"></div>${i<STAGES.length-1?'<div class="tl-connector"></div>':''}</div><div class="tl-content"><div class="tl-name">${s.label}</div><div class="tl-date">${hist?hist.date:current?'Atual':'—'}</div></div></div>`;
   }).join('');
-  const croquiHTML=(o.croqui||[]).length>0?`<div class="detail-section"><div class="detail-section-title">Croqui</div><div class="images-protected">${(o.croqui||[]).map(img=>`<img src="${img}" oncontextmenu="return false;" onclick="openLightbox('${img}')">`).join('')}</div><div class="no-download-notice">🔒 Protegido</div></div>`:'';
-  const localHTML=(o.local||[]).length>0?`<div class="detail-section"><div class="detail-section-title">Fotos do Local</div><div class="images-protected">${(o.local||[]).map(img=>`<img src="${img}" oncontextmenu="return false;" onclick="openLightbox('${img}')">`).join('')}</div></div>`:'';
+  const croquiHTML=(o.croqui||[]).length>0?`<div class="detail-section"><div class="detail-section-title">Croqui</div><div class="images-protected">${(o.croqui||[]).map(img=>`<div class="img-zoom-wrap" onclick="openLightbox('${img}')"><img src="${img}" oncontextmenu="return false;"></div>`).join('')}</div><div class="no-download-notice">🔒 Protegido</div></div>`:'';
+  const localHTML=(o.local||[]).length>0?`<div class="detail-section"><div class="detail-section-title">Fotos do Local</div><div class="images-protected">${(o.local||[]).map(img=>`<div class="img-zoom-wrap" onclick="openLightbox('${img}')"><img src="${img}" oncontextmenu="return false;"></div>`).join('')}</div></div>`:'';
   const row=(k,v)=>v?`<div class="detail-row"><div class="detail-key">${k}</div><div class="detail-val">${v}</div></div>`:'';
   // Fotos em destaque no topo — importante para Produção
   const temFotos = (o.croqui||[]).length > 0 || (o.local||[]).length > 0;
@@ -899,12 +900,12 @@ function openDetail(id) {
       ${(o.croqui||[]).length>0?`
         <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Croqui / Medição</div>
         <div class="images-protected" style="margin-bottom:12px;">
-          ${(o.croqui||[]).map(img=>`<img src="${img}" oncontextmenu="return false;" onclick="openLightbox('${img}')" style="cursor:zoom-in;" title="Clique para ampliar">`).join('')}
+          ${(o.croqui||[]).map(img=>`<div class="img-zoom-wrap" onclick="openLightbox('${img}')"><img src="${img}" oncontextmenu="return false;"></div>`).join('')}
         </div>`:''}
       ${(o.local||[]).length>0?`
         <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Fotos do Local</div>
         <div class="images-protected">
-          ${(o.local||[]).map(img=>`<img src="${img}" oncontextmenu="return false;" onclick="openLightbox('${img}')" style="cursor:zoom-in;" title="Clique para ampliar">`).join('')}
+          ${(o.local||[]).map(img=>`<div class="img-zoom-wrap" onclick="openLightbox('${img}')"><img src="${img}" oncontextmenu="return false;"></div>`).join('')}
         </div>`:''}
       <div class="no-download-notice" style="margin-top:8px;">🔒 Protegido — clique para ampliar</div>
     </div>` : '';

@@ -132,6 +132,15 @@
   .img-zoom-wrap:hover{opacity:0.85;}
   .no-download-notice{font-size:10px;color:var(--stone-light);margin-top:4px;font-style:italic;}
 
+  /* AUTOCOMPLETE PEDRAS */
+  #pedras-sugestoes .sug-item{padding:10px 14px;cursor:pointer;font-size:13px;color:var(--stone);border-bottom:1px solid var(--cream-dark);display:flex;align-items:center;justify-content:space-between;}
+  #pedras-sugestoes .sug-item:last-child{border-bottom:none;}
+  #pedras-sugestoes .sug-item:hover{background:var(--cream);}
+  #pedras-sugestoes .sug-item .sug-cat{font-size:10px;color:var(--stone-light);font-weight:600;text-transform:uppercase;}
+  #pedras-sugestoes .sug-new{padding:10px 14px;cursor:pointer;font-size:13px;color:var(--gold);font-weight:600;border-top:1px solid var(--cream-dark);}
+  #pedras-sugestoes .sug-new:hover{background:#FBF8F2;}
+  /* ACABAMENTO */
+  input[name="acabamento"]:checked + span, label:has(input[name="acabamento"]:checked){border-color:var(--gold)!important;background:#FBF8F2!important;}
   /* TIMELINE */
   .timeline{display:flex;flex-direction:column;}
   .tl-item{display:flex;gap:14px;align-items:flex-start;}
@@ -419,6 +428,23 @@
       <div class="form-grid">
         <div class="form-group"><label class="form-label">Metragem Total (m²)</label><input type="text" class="form-input" id="c-metragem" placeholder="Ex: 4,5"></div>
         <div class="form-group"><label class="form-label">Valor (R$) *</label><input type="text" class="form-input" id="c-valor" placeholder="0,00"></div>
+        <div class="form-group span2" style="position:relative;">
+          <label class="form-label">Material <span style="font-size:10px;color:var(--stone-light);font-weight:400;">— pode ser alterado pelo comercial</span></label>
+          <input type="text" class="form-input" id="c-material" placeholder="Digite para buscar... ex: preto, branco, mármore" autocomplete="off"
+            oninput="filtrarPedras(this.value)" onblur="setTimeout(()=>fecharSugestoes(),200)">
+          <div id="pedras-sugestoes" style="display:none;position:absolute;top:100%;left:0;right:0;background:white;border:1.5px solid var(--gold);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:9999;max-height:220px;overflow-y:auto;margin-top:2px;"></div>
+        </div>
+        <div class="form-group span2">
+          <label class="form-label">Acabamento</label>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--stone);cursor:pointer;background:var(--cream);border:1.5px solid var(--cream-dark);border-radius:8px;padding:6px 12px;transition:all 0.15s;"><input type="radio" name="acabamento" value="Polido" style="accent-color:var(--gold);"> Polido</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--stone);cursor:pointer;background:var(--cream);border:1.5px solid var(--cream-dark);border-radius:8px;padding:6px 12px;transition:all 0.15s;"><input type="radio" name="acabamento" value="Levigado" style="accent-color:var(--gold);"> Levigado</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--stone);cursor:pointer;background:var(--cream);border:1.5px solid var(--cream-dark);border-radius:8px;padding:6px 12px;transition:all 0.15s;"><input type="radio" name="acabamento" value="Escovado" style="accent-color:var(--gold);"> Escovado</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--stone);cursor:pointer;background:var(--cream);border:1.5px solid var(--cream-dark);border-radius:8px;padding:6px 12px;transition:all 0.15s;"><input type="radio" name="acabamento" value="Flameado" style="accent-color:var(--gold);"> Flameado</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--stone);cursor:pointer;background:var(--cream);border:1.5px solid var(--cream-dark);border-radius:8px;padding:6px 12px;transition:all 0.15s;"><input type="radio" name="acabamento" value="Apicoado" style="accent-color:var(--gold);"> Apicoado</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--stone);cursor:pointer;background:var(--cream);border:1.5px solid var(--cream-dark);border-radius:8px;padding:6px 12px;transition:all 0.15s;"><input type="radio" name="acabamento" value="Outro" style="accent-color:var(--gold);"> Outro</label>
+          </div>
+        </div>
         <div class="form-group"><label class="form-label">Data de Entrega <span style="font-size:10px;color:var(--stone-light);font-weight:400;">(definida ao fechar)</span></label><input type="date" class="form-input" id="c-dataentrega" placeholder="Será sugerida ao fechar"></div>
         <div class="form-group"><label class="form-label">Urgente?</label>
           <select class="form-select" id="c-urgente"><option value="nao">Não</option><option value="sim">⚠️ Sim — prioridade máxima</option></select>
@@ -835,6 +861,11 @@ function abrirFecharPedido(id) {
       ${o.obsAcesso?`<div style="grid-column:1/-1;"><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;letter-spacing:0.5px;">Obs. Acesso</div><div style="color:var(--stone);">${o.obsAcesso}</div></div>`:''}
     </div>`;
   document.getElementById('c-metragem').value=o.metragem||'';
+  document.getElementById('c-material').value=o.material||'';
+  // Marca acabamento salvo
+  document.querySelectorAll('input[name="acabamento"]').forEach(r=>{
+    r.checked = (r.value === (o.acabamento||''));
+  });
   document.getElementById('c-valor').value=o.valor||'';
   document.getElementById('c-dataentrega').value=o.dataentrega||'';
   document.getElementById('c-urgente').value=o.urgente||'nao';
@@ -869,6 +900,8 @@ async function fecharPedido() {
   const novoStage = stagesAvancados.includes(order.stage) ? order.stage : (order.stage==='medicao' ? 'negociacao' : order.stage);
   const dadosComerciais={
     metragem:document.getElementById('c-metragem').value.trim(),
+    material:document.getElementById('c-material').value.trim()||order.material,
+    acabamento:(document.querySelector('input[name="acabamento"]:checked')||{}).value||order.acabamento||'',
     valor, dataentrega,
     urgente:document.getElementById('c-urgente').value,
     obsComercial:document.getElementById('c-obs-comercial').value.trim(),
@@ -1301,29 +1334,65 @@ function renderMateriais() {
   const stageProd = ['fechado','corte','acabamento','pronto','entregue'];
   const pedidosProd = orders.filter(o => stageProd.includes(o.stage) && o.material && o.metragem);
 
-  // Group by material
+  // Group by material, com acabamentos separados
+  // Levigado do polido: desconta do levigado e soma no polido
   const matMap = {};
   pedidosProd.forEach(o => {
     const mat = (o.material||'').trim().toLowerCase();
     const m2 = parseFloat((o.metragem||'0').replace(',','.').replace(/[^0-9.]/g,''))||0;
     if (!mat || m2===0) return;
-    if (!matMap[mat]) matMap[mat] = {nome:o.material.trim(), total:0, pedidos:[]};
+    const nomeCapitalizado = (o.material||'').trim().replace(/\b\w/g, c => c.toUpperCase());
+    if (!matMap[mat]) matMap[mat] = {nome:nomeCapitalizado, total:0, acabamentos:{}, comprar:{}};
+
+    let acab = (o.acabamento||'Não informado');
+    let acabCompra = acab; // acabamento que vai para a conta de "o que comprar"
+
+    // Se levigado foi cortado do polido: conta como levigado no painel mas como polido na compra
+    if (acab === 'Levigado' && o.levigado_do_polido) {
+      acabCompra = 'Polido';
+    }
+
     matMap[mat].total += m2;
-    matMap[mat].pedidos.push({id:o.id, cliente:o.cliente, m2, stage:o.stage});
+    matMap[mat].acabamentos[acab] = (matMap[mat].acabamentos[acab]||0) + m2;
+    matMap[mat].comprar[acabCompra] = (matMap[mat].comprar[acabCompra]||0) + m2;
   });
 
   const sorted = Object.values(matMap).sort((a,b)=>b.total-a.total);
 
-  const matHTML = sorted.length > 0 ? sorted.map(m => `
+  const ACABAMENTOS_ORDEM = ['Polido','Levigado','Escovado','Flameado','Outro','Não informado'];
+  const matHTML = sorted.length > 0 ? sorted.map(m => {
+    // Seção: vendido por acabamento
+    const linhasAcab = ACABAMENTOS_ORDEM
+      .filter(a => m.acabamentos[a])
+      .map(a => {
+        const isLevDoPol = a === 'Levigado' && m.comprar['Polido'] && m.comprar['Levigado'] !== m.acabamentos['Levigado'];
+        const obs = isLevDoPol ? `<span style="font-size:10px;color:var(--gold);margin-left:6px;">parte do polido</span>` : '';
+        return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--cream-dark);">
+          <span style="font-size:13px;color:var(--stone-light);">${a}${obs}</span>
+          <span style="font-size:14px;font-weight:700;color:var(--stone);">${m.acabamentos[a].toFixed(2).replace('.',',')} m²</span>
+        </div>`;
+      }).join('');
+
+    // Seção: o que comprar
+    const linhasComprar = ACABAMENTOS_ORDEM
+      .filter(a => m.comprar[a])
+      .map(a => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;">
+          <span style="font-size:12px;color:var(--stone);font-weight:600;">📦 Chapa ${a}</span>
+          <span style="font-size:13px;font-weight:700;color:var(--gold);">${m.comprar[a].toFixed(2).replace('.',',')} m²</span>
+        </div>`).join('');
+
+    return `
     <div style="background:white;border-radius:14px;padding:20px;box-shadow:var(--shadow);margin-bottom:14px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <div style="font-size:16px;font-weight:600;color:var(--stone);">🪨 ${m.nome}</div>
-        <div style="background:var(--gold);color:white;padding:6px 14px;border-radius:20px;font-size:14px;font-weight:700;">${m.total.toFixed(2).replace('.',',')} m²</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid var(--cream-dark);">
+        <div style="font-size:16px;font-weight:700;color:var(--stone);">🪨 ${m.nome}</div>
+        <div style="background:var(--gold);color:white;padding:5px 14px;border-radius:20px;font-size:13px;font-weight:700;">Total: ${m.total.toFixed(2).replace('.',',')} m²</div>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;">
-        ${m.pedidos.map(p=>`<span style="background:var(--cream);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--stone-mid);">${p.id} · ${p.cliente} · ${p.m2.toFixed(2).replace('.',',')}m²</span>`).join('')}
-      </div>
-    </div>`) .join('') : '<div class="empty-state"><div class="empty-icon">🪨</div>Nenhum material registrado ainda.<br>Adicione metragem e material nos pedidos fechados.</div>';
+      ${linhasAcab || '<div style="font-size:13px;color:var(--stone-light);">Sem acabamento informado</div>'}
+      ${linhasComprar ? `<div style="margin-top:12px;padding-top:12px;border-top:2px dashed var(--cream-dark);">${linhasComprar}</div>` : ''}
+    </div>`;
+  }).join('') : '<div class="empty-state"><div class="empty-icon">🪨</div>Nenhum material registrado ainda.<br>Adicione metragem e material nos pedidos fechados.</div>';
 
   el.innerHTML = `
     <div style="max-width:900px;margin:0 auto;">
@@ -1813,6 +1882,15 @@ function abrirModalConfirmarData(id) {
     validarDataManual(inputManual.value);
   };
 
+  // Mostra pergunta levigado só se o acabamento for Levigado
+  const acabSel = (document.querySelector('input[name="acabamento"]:checked')||{}).value||'';
+  const blocoLev = document.getElementById('bloco-levigado');
+  if (blocoLev) {
+    blocoLev.style.display = acabSel === 'Levigado' ? 'block' : 'none';
+    // Reset: padrão é comprar chapa levigada
+    const radios = document.querySelectorAll('input[name="levigado_origem"]');
+    radios.forEach(r => r.checked = (r.value === 'levigado'));
+  }
   openModal('modal-confirmar-data');
 }
 
@@ -1874,8 +1952,12 @@ async function confirmarFechamentoComData() {
   history.push({stage:'fechado', date:hoje});
 
   // Salva data + stage fechado no pedido original
+  const materialFinal = document.getElementById('c-material') ? (document.getElementById('c-material').value.trim()||order.material) : order.material;
+  const acabamentoFinal = (document.querySelector('input[name="acabamento"]:checked')||{}).value||order.acabamento||'';
+  const levOrigem = (document.querySelector('input[name="levigado_origem"]:checked')||{}).value||'levigado';
+  const levigadoDoPolicdo = (acabamentoFinal === 'Levigado' && levOrigem === 'polido');
   const { error } = await getSB().from('pedidos')
-    .update({ stage:'fechado', history, dataentrega: dataEscolhida })
+    .update({ stage:'fechado', history, dataentrega: dataEscolhida, material: materialFinal, acabamento: acabamentoFinal, levigado_do_polido: levigadoDoPolicdo })
     .eq('id', id);
 
   if (error) { hideLoading(); showNotif('Erro: ' + error.message, 'error'); return; }
@@ -1900,6 +1982,182 @@ async function confirmarFechamentoComData() {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+
+// ─── BASE DE PEDRAS ──────────────────────────────────────────────────────────
+const PEDRAS_BASE = [
+  // MÁRMORES
+  {nome:'Mármore Branco Nacional', cat:'Mármore'},
+  {nome:'Mármore Branco Carrara', cat:'Mármore'},
+  {nome:'Mármore Branco Paraná', cat:'Mármore'},
+  {nome:'Mármore Bege Bahia', cat:'Mármore'},
+  {nome:'Mármore Crema Marfil', cat:'Mármore'},
+  {nome:'Mármore Travertino Romano', cat:'Mármore'},
+  {nome:'Mármore Nero Marquina', cat:'Mármore'},
+  // GRANITOS
+  {nome:'Granito Cinza Andorinha', cat:'Granito'},
+  {nome:'Granito Cinza Corumbá', cat:'Granito'},
+  {nome:'Granito Cinza Castelo', cat:'Granito'},
+  {nome:'Granito Ocre Itabira', cat:'Granito'},
+  {nome:'Granito Amarelo Ornamental', cat:'Granito'},
+  {nome:'Granito Amarelo Marcujá', cat:'Granito'},
+  {nome:'Granito Amarelo Ouro Brasil', cat:'Granito'},
+  {nome:'Granito Amarelo Icaraí', cat:'Granito'},
+  {nome:'Granito Amarelo Santa Cecília', cat:'Granito'},
+  {nome:'Granito Branco Dallas', cat:'Granito'},
+  {nome:'Granito Branco Marfim', cat:'Granito'},
+  {nome:'Granito Branco Arabesco', cat:'Granito'},
+  {nome:'Granito Branco Fortaleza', cat:'Granito'},
+  {nome:'Granito Branco Itaúnas', cat:'Granito'},
+  {nome:'Granito Branco Siena', cat:'Granito'},
+  {nome:'Granito Branco Serenata', cat:'Granito'},
+  {nome:'Granito Branco Ceará', cat:'Granito'},
+  {nome:'Granito Verde Ubatuba', cat:'Granito'},
+  {nome:'Granito Verde Guatemala', cat:'Granito'},
+  {nome:'Granito Preto São Gabriel', cat:'Granito'},
+  {nome:'Granito Preto Via Láctea', cat:'Granito'},
+  {nome:'Granito Preto Absoluto', cat:'Granito'},
+  {nome:'Granito Marrom Tabaco', cat:'Granito'},
+  {nome:'Granito Café Imperial', cat:'Granito'},
+  {nome:'Granito Vermelho Balmoral', cat:'Granito'},
+  {nome:'Granito Juparaná', cat:'Granito'},
+  // QUARTZITOS
+  {nome:'Quartzito Taj Mahal', cat:'Quartzito'},
+  {nome:'Quartzito Black Taurus Guidoni', cat:'Quartzito'},
+  {nome:'Quartzito Branco Romano Guidoni', cat:'Quartzito'},
+  {nome:'Quartzito Cristallo Guidoni', cat:'Quartzito'},
+  {nome:'Quartzito Emerald Green Guidoni', cat:'Quartzito'},
+  {nome:'Quartzito Emerald Malbec Guidoni', cat:'Quartzito'},
+  {nome:'Quartzito Emerald Versace Guidoni', cat:'Quartzito'},
+  {nome:'Quartzito Emerald Wine Guidoni', cat:'Quartzito'},
+  {nome:'Quartzito Butterfly Beige Guidoni', cat:'Quartzito'},
+  {nome:'Quartzito Butterfly Green Guidoni', cat:'Quartzito'},
+  {nome:'Quartzito Giallo Sofia Guidoni', cat:'Quartzito'},
+  {nome:'Quartzito Giallo Topazio Guidoni', cat:'Quartzito'},
+  // QUARTZOS SINTÉTICOS
+  {nome:'Branco Prime', cat:'Quartzo Sintético'},
+  {nome:'Bege Prime', cat:'Quartzo Sintético'},
+  // TOPZSTONE — ABSOLUTE
+  {nome:'Absolute Black Guidoni', cat:'Topzstone'},
+  {nome:'Absolute White Guidoni', cat:'Topzstone'},
+  {nome:'Aurora White Guidoni', cat:'Topzstone'},
+  {nome:'Georgia Gray Guidoni', cat:'Topzstone'},
+  // TOPZSTONE — URBAN MARBLE
+  {nome:'Bianco Carrara Guidoni', cat:'Topzstone'},
+  {nome:'American Carrara Guidoni', cat:'Topzstone'},
+  {nome:'Vanguard Carrara Guidoni', cat:'Topzstone'},
+  {nome:'Bright Statuario Guidoni', cat:'Topzstone'},
+  {nome:'Calacatta Borghini Guidoni', cat:'Topzstone'},
+  {nome:'Calacatta Divine Guidoni', cat:'Topzstone'},
+  {nome:'Calacatta Duomo Guidoni', cat:'Topzstone'},
+  {nome:'Calacatta Misty Guidoni', cat:'Topzstone'},
+  {nome:'Calacatta Venato Guidoni', cat:'Topzstone'},
+  {nome:'Calacatta Milano Guidoni', cat:'Topzstone'},
+  {nome:'New Calacatta Lazaro Guidoni', cat:'Topzstone'},
+  {nome:'Arabescato Maximo Guidoni', cat:'Topzstone'},
+  {nome:'Venatino Guidoni', cat:'Topzstone'},
+  // TOPZSTONE — DOWNTOWN
+  {nome:'American Soapstone Guidoni', cat:'Topzstone'},
+  {nome:'Breckenridge Guidoni', cat:'Topzstone'},
+  // TOPZSTONE — SPOTLIGHT
+  {nome:'Belgian Blue Guidoni', cat:'Topzstone'},
+  {nome:'Black Lights Guidoni', cat:'Topzstone'},
+  // TOPZSTONE — DEMAIS
+  {nome:'Ferrara Gold Guidoni', cat:'Topzstone'},
+  {nome:'Ferrara White Guidoni', cat:'Topzstone'},
+  {nome:'Ferrara Black Guidoni', cat:'Topzstone'},
+  {nome:'Palisades Gold Guidoni', cat:'Topzstone'},
+  {nome:'Himalaya Summit Guidoni', cat:'Topzstone'},
+  {nome:'Himalaya Black Guidoni', cat:'Topzstone'},
+  {nome:'Molokini Blue Guidoni', cat:'Topzstone'},
+  {nome:'Denali Guidoni', cat:'Topzstone'},
+  {nome:'Liberty Bell Guidoni', cat:'Topzstone'},
+  {nome:'Mont Blanc Guidoni', cat:'Topzstone'},
+  {nome:'Spanish Black Guidoni', cat:'Topzstone'},
+  {nome:'Sfumato Guidoni', cat:'Topzstone'},
+  {nome:'Silver Moon Guidoni', cat:'Topzstone'},
+  {nome:'Rhodes Guidoni', cat:'Topzstone'},
+  {nome:'Formosa Classic Guidoni', cat:'Topzstone'},
+  {nome:'Formosa Gold Guidoni', cat:'Topzstone'},
+  {nome:'Smoky Patagonia Guidoni', cat:'Topzstone'},
+  {nome:'Matarazzo Guidoni', cat:'Topzstone'},
+  {nome:'Crystal Guidoni', cat:'Topzstone'},
+  {nome:'Sugar Guidoni', cat:'Topzstone'},
+  {nome:'Venus Guidoni', cat:'Topzstone'},
+  {nome:'White Brilliant Guidoni', cat:'Topzstone'},
+  {nome:'White Lights Guidoni', cat:'Topzstone'},
+  {nome:'Crystal 1000 Guidoni', cat:'Topzstone'},
+  {nome:'Eyes White Guidoni', cat:'Topzstone'},
+  {nome:'Grecco Guidoni', cat:'Topzstone'},
+  {nome:'Nocciola Guidoni', cat:'Topzstone'},
+  {nome:'Royal Guidoni', cat:'Topzstone'},
+  // BASALTOS
+  {nome:'Basalto Marrom Absoluto', cat:'Basalto'},
+  {nome:'Basalto Cinza Absoluto', cat:'Basalto'},
+  {nome:'Basalto Preto Absoluto', cat:'Basalto'},
+  {nome:'Basalto Amarelo Mel', cat:'Basalto'},
+];
+
+// Pedras adicionadas pelo usuário (salvas no localStorage do browser)
+function getPedrasExtras() {
+  try { return JSON.parse(localStorage.getItem('pedras_extras')||'[]'); } catch(e) { return []; }
+}
+function salvarPedraExtra(nome, cat) {
+  const extras = getPedrasExtras();
+  if (!extras.find(p => p.nome.toLowerCase() === nome.toLowerCase())) {
+    extras.push({nome, cat: cat||'Outros'});
+    localStorage.setItem('pedras_extras', JSON.stringify(extras));
+  }
+}
+function todasAsPedras() {
+  return [...PEDRAS_BASE, ...getPedrasExtras()];
+}
+
+function filtrarPedras(termo) {
+  const box = document.getElementById('pedras-sugestoes');
+  if (!box) return;
+  if (!termo || termo.length < 2) { box.style.display='none'; return; }
+
+  const t = termo.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const resultados = todasAsPedras().filter(p => {
+    const n = p.nome.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    return n.includes(t);
+  }).slice(0, 10);
+
+  let html = resultados.map(p => `
+    <div class="sug-item" onmousedown="selecionarPedra('${p.nome.replace(/'/g,"\'")}')">
+      <span>${p.nome}</span>
+      <span class="sug-cat">${p.cat}</span>
+    </div>`).join('');
+
+  // Opção de adicionar nova pedra
+  const jaExiste = todasAsPedras().some(p => p.nome.toLowerCase() === termo.toLowerCase());
+  if (!jaExiste) {
+    html += `<div class="sug-new" onmousedown="adicionarNovaPedra('${termo.replace(/'/g,"\'")}')">+ Cadastrar "${termo}" como nova pedra</div>`;
+  }
+
+  box.innerHTML = html || `<div class="sug-new" onmousedown="adicionarNovaPedra('${termo.replace(/'/g,"\'")}')">+ Cadastrar "${termo}" como nova pedra</div>`;
+  box.style.display = 'block';
+}
+
+function selecionarPedra(nome) {
+  const input = document.getElementById('c-material');
+  if (input) input.value = nome;
+  fecharSugestoes();
+}
+
+function adicionarNovaPedra(nome) {
+  const nomeCapitalizado = nome.replace(/\w/g, c => c.toUpperCase());
+  salvarPedraExtra(nomeCapitalizado, 'Outros');
+  selecionarPedra(nomeCapitalizado);
+  showNotif(`"${nomeCapitalizado}" cadastrada na base de pedras ✓`, 'success');
+}
+
+function fecharSugestoes() {
+  const box = document.getElementById('pedras-sugestoes');
+  if (box) box.style.display = 'none';
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 </script>
 
 <!-- MODAL CONFIRMAR DATA DE INSTALAÇÃO -->
@@ -1921,6 +2179,19 @@ async function confirmarFechamentoComData() {
       <!-- Sugestões de datas -->
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:10px;">Próximos dias disponíveis</div>
       <div id="sugestoes-datas" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;"></div>
+
+      <!-- Pergunta levigado (aparece só se acabamento = Levigado) -->
+      <div id="bloco-levigado" style="display:none;border-top:1px solid var(--cream-dark);padding-top:16px;margin-bottom:16px;">
+        <div style="font-size:12px;font-weight:700;color:var(--stone);margin-bottom:10px;">🪨 Este levigado será processado de chapa polida?</div>
+        <div style="display:flex;gap:10px;">
+          <label style="flex:1;display:flex;align-items:center;gap:8px;padding:12px;background:var(--cream);border:2px solid var(--cream-dark);border-radius:10px;cursor:pointer;font-size:13px;">
+            <input type="radio" name="levigado_origem" value="polido" style="accent-color:var(--gold);"> Sim, usar chapa polida
+          </label>
+          <label style="flex:1;display:flex;align-items:center;gap:8px;padding:12px;background:var(--cream);border:2px solid var(--cream-dark);border-radius:10px;cursor:pointer;font-size:13px;">
+            <input type="radio" name="levigado_origem" value="levigado" checked style="accent-color:var(--gold);"> Não, comprar chapa levigada
+          </label>
+        </div>
+      </div>
 
       <!-- Ou escolher manualmente -->
       <div style="border-top:1px solid var(--cream-dark);padding-top:16px;">

@@ -724,6 +724,17 @@ async function drop(e,stage) {
     return;
   }
 
+  // Se estava em Pedido Fechado e voltou para Negociação → remove cópia em Corte
+  if (order.stage === 'fechado' && stage === 'negociacao') {
+    const copia = orders.find(o => o.ref_fechado === id);
+    if (copia) {
+      if (!confirm(`Ao voltar para Negociação, a cópia ${copia.id} em Em Corte será removida. Confirmar?`)) return;
+      await getSB().from('pedidos').delete().eq('id', copia.id);
+      orders = orders.filter(o => o.id !== copia.id);
+      showNotif(`Cópia ${copia.id} removida de Em Corte`, 'error');
+    }
+  }
+
   history.push({stage,date:hoje});
   order.stage=stage; order.history=history;
   renderKanban(document.getElementById('search-kanban').value);
@@ -867,11 +878,36 @@ async function fecharPedido() {
 
 // ============ DELETE ============
 async function deleteOrder(id) {
-  if (!confirm(`Excluir pedido ${id}?`)) return;
-  await getSB().from('pedidos').delete().eq('id',id);
-  orders=orders.filter(o=>o.id!==id);
+  const order = orders.find(o => o.id === id);
+  if (!order) return;
+
+  // Verifica se tem cópia em Em Corte vinculada
+  const copia = orders.find(o => o.ref_fechado === id);
+  const msgExtra = copia ? `\n\nA cópia ${copia.id} em Em Corte também será excluída.` : '';
+
+  if (!confirm(`Excluir pedido ${id}?${msgExtra}`)) return;
+
+  showLoading('Excluindo...');
+
+  // Deleta o pedido principal
+  await getSB().from('pedidos').delete().eq('id', id);
+
+  // Se era um Pedido Fechado, deleta a cópia em Em Corte automaticamente
+  if (copia) {
+    await getSB().from('pedidos').delete().eq('id', copia.id);
+    orders = orders.filter(o => o.id !== copia.id);
+  }
+
+  // Se era uma cópia (em Corte), remove referência do original
+  if (order.ref_fechado) {
+    // Só deleta a cópia, original continua
+  }
+
+  orders = orders.filter(o => o.id !== id);
+  hideLoading();
   renderKanban(document.getElementById('search-kanban').value);
-  showNotif('Pedido excluído','error');
+  const msg = copia ? `Pedido ${id} e cópia ${copia.id} excluídos` : `Pedido ${id} excluído`;
+  showNotif(msg, 'error');
 }
 
 // ============ DETAIL ============

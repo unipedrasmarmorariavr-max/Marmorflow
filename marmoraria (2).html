@@ -618,21 +618,19 @@ async function mostrarPedidoCliente(id) {
 }
 
 // ============ LOGIN ============
-function selectProfile(p) {
-  selectedProfile = p;
-  var btns = document.querySelectorAll('.profile-btn');
-  for (var i=0; i<btns.length; i++) btns[i].classList.remove('selected');
-  var sel = document.querySelector('[data-profile="' + p + '"]');
-  if (sel) sel.classList.add('selected');
-  console.log('Profile selected:', p);
-}
-// doLogin removed
 function doLogout() {
-  currentUser=null; selectedProfile=null;
+  currentUser=null; selectedProfile=null; perfilAtual=null;
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app').style.display='none';
   document.getElementById('pin-input').value='';
-  document.querySelectorAll('.profile-btn').forEach(b=>b.classList.remove('selected'));
+  // Remove seleção visual de todos os perfis
+  var ids = ['dono','medidor','comercial','producao','financeiro'];
+  for (var i=0; i<ids.length; i++) {
+    var el = document.getElementById('pb-'+ids[i]);
+    if (el) el.style.cssText = 'cursor:pointer;border:2px solid #EDE9E1;background:#F7F4EF;border-radius:12px;padding:14px 10px;text-align:center;';
+  }
+  var lbl = document.getElementById('perfil-label');
+  if (lbl) lbl.textContent = '';
 }
 
 // ============ DB ============
@@ -1204,11 +1202,9 @@ function renderDashboard() {
           ${rowD('Receita confirmada',totalFech,'#4A7C59')}
           <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--cream-dark);">
             <div style="font-size:12px;color:var(--stone-light);margin-bottom:6px;">Taxa de conversão</div>
-            ${(() => {
-              // Fechados ÷ total de pedidos orçados (sem cópias de corte, sem só medição)
+${(()=>{
               const taxa = totalOrcadoCount > 0 ? Math.round((fechados.length / totalOrcadoCount) * 100) : 0;
-              return \`<div style="font-size:24px;font-weight:700;color:var(--stone);">\${taxa}%</div>
-              <div style="font-size:11px;color:var(--stone-light);">${fechados.length} fechado${fechados.length!==1?'s':''} de ${totalOrcadoCount} orçamento${totalOrcadoCount!==1?'s':''}</div>`;
+              return '<div style="font-size:24px;font-weight:700;color:var(--stone);">'+taxa+'%</div><div style="font-size:11px;color:var(--stone-light);">'+fechados.length+' fechado'+(fechados.length!==1?'s':'')+' de '+totalOrcadoCount+' orçamento'+(totalOrcadoCount!==1?'s':'')+'</div>';
             })()}
           </div>
         </div>

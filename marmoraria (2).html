@@ -1061,37 +1061,12 @@ function showNotif(msg,type=''){
   n.className='notif show '+type;
   setTimeout(()=>{n.className='notif';},3500);
 }
-document.getElementById('pin-input').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+document.getElementById('pin-input').addEventListener('keydown',e=>{if(e.key==='Enter')entrar();});
 
 // ============ LOGIN SIMPLES ============
 var perfilAtual = null;
 var pinsMap = {dono:'1234', medidor:'2222', comercial:'3333', producao:'4444'};
 
-
-function toggleOrigem() {
-  var v = document.getElementById('c-origem').value;
-  var g = document.getElementById('origem-nome-group');
-  if (g) g.style.display = (v==='arquiteto'||v==='construtora') ? 'flex' : 'none';
-}
-
-function selPerfil(p) {
-  perfilAtual = p;
-  var ids = ['dono','medidor','comercial','producao','financeiro'];
-  for (var i=0; i<ids.length; i++) {
-    var el = document.getElementById('btn-'+ids[i]);
-    if (el) el.style.border = ids[i]===p ? '2px solid #B8965A' : '2px solid #EDE9E1';
-  }
-  var label = {dono:'👑 Dono',medidor:'📐 Medidor',comercial:'💼 Comercial',producao:'⚙️ Produção'};
-  document.getElementById('perfil-selecionado').textContent = 'Perfil: ' + (label[p]||p);
-}
-
-
-
-function toggleOrigem() {
-  var v = document.getElementById('c-origem').value;
-  var g = document.getElementById('origem-nome-group');
-  if (g) g.style.display = (v==='arquiteto'||v==='construtora') ? 'flex' : 'none';
-}
 
 function selPerfil(p) {
   perfilAtual = p;

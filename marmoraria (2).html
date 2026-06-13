@@ -282,6 +282,7 @@
     <button class="tab-btn" onclick="showTab('dashboard')" id="tab-dashboard">📊 Dashboard</button>
     <button class="tab-btn" onclick="showTab('materiais')" id="tab-materiais">🪨 Materiais</button>
     <button class="tab-btn" onclick="showTab('financeiro')" id="tab-financeiro">💰 Financeiro</button>
+    <button class="tab-btn" onclick="showTab('orcamento')" id="tab-orcamento" style="display:none;">🧮 Orçamento</button>
   </div>
   <div class="content">
     <div class="panel active" id="panel-kanban">
@@ -305,6 +306,9 @@
     </div>
     <div class="panel" id="panel-financeiro">
       <div id="financeiro-content"></div>
+    </div>
+    <div class="panel" id="panel-orcamento">
+      <div id="orcamento-content"></div>
     </div>
     <div class="panel" id="panel-portal">
       <div class="portal-wrap">
@@ -508,9 +512,9 @@ function getSB() { if (!sb) { sb = supabase.createClient(SUPABASE_URL, SUPABASE_
 
 const PINS = { dono:'1234', medidor:'2222', comercial:'3333', producao:'4444', financeiro:'5555' };
 const PROFILES = {
-  dono:       { name:'Dono',       icon:'👑', canCreate:true,  canDelete:true,  canEdit:true,  canMoveAll:true,  canFechar:true,  canFinanceiro:true  },
+  dono:       { name:'Dono',       icon:'👑', canCreate:true,  canDelete:true,  canEdit:true,  canMoveAll:true,  canFechar:true,  canFinanceiro:true,  canOrcamento:true  },
   medidor:    { name:'Medidor',    icon:'📐', canCreate:true,  canDelete:false, canEdit:true,  canMoveAll:false, canFechar:false, canFinanceiro:false },
-  comercial:  { name:'Comercial',  icon:'💼', canCreate:true,  canDelete:false, canEdit:false, canMoveAll:true,  canFechar:true,  canFinanceiro:false },
+  comercial:  { name:'Comercial',  icon:'💼', canCreate:true,  canDelete:false, canEdit:false, canMoveAll:true,  canFechar:true,  canFinanceiro:false, canOrcamento:true  },
   producao:   { name:'Produção',   icon:'⚙️', canCreate:false, canDelete:false, canEdit:false, canMoveAll:false, canFechar:false, canFinanceiro:false },
   financeiro: { name:'Financeiro', icon:'💰', canCreate:false, canDelete:false, canEdit:false, canMoveAll:false, canFechar:false, canFinanceiro:true  }
 };
@@ -683,6 +687,7 @@ function showTab(tab) {
   if (tab==='dashboard') renderDashboard();
   if (tab==='materiais') renderMateriais();
   if (tab==='financeiro') renderFinanceiro();
+  if (tab==='orcamento') renderOrcamento();
   if (tab==='agenda') renderAgenda();
 }
 
@@ -1148,6 +1153,8 @@ function entrar() {
   // Show dashboard/materiais only for dono
   var tabDash = document.getElementById('tab-dashboard');
   var tabMat = document.getElementById('tab-materiais');
+  var tabOrc = document.getElementById('tab-orcamento');
+  if (tabOrc) tabOrc.style.display = (p.canOrcamento) ? '' : 'none';
   var tabFin = document.getElementById('tab-financeiro');
   var tabPortal = document.getElementById('tab-portal');
   var tabAgenda = document.getElementById('tab-agenda');
@@ -2160,6 +2167,702 @@ function fecharSugestoes() {
   if (box) box.style.display = 'none';
 }
 // ─────────────────────────────────────────────────────────────────────────────
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MÓDULO DE ORÇAMENTO — baseado na metodologia Marmoprice
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Configurações padrão da empresa (editáveis pelo Dono)
+const CONFIG_ORC_DEFAULT = {
+  // Gastos mensais
+  custoEstrutura: 55057.10,
+  // Produção
+  horasProdMes: 176, // horas produtivas/mês
+  qtdFuncionarios: 5,
+  // Operações (hr/m² ou hr/m ou hr/un)
+  serra: 0.8,
+  corte45: 0.2,
+  montagem45: 1.2,
+  corteDPolimento: 2,
+  areaBipolida: 2,
+  sistemaFlush: 3,
+  sistemaFlath: 3,
+  recortesSemPolimento: 0.5,
+  rebaixoItaliano: 8,
+  rebaixoAmericano: 2,
+  polimentoAutomatico: 0.15,
+  polimentoManual: 0.2,
+  cubEsculpida: 3,
+  meioBoelado: 0.5,
+  meioBoeladoDuplo: 1,
+  chanfrado45: 1,
+  meiaCana: 1,
+  boeladoDuplo: 2,
+  chanfradoDuplo: 2,
+  meiaCanaDuplo: 2,
+  colagemTopo: 0.25,
+  chanfroAlongado: 2,
+  waterJet: 20,
+  // Instalação
+  horasInstalacaoM2: 1.5,
+  pessoasInstalacao: 2,
+  horasEntregaM2: 0.33,
+  pessoasEntrega: 1,
+  // Transporte
+  consumoCombustivel: 8,
+  custoCombustivel: 7.00,
+  minKmLento: 3,
+  minKmIntermediario: 2,
+  minKmRapido: 1,
+  transito: 'rapido',
+  // Depreciação
+  valorMaquinas: 13800,
+  anosDepreciacao: 10,
+  valorResidual: 70,
+  // Outros
+  inadimplencia: 0.5,
+  comissaoVendedor: 0,
+  custoInsumo: 5,
+};
+
+function getConfigOrc() {
+  try {
+    const s = localStorage.getItem('config_orcamento');
+    return s ? {...CONFIG_ORC_DEFAULT, ...JSON.parse(s)} : {...CONFIG_ORC_DEFAULT};
+  } catch(e) { return {...CONFIG_ORC_DEFAULT}; }
+}
+function salvarConfigOrc(cfg) {
+  localStorage.setItem('config_orcamento', JSON.stringify(cfg));
+}
+
+// Pedras cadastradas (salvas no localStorage)
+function getPedrasCadastradas() {
+  try {
+    const s = localStorage.getItem('pedras_cadastradas');
+    return s ? JSON.parse(s) : [];
+  } catch(e) { return []; }
+}
+function salvarPedras(pedras) {
+  localStorage.setItem('pedras_cadastradas', JSON.stringify(pedras));
+}
+
+// Grupos de dificuldade
+const GRUPOS_DIFICULDADE = [
+  { id: 1, nome: 'Grupo 1 — Granitos', dif: 1.0, margem: 30 },
+  { id: 2, nome: 'Grupo 2 — Mármores', dif: 1.3, margem: 30 },
+  { id: 3, nome: 'Grupo 3 — Quartzitos', dif: 2.0, margem: 40 },
+  { id: 4, nome: 'Grupo 4 — Quartzitos Quebradiços', dif: 2.5, margem: 40 },
+  { id: 5, nome: 'Grupo 5 — Ultracompactos', dif: 2.3, margem: 40 },
+  { id: 6, nome: 'Grupo 6 — Quartzos', dif: 1.0, margem: 40 },
+];
+
+// Orçamentos salvos
+let orcamentos = [];
+let orcamentoAtual = null;
+
+function getOrcamentos() {
+  try {
+    const s = localStorage.getItem('orcamentos_marmorflow');
+    return s ? JSON.parse(s) : [];
+  } catch(e) { return []; }
+}
+function salvarOrcamentos(orcs) {
+  localStorage.setItem('orcamentos_marmorflow', JSON.stringify(orcs));
+}
+
+// ─── CÁLCULO DO ORÇAMENTO ────────────────────────────────────────────────
+function calcularCustoHora() {
+  const cfg = getConfigOrc();
+  const horasMes = cfg.horasProdMes * cfg.qtdFuncionarios;
+  // Depreciação mensal
+  const depreciacaoMensal = (cfg.valorMaquinas * (1 - cfg.valorResidual/100)) / (cfg.anosDepreciacao * 12);
+  const custoTotal = cfg.custoEstrutura + depreciacaoMensal;
+  return {
+    custoHoraEmpresa: custoTotal / horasMes,
+    custoHoraHomem: custoTotal / (horasMes / cfg.qtdFuncionarios),
+    custoEstrutura: custoTotal,
+    horasMes
+  };
+}
+
+function calcularItem(item, pedra, cfg) {
+  if (!pedra || !item) return null;
+  const grupo = GRUPOS_DIFICULDADE.find(g => g.id === pedra.grupoId) || GRUPOS_DIFICULDADE[0];
+  const dif = grupo.dif;
+  const { custoHoraEmpresa } = calcularCustoHora();
+
+  // Área total com quebra
+  const areaBase = item.largura * item.comprimento * item.quantidade;
+  const areaComQuebra = areaBase * (1 + pedra.quebra / 100);
+
+  // Custo matéria prima
+  const custoMaterial = areaComQuebra * pedra.custoM2;
+
+  // Perímetro para polimento (2 × largura + 2 × comprimento) × quantidade
+  const perimetro = (2 * item.largura + 2 * item.comprimento) * item.quantidade;
+
+  // Tempos de produção (em horas)
+  const tSerra = areaBase * cfg.serra * dif;
+  const tMontagem45 = item.tempoMontagem45 || 0;
+  const tBipolimento = item.areaBipolida ? item.areaBipolida * cfg.areaBipolida * dif : 0;
+  const tPolimentoManual = item.compPolimentoManual ? item.compPolimentoManual * cfg.polimentoManual * dif : 0;
+  const tPolimentoAuto = item.compPolimentoAuto ? item.compPolimentoAuto * cfg.polimentoAutomatico * dif : 0;
+  const tHorasAdicionais = item.horasAdicionais || 0;
+
+  const tempoProdTotal = tSerra + tMontagem45 + tBipolimento + tPolimentoManual + tPolimentoAuto + tHorasAdicionais;
+
+  // Custo produção
+  const custoSerra = tSerra * custoHoraEmpresa;
+  const custoMontagem = tMontagem45 * custoHoraEmpresa;
+  const custoBipolimento = tBipolimento * custoHoraEmpresa;
+  const custoPolimento = (tPolimentoManual + tPolimentoAuto) * custoHoraEmpresa;
+  const custoHorasAdic = tHorasAdicionais * custoHoraEmpresa;
+
+  // Custo instalação/transporte
+  const distancia = item.distancia || 0;
+  const minKm = cfg.transito === 'lento' ? cfg.minKmLento : cfg.transito === 'intermediario' ? cfg.minKmIntermediario : cfg.minKmRapido;
+  const tempoDeslocamento = (distancia * 2 * minKm) / 60; // em horas
+  const custoDeslocamento = tempoDeslocamento * custoHoraEmpresa;
+  const custoCombustivel = (distancia * 2 / cfg.consumoCombustivel) * cfg.custoCombustivel;
+
+  let custoInstalacao = 0;
+  if (item.tipoEntrega === 'instalacao') {
+    const tempoInstalacao = areaBase * cfg.horasInstalacaoM2 * cfg.pessoasInstalacao;
+    custoInstalacao = tempoInstalacao * custoHoraEmpresa;
+  } else if (item.tipoEntrega === 'entrega') {
+    const tempoEntrega = areaBase * cfg.horasEntregaM2 * cfg.pessoasEntrega;
+    custoInstalacao = tempoEntrega * custoHoraEmpresa;
+  }
+
+  // Soma de custos operacionais (sem insumos)
+  const custosOp = custoSerra + custoMontagem + custoBipolimento + custoPolimento +
+                   custoHorasAdic + custoDeslocamento + custoCombustivel + custoInstalacao + custoMaterial;
+
+  // Insumos = % sobre todos os outros custos
+  const custoInsumos = custosOp * (cfg.custoInsumo / 100);
+
+  const custoTotal = custosOp + custoInsumos;
+
+  // Margem de lucro
+  const margem = pedra.margem / 100;
+  const precoFinal = custoTotal / (1 - margem);
+  const lucroLiquido = precoFinal - custoTotal;
+
+  return {
+    areaBase, areaComQuebra, custoMaterial,
+    custoSerra, custoMontagem, custoBipolimento, custoPolimento,
+    custoHorasAdic, custoDeslocamento, custoCombustivel, custoInstalacao,
+    custoInsumos, custoTotal, lucroLiquido, precoFinal,
+    margem: pedra.margem, tempoProdTotal
+  };
+}
+
+function fmt(v) { return 'R$ ' + (v||0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+
+// ─── RENDER PRINCIPAL ────────────────────────────────────────────────────
+function renderOrcamento() {
+  const el = document.getElementById('orcamento-content');
+  if (!el) return;
+
+  const pedras = getPedrasCadastradas();
+  const orcs = getOrcamentos();
+  const { custoHoraEmpresa, custoEstrutura } = calcularCustoHora();
+
+  el.innerHTML = `
+    <div style="padding:24px;max-width:1100px;margin:0 auto;">
+
+      <!-- Header -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+        <div>
+          <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);">🧮 Orçamentos</div>
+          <div style="font-size:12px;color:var(--stone-light);margin-top:2px;">
+            Custo Hora Empresa: <strong style="color:var(--gold);">${fmt(custoHoraEmpresa)}</strong>
+            &nbsp;|&nbsp; Custo Estrutura Mensal: <strong style="color:var(--stone);">${fmt(custoEstrutura)}</strong>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button onclick="abrirConfigOrcamento()" style="background:var(--cream);border:1.5px solid var(--cream-dark);color:var(--stone);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;">⚙️ Configurações</button>
+          <button onclick="abrirCadastroPedras()" style="background:var(--cream);border:1.5px solid var(--cream-dark);color:var(--stone);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;">🪨 Pedras</button>
+          <button onclick="novoOrcamento()" style="background:var(--gold);color:white;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">+ Novo Orçamento</button>
+        </div>
+      </div>
+
+      <!-- Lista de orçamentos -->
+      ${orcs.length === 0 ? `
+        <div style="text-align:center;padding:60px;color:var(--stone-light);">
+          <div style="font-size:48px;margin-bottom:16px;">📋</div>
+          <div style="font-size:16px;font-weight:600;margin-bottom:8px;">Nenhum orçamento ainda</div>
+          <div style="font-size:13px;">Clique em "+ Novo Orçamento" para começar</div>
+        </div>` :
+        `<div style="display:flex;flex-direction:column;gap:12px;">
+          ${orcs.map(o => {
+            const totalGeral = o.itens.reduce((s, it) => {
+              if (!it.pedraId || !it.calc) return s;
+              return s + it.calc.precoFinal;
+            }, 0);
+            const statusCor = o.status === 'Fechado' ? '#4A7C59' : o.status === 'Aprovado' ? '#4A6C8C' : '#B8760A';
+            return `
+            <div style="background:white;border-radius:14px;padding:20px;box-shadow:var(--shadow);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+              <div>
+                <div style="font-size:15px;font-weight:700;color:var(--stone);">${o.cliente||'Cliente não informado'}</div>
+                <div style="font-size:12px;color:var(--stone-light);">${o.id} · ${o.itens.length} item(ns) · ${new Date(o.criadoEm).toLocaleDateString('pt-BR')}</div>
+                <span style="font-size:11px;background:${statusCor}22;color:${statusCor};padding:2px 10px;border-radius:20px;font-weight:600;">${o.status||'Em aberto'}</span>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:20px;font-weight:700;color:var(--gold);">${fmt(totalGeral)}</div>
+                <div style="display:flex;gap:8px;margin-top:8px;">
+                  <button onclick="editarOrcamento('${o.id}')" style="background:var(--cream);border:1.5px solid var(--cream-dark);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;">✏️ Editar</button>
+                  <button onclick="deletarOrcamento('${o.id}')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;">🗑</button>
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`
+      }
+    </div>
+
+    <!-- Modal Configurações -->
+    <div class="modal-overlay" id="modal-config-orc">
+      <div class="modal" style="max-width:700px;">
+        <div class="modal-header">
+          <div class="modal-title">⚙️ Configurações da Empresa</div>
+          <button class="modal-close" onclick="closeModal('modal-config-orc')">✕</button>
+        </div>
+        <div class="modal-body" id="config-orc-body"></div>
+        <div class="modal-footer">
+          <button class="btn-secondary" onclick="closeModal('modal-config-orc')">Cancelar</button>
+          <button class="btn-primary" onclick="salvarConfig()" style="width:auto;padding:10px 28px;">💾 Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Pedras -->
+    <div class="modal-overlay" id="modal-pedras-orc">
+      <div class="modal" style="max-width:700px;">
+        <div class="modal-header">
+          <div class="modal-title">🪨 Cadastro de Pedras</div>
+          <button class="modal-close" onclick="closeModal('modal-pedras-orc')">✕</button>
+        </div>
+        <div class="modal-body" id="pedras-orc-body"></div>
+        <div class="modal-footer">
+          <button class="btn-secondary" onclick="closeModal('modal-pedras-orc')">Fechar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Novo/Editar Orçamento -->
+    <div class="modal-overlay" id="modal-novo-orc" style="align-items:flex-start;padding:20px;overflow-y:auto;">
+      <div class="modal" style="max-width:900px;margin:0 auto;">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title" id="titulo-novo-orc">Novo Orçamento</div>
+            <div id="subtitulo-novo-orc" style="font-size:12px;color:var(--gold);margin-top:2px;"></div>
+          </div>
+          <button class="modal-close" onclick="closeModal('modal-novo-orc')">✕</button>
+        </div>
+        <div class="modal-body" id="novo-orc-body"></div>
+        <div class="modal-footer">
+          <button class="btn-secondary" onclick="closeModal('modal-novo-orc')">Cancelar</button>
+          <button class="btn-primary" onclick="salvarOrcamentoAtual()" style="width:auto;padding:10px 28px;">💾 Salvar Orçamento</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ─── MODAL CONFIGURAÇÕES ─────────────────────────────────────────────────
+function abrirConfigOrcamento() {
+  const cfg = getConfigOrc();
+  const body = document.getElementById('config-orc-body');
+  body.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:20px;">
+
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">💰 Custos da Empresa</div>
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">Custo Estrutura Mensal (R$)</label><input class="form-input" id="cfg-custoEstrutura" value="${cfg.custoEstrutura}"></div>
+          <div class="form-group"><label class="form-label">Horas Produtivas/Mês</label><input class="form-input" id="cfg-horasProdMes" value="${cfg.horasProdMes}"></div>
+          <div class="form-group"><label class="form-label">Qtd Funcionários Produção</label><input class="form-input" id="cfg-qtdFuncionarios" value="${cfg.qtdFuncionarios}"></div>
+          <div class="form-group"><label class="form-label">Custo Insumo (%)</label><input class="form-input" id="cfg-custoInsumo" value="${cfg.custoInsumo}"></div>
+          <div class="form-group"><label class="form-label">Inadimplência (%)</label><input class="form-input" id="cfg-inadimplencia" value="${cfg.inadimplencia}"></div>
+          <div class="form-group"><label class="form-label">Comissão Vendedor (%)</label><input class="form-input" id="cfg-comissaoVendedor" value="${cfg.comissaoVendedor}"></div>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">🏗️ Depreciação de Máquinas</div>
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">Valor Investimentos (R$)</label><input class="form-input" id="cfg-valorMaquinas" value="${cfg.valorMaquinas}"></div>
+          <div class="form-group"><label class="form-label">Anos de Depreciação</label><input class="form-input" id="cfg-anosDepreciacao" value="${cfg.anosDepreciacao}"></div>
+          <div class="form-group"><label class="form-label">Valor Residual (%)</label><input class="form-input" id="cfg-valorResidual" value="${cfg.valorResidual}"></div>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">⏱️ Tempos de Produção (hr/m² ou hr/m ou hr/un)</div>
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">Serra (hr/m²)</label><input class="form-input" id="cfg-serra" value="${cfg.serra}"></div>
+          <div class="form-group"><label class="form-label">Corte 45°/meia esquadria (hr/m)</label><input class="form-input" id="cfg-corte45" value="${cfg.corte45}"></div>
+          <div class="form-group"><label class="form-label">Montagem 45° (hr/m)</label><input class="form-input" id="cfg-montagem45" value="${cfg.montagem45}"></div>
+          <div class="form-group"><label class="form-label">Área Bipolida (hr/m²)</label><input class="form-input" id="cfg-areaBipolida" value="${cfg.areaBipolida}"></div>
+          <div class="form-group"><label class="form-label">Polimento Manual (hr/m)</label><input class="form-input" id="cfg-polimentoManual" value="${cfg.polimentoManual}"></div>
+          <div class="form-group"><label class="form-label">Polimento Automático (hr/m)</label><input class="form-input" id="cfg-polimentoAutomatico" value="${cfg.polimentoAutomatico}"></div>
+          <div class="form-group"><label class="form-label">Meio Boleado (hr/m)</label><input class="form-input" id="cfg-meioBoelado" value="${cfg.meioBoelado}"></div>
+          <div class="form-group"><label class="form-label">Meio Boleado Duplo (hr/m)</label><input class="form-input" id="cfg-meioBoeladoDuplo" value="${cfg.meioBoeladoDuplo}"></div>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">🚚 Transporte e Instalação</div>
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">Consumo Combustível (km/L)</label><input class="form-input" id="cfg-consumoCombustivel" value="${cfg.consumoCombustivel}"></div>
+          <div class="form-group"><label class="form-label">Custo Combustível (R$/L)</label><input class="form-input" id="cfg-custoCombustivel" value="${cfg.custoCombustivel}"></div>
+          <div class="form-group"><label class="form-label">Hrs Instalação por m²</label><input class="form-input" id="cfg-horasInstalacaoM2" value="${cfg.horasInstalacaoM2}"></div>
+          <div class="form-group"><label class="form-label">Pessoas na Instalação</label><input class="form-input" id="cfg-pessoasInstalacao" value="${cfg.pessoasInstalacao}"></div>
+          <div class="form-group"><label class="form-label">Hrs Entrega por m²</label><input class="form-input" id="cfg-horasEntregaM2" value="${cfg.horasEntregaM2}"></div>
+          <div class="form-group"><label class="form-label">Pessoas na Entrega</label><input class="form-input" id="cfg-pessoasEntrega" value="${cfg.pessoasEntrega}"></div>
+          <div class="form-group span2"><label class="form-label">Trânsito Padrão</label>
+            <select class="form-select" id="cfg-transito">
+              <option value="lento" ${cfg.transito==='lento'?'selected':''}>Lento (3 min/km)</option>
+              <option value="intermediario" ${cfg.transito==='intermediario'?'selected':''}>Intermediário (2 min/km)</option>
+              <option value="rapido" ${cfg.transito==='rapido'?'selected':''}>Rápido (1 min/km)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  openModal('modal-config-orc');
+}
+
+function salvarConfig() {
+  const cfg = getConfigOrc();
+  const campos = ['custoEstrutura','horasProdMes','qtdFuncionarios','custoInsumo','inadimplencia',
+    'comissaoVendedor','valorMaquinas','anosDepreciacao','valorResidual','serra','corte45',
+    'montagem45','areaBipolida','polimentoManual','polimentoAutomatico','meioBoelado',
+    'meioBoeladoDuplo','consumoCombustivel','custoCombustivel','horasInstalacaoM2',
+    'pessoasInstalacao','horasEntregaM2','pessoasEntrega'];
+  campos.forEach(c => {
+    const el = document.getElementById('cfg-' + c);
+    if (el) cfg[c] = parseFloat(el.value.replace(',','.')) || 0;
+  });
+  const tr = document.getElementById('cfg-transito');
+  if (tr) cfg.transito = tr.value;
+  salvarConfigOrc(cfg);
+  closeModal('modal-config-orc');
+  showNotif('Configurações salvas! ✓', 'success');
+  renderOrcamento();
+}
+
+// ─── MODAL PEDRAS ────────────────────────────────────────────────────────
+function abrirCadastroPedras() {
+  renderListaPedras();
+  openModal('modal-pedras-orc');
+}
+
+function renderListaPedras() {
+  const pedras = getPedrasCadastradas();
+  const body = document.getElementById('pedras-orc-body');
+  body.innerHTML = `
+    <div style="margin-bottom:16px;">
+      <button onclick="abrirFormPedra()" style="background:var(--gold);color:white;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">+ Adicionar Pedra</button>
+    </div>
+    <div id="form-nova-pedra" style="display:none;background:var(--cream);border-radius:12px;padding:16px;margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:600;color:var(--stone);margin-bottom:12px;" id="titulo-form-pedra">Nova Pedra</div>
+      <div class="form-grid">
+        <div class="form-group span2">
+          <label class="form-label">Nome da Pedra *</label>
+          <input class="form-input" id="pedra-nome" placeholder="Ex: Granito Preto São Gabriel Escovado">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Custo m² + Frete (R$) *</label>
+          <input class="form-input" id="pedra-custo" placeholder="0,00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Margem de Lucro (%)</label>
+          <input class="form-input" id="pedra-margem" placeholder="30" oninput="this.dataset.editado='sim'">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Margem de Quebra (%)</label>
+          <input class="form-input" id="pedra-quebra" placeholder="10">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Grupo / Dificuldade</label>
+          <select class="form-select" id="pedra-grupo" onchange="ajustarMargemPorGrupo(this.value)">
+            ${GRUPOS_DIFICULDADE.map(g => `<option value="${g.id}">${g.nome}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button onclick="salvarPedraForm()" style="background:var(--green);color:white;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px;">💾 Salvar</button>
+        <button onclick="document.getElementById('form-nova-pedra').style.display='none'" style="background:var(--cream-dark);border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;">Cancelar</button>
+      </div>
+      <input type="hidden" id="pedra-edit-id">
+    </div>
+    ${pedras.length === 0 ? '<div style="text-align:center;padding:40px;color:var(--stone-light);">Nenhuma pedra cadastrada ainda.</div>' :
+      `<div style="display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto;">
+        ${pedras.map(p => {
+          const grupo = GRUPOS_DIFICULDADE.find(g => g.id === p.grupoId);
+          return `<div style="background:white;border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--stone);">🪨 ${p.nome}</div>
+              <div style="font-size:12px;color:var(--stone-light);">${grupo?grupo.nome:''} · Quebra: ${p.quebra}% · Margem: ${p.margem}%</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="font-size:15px;font-weight:700;color:var(--gold);">R$ ${p.custoM2.toFixed(2).replace('.',',')}/m²</div>
+              <button onclick="editarPedra('${p.id}')" style="background:var(--cream);border:1.5px solid var(--cream-dark);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:12px;">✏️</button>
+              <button onclick="deletarPedra('${p.id}')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:12px;">🗑</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`
+    }`;
+}
+
+function abrirFormPedra(id) {
+  const form = document.getElementById('form-nova-pedra');
+  form.style.display = 'block';
+  document.getElementById('pedra-edit-id').value = id || '';
+  document.getElementById('titulo-form-pedra').textContent = id ? 'Editar Pedra' : 'Nova Pedra';
+  if (id) {
+    const p = getPedrasCadastradas().find(x => x.id === id);
+    if (p) {
+      document.getElementById('pedra-nome').value = p.nome;
+      document.getElementById('pedra-custo').value = p.custoM2;
+      document.getElementById('pedra-margem').value = p.margem;
+      document.getElementById('pedra-quebra').value = p.quebra;
+      document.getElementById('pedra-grupo').value = p.grupoId;
+    }
+  } else {
+    document.getElementById('pedra-nome').value = '';
+    document.getElementById('pedra-custo').value = '';
+    document.getElementById('pedra-margem').value = '30';
+    document.getElementById('pedra-margem').dataset.editado = '';
+    document.getElementById('pedra-quebra').value = '10';
+    document.getElementById('pedra-grupo').value = '1';
+  }
+}
+
+function editarPedra(id) { abrirFormPedra(id); }
+
+function ajustarMargemPorGrupo(grupoId) {
+  const grupo = GRUPOS_DIFICULDADE.find(g => g.id === parseInt(grupoId));
+  const campoMargem = document.getElementById('pedra-margem');
+  if (campoMargem && !campoMargem.dataset.editado && grupo) {
+    campoMargem.value = grupo.margem;
+  }
+}
+
+function salvarPedraForm() {
+  const nome = document.getElementById('pedra-nome').value.trim();
+  const custo = parseFloat(document.getElementById('pedra-custo').value.replace(',','.'));
+  const margem = parseFloat(document.getElementById('pedra-margem').value) || 30;
+  const quebra = parseFloat(document.getElementById('pedra-quebra').value) || 10;
+  const grupoId = parseInt(document.getElementById('pedra-grupo').value);
+  const editId = document.getElementById('pedra-edit-id').value;
+
+  if (!nome || !custo) { showNotif('Preencha nome e custo!', 'error'); return; }
+
+  let pedras = getPedrasCadastradas();
+  if (editId) {
+    pedras = pedras.map(p => p.id === editId ? {...p, nome, custoM2: custo, margem, quebra, grupoId} : p);
+  } else {
+    pedras.push({ id: 'p' + Date.now(), nome, custoM2: custo, margem, quebra, grupoId });
+  }
+  salvarPedras(pedras);
+  document.getElementById('form-nova-pedra').style.display = 'none';
+  renderListaPedras();
+  showNotif('Pedra salva! ✓', 'success');
+}
+
+function deletarPedra(id) {
+  if (!confirm('Excluir esta pedra?')) return;
+  salvarPedras(getPedrasCadastradas().filter(p => p.id !== id));
+  renderListaPedras();
+}
+
+// ─── NOVO ORÇAMENTO ──────────────────────────────────────────────────────
+function novoOrcamento() {
+  orcamentoAtual = {
+    id: 'ORC-' + Date.now(),
+    cliente: '',
+    distancia: 0,
+    transito: 'rapido',
+    status: 'Em aberto',
+    criadoEm: new Date().toISOString(),
+    itens: []
+  };
+  renderFormOrcamento();
+  openModal('modal-novo-orc');
+}
+
+function editarOrcamento(id) {
+  const orcs = getOrcamentos();
+  orcamentoAtual = JSON.parse(JSON.stringify(orcs.find(o => o.id === id)));
+  renderFormOrcamento();
+  openModal('modal-novo-orc');
+}
+
+function deletarOrcamento(id) {
+  if (!confirm('Excluir este orçamento?')) return;
+  salvarOrcamentos(getOrcamentos().filter(o => o.id !== id));
+  renderOrcamento();
+  showNotif('Orçamento excluído', 'error');
+}
+
+function renderFormOrcamento() {
+  const orc = orcamentoAtual;
+  const pedras = getPedrasCadastradas();
+  const cfg = getConfigOrc();
+
+  // Recalcula todos os itens
+  orc.itens.forEach(item => {
+    const pedra = pedras.find(p => p.id === item.pedraId);
+    item.calc = pedra ? calcularItem(item, pedra, cfg) : null;
+  });
+
+  const totalGeral = orc.itens.reduce((s, it) => s + (it.calc ? it.calc.precoFinal : 0), 0);
+  const custoTotal = orc.itens.reduce((s, it) => s + (it.calc ? it.calc.custoTotal : 0), 0);
+  const lucroTotal = orc.itens.reduce((s, it) => s + (it.calc ? it.calc.lucroLiquido : 0), 0);
+  const margemMedia = totalGeral > 0 ? (lucroTotal / totalGeral * 100) : 0;
+
+  document.getElementById('titulo-novo-orc').textContent = orc.cliente || 'Novo Orçamento';
+  document.getElementById('subtitulo-novo-orc').textContent = orc.id;
+
+  document.getElementById('novo-orc-body').innerHTML = `
+    <!-- Dados gerais -->
+    <div style="background:var(--cream);border-radius:12px;padding:16px;margin-bottom:20px;">
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Cliente *</label>
+          <input class="form-input" id="orc-cliente" value="${orc.cliente||''}" oninput="orcamentoAtual.cliente=this.value;document.getElementById('titulo-novo-orc').textContent=this.value||'Novo Orçamento'"></div>
+        <div class="form-group"><label class="form-label">Distância (km)</label>
+          <input class="form-input" id="orc-distancia" value="${orc.distancia||0}" oninput="orcamentoAtual.distancia=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Status</label>
+          <select class="form-select" id="orc-status" onchange="orcamentoAtual.status=this.value">
+            ${['Em aberto','Aprovado','Fechado','Cancelado'].map(s => `<option ${orc.status===s?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Trânsito</label>
+          <select class="form-select" id="orc-transito" onchange="orcamentoAtual.transito=this.value;recalcularOrcamento()">
+            <option value="lento" ${orc.transito==='lento'?'selected':''}>Lento</option>
+            <option value="intermediario" ${orc.transito==='intermediario'?'selected':''}>Intermediário</option>
+            <option value="rapido" ${orc.transito==='rapido'?'selected':''}>Rápido</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resumo financeiro -->
+    ${orc.itens.length > 0 ? `
+    <div style="background:var(--stone);color:white;border-radius:12px;padding:16px;margin-bottom:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">
+      <div><div style="font-size:10px;opacity:0.7;text-transform:uppercase;">Custo Total</div><div style="font-size:18px;font-weight:700;">${fmt(custoTotal)}</div></div>
+      <div><div style="font-size:10px;opacity:0.7;text-transform:uppercase;">Lucro Líquido</div><div style="font-size:18px;font-weight:700;color:#A8D5A2;">${fmt(lucroTotal)}</div></div>
+      <div><div style="font-size:10px;opacity:0.7;text-transform:uppercase;">Margem</div><div style="font-size:18px;font-weight:700;color:${margemMedia>=30?'#A8D5A2':margemMedia>=20?'#FFD700':'#FF6B6B'};">${margemMedia.toFixed(1)}%</div></div>
+      <div><div style="font-size:10px;opacity:0.7;text-transform:uppercase;">Preço Final</div><div style="font-size:20px;font-weight:700;color:#FFD700;">${fmt(totalGeral)}</div></div>
+    </div>` : ''}
+
+    <!-- Itens -->
+    <div id="lista-itens-orc">
+      ${orc.itens.map((item, idx) => renderItemOrcamento(item, idx, pedras, cfg)).join('')}
+    </div>
+
+    <button onclick="adicionarItemOrcamento()" style="width:100%;padding:12px;background:var(--cream);border:2px dashed var(--cream-dark);border-radius:10px;cursor:pointer;font-size:14px;color:var(--stone-light);margin-top:8px;">+ Adicionar Item</button>`;
+}
+
+function renderItemOrcamento(item, idx, pedras, cfg) {
+  const pedra = pedras.find(p => p.id === item.pedraId);
+  const calc = item.calc;
+
+  return `
+  <div style="background:white;border-radius:14px;padding:20px;box-shadow:var(--shadow);margin-bottom:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div style="font-size:14px;font-weight:700;color:var(--stone);">📐 Item ${idx+1}: ${item.nome||'Sem nome'}</div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        ${calc ? `<span style="background:var(--gold);color:white;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:700;">${fmt(calc.precoFinal)}</span>` : ''}
+        <button onclick="removerItemOrcamento(${idx})" style="background:#FDEAEA;border:none;color:#B85A4A;padding:5px 10px;border-radius:6px;cursor:pointer;">🗑</button>
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="form-group"><label class="form-label">Nome do Item</label>
+        <input class="form-input" value="${item.nome||''}" oninput="orcamentoAtual.itens[${idx}].nome=this.value"></div>
+      <div class="form-group"><label class="form-label">Pedra / Material</label>
+        <select class="form-select" onchange="orcamentoAtual.itens[${idx}].pedraId=this.value;recalcularOrcamento()">
+          <option value="">Selecione...</option>
+          ${pedras.map(p => `<option value="${p.id}" ${item.pedraId===p.id?'selected':''}>${p.nome} — R$ ${p.custoM2.toFixed(2).replace('.',',')}/m²</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Largura (m)</label>
+        <input class="form-input" type="number" step="0.01" value="${item.largura||''}" oninput="orcamentoAtual.itens[${idx}].largura=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+      <div class="form-group"><label class="form-label">Comprimento (m)</label>
+        <input class="form-input" type="number" step="0.01" value="${item.comprimento||''}" oninput="orcamentoAtual.itens[${idx}].comprimento=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+      <div class="form-group"><label class="form-label">Quantidade</label>
+        <input class="form-input" type="number" value="${item.quantidade||1}" oninput="orcamentoAtual.itens[${idx}].quantidade=parseInt(this.value)||1;recalcularOrcamento()"></div>
+      <div class="form-group"><label class="form-label">Tipo de Entrega</label>
+        <select class="form-select" onchange="orcamentoAtual.itens[${idx}].tipoEntrega=this.value;recalcularOrcamento()">
+          <option value="instalacao" ${item.tipoEntrega==='instalacao'?'selected':''}>Com Instalação</option>
+          <option value="entrega" ${item.tipoEntrega==='entrega'?'selected':''}>Só Entrega</option>
+          <option value="retirada" ${item.tipoEntrega==='retirada'?'selected':''}>Retirada</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Bipolimento (m²)</label>
+        <input class="form-input" type="number" step="0.1" value="${item.areaBipolida||0}" oninput="orcamentoAtual.itens[${idx}].areaBipolida=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+      <div class="form-group"><label class="form-label">Horas Adicionais</label>
+        <input class="form-input" type="number" step="0.25" value="${item.horasAdicionais||0}" oninput="orcamentoAtual.itens[${idx}].horasAdicionais=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+    </div>
+    ${calc ? `
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--cream-dark);display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;">
+      <div style="font-size:11px;color:var(--stone-light);">Área: <strong>${calc.areaBase.toFixed(2)} m²</strong></div>
+      <div style="font-size:11px;color:var(--stone-light);">c/ Quebra: <strong>${calc.areaComQuebra.toFixed(2)} m²</strong></div>
+      <div style="font-size:11px;color:var(--stone-light);">Material: <strong>${fmt(calc.custoMaterial)}</strong></div>
+      <div style="font-size:11px;color:var(--stone-light);">Produção: <strong>${fmt(calc.custoSerra+calc.custoMontagem+calc.custoBipolimento+calc.custoPolimento)}</strong></div>
+      <div style="font-size:11px;color:var(--stone-light);">Instalação: <strong>${fmt(calc.custoInstalacao)}</strong></div>
+      <div style="font-size:11px;color:var(--stone-light);">Insumos (${cfg.custoInsumo}%): <strong>${fmt(calc.custoInsumos)}</strong></div>
+      <div style="font-size:11px;color:var(--stone-light);">Custo Total: <strong>${fmt(calc.custoTotal)}</strong></div>
+      <div style="font-size:11px;color:var(--stone-light);">Lucro (${calc.margem}%): <strong style="color:var(--green);">${fmt(calc.lucroLiquido)}</strong></div>
+    </div>` : ''}
+  </div>`;
+}
+
+function adicionarItemOrcamento() {
+  orcamentoAtual.itens.push({
+    nome: '', pedraId: '', largura: 0, comprimento: 0, quantidade: 1,
+    tipoEntrega: 'instalacao', areaBipolida: 0, horasAdicionais: 0, calc: null
+  });
+  recalcularOrcamento();
+}
+
+function removerItemOrcamento(idx) {
+  orcamentoAtual.itens.splice(idx, 1);
+  recalcularOrcamento();
+}
+
+function recalcularOrcamento() {
+  const pedras = getPedrasCadastradas();
+  const cfg = {...getConfigOrc(), transito: orcamentoAtual.transito};
+  orcamentoAtual.itens.forEach(item => {
+    const pedra = pedras.find(p => p.id === item.pedraId);
+    item.distancia = orcamentoAtual.distancia;
+    item.calc = (pedra && item.largura && item.comprimento) ? calcularItem(item, pedra, cfg) : null;
+  });
+  renderFormOrcamento();
+}
+
+function salvarOrcamentoAtual() {
+  if (!orcamentoAtual) return;
+  orcamentoAtual.cliente = document.getElementById('orc-cliente')?.value || orcamentoAtual.cliente;
+  orcamentoAtual.status = document.getElementById('orc-status')?.value || orcamentoAtual.status;
+  if (!orcamentoAtual.cliente) { showNotif('Informe o nome do cliente!', 'error'); return; }
+
+  let orcs = getOrcamentos();
+  const idx = orcs.findIndex(o => o.id === orcamentoAtual.id);
+  if (idx >= 0) orcs[idx] = orcamentoAtual;
+  else orcs.unshift(orcamentoAtual);
+  salvarOrcamentos(orcs);
+
+  closeModal('modal-novo-orc');
+  renderOrcamento();
+  showNotif('Orçamento salvo! ✓', 'success');
+}
+// ═══════════════════════════════════════════════════════════════════════════
 
 </script>
 

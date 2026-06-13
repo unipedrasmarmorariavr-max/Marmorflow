@@ -1157,8 +1157,14 @@ function renderDashboard() {
   const producao = orders.filter(o => ['corte','acabamento','pronto'].includes(o.stage));
   const entregues = orders.filter(o => o.stage==='entregue');
 
-  const totalNeg = negociando.reduce((s,o) => s + (parseFloat((o.valor||'0').replace(',','.').replace(/[^0-9.]/g,''))||0), 0);
-  const totalFech = fechados.reduce((s,o) => s + (parseFloat((o.valor||'0').replace(',','.').replace(/[^0-9.]/g,''))||0), 0);
+  const parseValor = o => parseFloat((o.valor||'0').replace(',','.').replace(/[^0-9.]/g,''))||0;
+  const totalNeg = negociando.reduce((s,o) => s + parseValor(o), 0);
+  const totalFech = fechados.reduce((s,o) => s + parseValor(o), 0);
+  // Total orçado = TUDO que já recebeu valor (negociação + fechados + produção + entregues)
+  // Exclui apenas cópias de Em Corte (ref_fechado) para não duplicar
+  const todosOrcados = orders.filter(o => o.valor && !o.ref_fechado);
+  const totalOrcado = todosOrcados.reduce((s,o) => s + parseValor(o), 0);
+  const totalOrcadoCount = todosOrcados.length;
 
   // Origem breakdown
   const origemMap = {};
@@ -1204,13 +1210,16 @@ function renderDashboard() {
         </div>
         <div style="background:white;border-radius:16px;padding:24px;box-shadow:var(--shadow);">
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:16px;">Resumo Financeiro</div>
-          ${rowD('Em negociação',totalNeg,'#B8760A')}
-          ${rowD('Pedidos fechados',totalFech,'#4A7C59')}
-          ${rowD('Total geral',totalNeg+totalFech,'#B8965A')}
+          ${rowD('Total orçado',totalOrcado,'#B8760A')}
+          ${rowD('Receita confirmada',totalFech,'#4A7C59')}
           <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--cream-dark);">
             <div style="font-size:12px;color:var(--stone-light);margin-bottom:6px;">Taxa de conversão</div>
-            <div style="font-size:24px;font-weight:700;color:var(--stone);">${orders.length>0?Math.round((fechados.length/Math.max(orders.filter(o=>o.stage!=='medicao').length,1))*100):0}%</div>
-            <div style="font-size:11px;color:var(--stone-light);">dos orçamentos viram pedido</div>
+            ${(() => {
+              // Fechados ÷ total de pedidos orçados (sem cópias de corte, sem só medição)
+              const taxa = totalOrcadoCount > 0 ? Math.round((fechados.length / totalOrcadoCount) * 100) : 0;
+              return \`<div style="font-size:24px;font-weight:700;color:var(--stone);">\${taxa}%</div>
+              <div style="font-size:11px;color:var(--stone-light);">${fechados.length} fechado${fechados.length!==1?'s':''} de ${totalOrcadoCount} orçamento${totalOrcadoCount!==1?'s':''}</div>`;
+            })()}
           </div>
         </div>
       </div>

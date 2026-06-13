@@ -1882,8 +1882,9 @@ function abrirModalConfirmarData(id) {
     validarDataManual(inputManual.value);
   };
 
-  // Mostra pergunta levigado só se o acabamento for Levigado
-  const acabSel = (document.querySelector('input[name="acabamento"]:checked')||{}).value||'';
+  // Mostra pergunta levigado — usa acabamento do pedido salvo OU do radio button se modal estiver aberto
+  const acabRadio = (document.querySelector('input[name="acabamento"]:checked')||{}).value||'';
+  const acabSel = acabRadio || order.acabamento || '';
   const blocoLev = document.getElementById('bloco-levigado');
   if (blocoLev) {
     blocoLev.style.display = acabSel === 'Levigado' ? 'block' : 'none';
@@ -1953,7 +1954,8 @@ async function confirmarFechamentoComData() {
 
   // Salva data + stage fechado no pedido original
   const materialFinal = document.getElementById('c-material') ? (document.getElementById('c-material').value.trim()||order.material) : order.material;
-  const acabamentoFinal = (document.querySelector('input[name="acabamento"]:checked')||{}).value||order.acabamento||'';
+  const acabRadioFinal = (document.querySelector('input[name="acabamento"]:checked')||{}).value||'';
+  const acabamentoFinal = acabRadioFinal || order.acabamento || '';
   const levOrigem = (document.querySelector('input[name="levigado_origem"]:checked')||{}).value||'levigado';
   const levigadoDoPolicdo = (acabamentoFinal === 'Levigado' && levOrigem === 'polido');
   const { error } = await getSB().from('pedidos')

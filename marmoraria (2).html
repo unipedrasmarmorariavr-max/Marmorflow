@@ -569,7 +569,24 @@ async function mostrarPedidoCliente(id) {
     return `<div class="tl-item ${cls}"><div class="tl-line"><div class="tl-dot"></div>${i<STAGES.length-1?'<div class="tl-connector"></div>':''}</div><div class="tl-content"><div class="tl-name">${s.label}</div><div class="tl-date">${hist?hist.date:current?'← Aqui agora':done?'✓':'—'}</div></div></div>`;
   }).join('');
   const croquiImgs = o.croqui||[];
-  const croquiHTML = croquiImgs.length>0?`<div style="margin-top:20px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:8px;">Croqui do Pedido</div><div class="images-protected">${croquiImgs.map(img=>`<img src="${img}" oncontextmenu="return false;" onclick="openLightbox('${img}')">`).join('')}</div><div class="no-download-notice">🔒 Visualização apenas</div></div>`:'';
+  const localImgs = o.local||[];
+  const temFotosCliente = croquiImgs.length > 0 || localImgs.length > 0;
+  const fotosClienteHTML = temFotosCliente ? `
+    <div style="background:white;border-radius:16px;padding:24px;box-shadow:var(--shadow);margin-top:16px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:16px;">📐 Fotos do Pedido</div>
+      ${croquiImgs.length>0?`
+        <div style="font-size:12px;font-weight:600;color:var(--stone);margin-bottom:8px;">Croqui / Medição</div>
+        <div class="images-protected" style="margin-bottom:16px;">
+          ${croquiImgs.map(img=>`<img src="${img}" oncontextmenu="return false;" onclick="openLightbox('${img}')" style="cursor:zoom-in;" title="Toque para ampliar">`).join('')}
+        </div>`:''}
+      ${localImgs.length>0?`
+        <div style="font-size:12px;font-weight:600;color:var(--stone);margin-bottom:8px;">Fotos do Local</div>
+        <div class="images-protected">
+          ${localImgs.map(img=>`<img src="${img}" oncontextmenu="return false;" onclick="openLightbox('${img}')" style="cursor:zoom-in;" title="Toque para ampliar">`).join('')}
+        </div>`:''}
+      <div class="no-download-notice" style="margin-top:10px;">🔒 Visualização apenas — toque para ampliar</div>
+    </div>` : '';
+
   body.innerHTML = `
     <div style="background:white;border-radius:16px;padding:24px;box-shadow:var(--shadow);margin-bottom:16px;">
       <div style="font-family:'DM Serif Display',serif;font-size:22px;color:var(--stone);margin-bottom:4px;">${o.cliente}</div>
@@ -583,8 +600,8 @@ async function mostrarPedidoCliente(id) {
     <div style="background:white;border-radius:16px;padding:24px;box-shadow:var(--shadow);">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:16px;">Histórico</div>
       <div class="timeline">${tlHTML}</div>
-      ${croquiHTML}
-    </div>`;
+    </div>
+    ${fotosClienteHTML}`;
 }
 
 // ============ LOGIN ============
@@ -874,7 +891,26 @@ function openDetail(id) {
   const croquiHTML=(o.croqui||[]).length>0?`<div class="detail-section"><div class="detail-section-title">Croqui</div><div class="images-protected">${(o.croqui||[]).map(img=>`<img src="${img}" oncontextmenu="return false;" onclick="openLightbox('${img}')">`).join('')}</div><div class="no-download-notice">🔒 Protegido</div></div>`:'';
   const localHTML=(o.local||[]).length>0?`<div class="detail-section"><div class="detail-section-title">Fotos do Local</div><div class="images-protected">${(o.local||[]).map(img=>`<img src="${img}" oncontextmenu="return false;" onclick="openLightbox('${img}')">`).join('')}</div></div>`:'';
   const row=(k,v)=>v?`<div class="detail-row"><div class="detail-key">${k}</div><div class="detail-val">${v}</div></div>`:'';
+  // Fotos em destaque no topo — importante para Produção
+  const temFotos = (o.croqui||[]).length > 0 || (o.local||[]).length > 0;
+  const fotosDestaqueHTML = temFotos ? `
+    <div class="detail-section" style="background:var(--cream);border-radius:12px;padding:14px;margin-bottom:4px;">
+      <div class="detail-section-title" style="margin-bottom:12px;">📐 Fotos do Pedido</div>
+      ${(o.croqui||[]).length>0?`
+        <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Croqui / Medição</div>
+        <div class="images-protected" style="margin-bottom:12px;">
+          ${(o.croqui||[]).map(img=>`<img src="${img}" oncontextmenu="return false;" onclick="openLightbox('${img}')" style="cursor:zoom-in;" title="Clique para ampliar">`).join('')}
+        </div>`:''}
+      ${(o.local||[]).length>0?`
+        <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Fotos do Local</div>
+        <div class="images-protected">
+          ${(o.local||[]).map(img=>`<img src="${img}" oncontextmenu="return false;" onclick="openLightbox('${img}')" style="cursor:zoom-in;" title="Clique para ampliar">`).join('')}
+        </div>`:''}
+      <div class="no-download-notice" style="margin-top:8px;">🔒 Protegido — clique para ampliar</div>
+    </div>` : '';
+
   document.getElementById('detail-body').innerHTML=`
+    ${fotosDestaqueHTML}
     <div class="detail-section">
       <div class="detail-section-title">Status</div>
       <span class="status-badge" style="background:${stage.bg};color:${stage.color};"><span style="width:8px;height:8px;border-radius:50%;background:${stage.color};display:inline-block;"></span>${stage.label}</span>
@@ -896,8 +932,7 @@ function openDetail(id) {
     </div>
     <div class="detail-section"><div class="detail-section-title">Acesso</div>
       ${row('Acesso',o.acesso)}${row('Andar/Apto',o.andar)}${row('Obs. Acesso',o.obsAcesso)}
-    </div>
-    ${croquiHTML}${localHTML}`;
+    </div>`;
   const footer=document.getElementById('detail-footer');
   footer.innerHTML='';
   const p=PROFILES[currentUser];

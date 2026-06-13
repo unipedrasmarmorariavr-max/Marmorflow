@@ -1332,7 +1332,8 @@ function renderMateriais() {
   if (!el) return;
 
   const stageProd = ['fechado','corte','acabamento','pronto','entregue'];
-  const pedidosProd = orders.filter(o => stageProd.includes(o.stage) && o.material && o.metragem);
+  // Exclui cópias de Em Corte (ref_fechado) para não duplicar
+  const pedidosProd = orders.filter(o => stageProd.includes(o.stage) && o.material && o.metragem && !o.ref_fechado);
 
   // Group by material, com acabamentos separados
   // Levigado do polido: desconta do levigado e soma no polido

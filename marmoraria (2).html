@@ -816,6 +816,7 @@ async function saveMedidor() {
 
 // ============ FECHAR PEDIDO (COMERCIAL) ============
 function abrirFecharPedido(id) {
+  try {
   const o=orders.find(o=>o.id===id); if(!o) return;
   fechandoId=id;
   document.getElementById('modal-comercial-title').textContent='Fechar Pedido';
@@ -842,12 +843,13 @@ function abrirFecharPedido(id) {
   document.getElementById('c-origem').value=o.origem||'';
   document.getElementById('c-origem-nome').value=o.origemNome||'';
   toggleOrigem();
-  const itens = (typeof o.itens_cliente === 'string' ? JSON.parse(o.itens_cliente||'{}') : o.itens_cliente||o.itensCliente||{});
+  let itens = {}; try { itens = typeof o.itens_cliente === 'string' ? JSON.parse(o.itens_cliente||'{}') : (o.itens_cliente||o.itensCliente||{}); } catch(e) { itens = {}; }
   ['cuba','torre','lixeira','calha','dispenser','valvula','torneira'].forEach(k=>{
     const el=document.getElementById('chk-'+k); if(el) el.checked=itens[k]||false;
   });
   closeModal('modal-detail');
   openModal('modal-comercial');
+  } catch(err) { alert('Erro ao abrir modal comercial: ' + err.message); console.error(err); }
 }
 
 async function fecharPedido() {

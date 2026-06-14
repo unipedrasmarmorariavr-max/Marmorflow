@@ -3081,6 +3081,7 @@ function salvarOrcamentoAtual() {
 let pedidoOrcAtual = null;
 
 function abrirTelaOrcamentoPedido(id) {
+  try {
   const order = orders.find(o => o.id === id);
   if (!order) return;
   pedidoOrcAtual = id;
@@ -3135,6 +3136,10 @@ function abrirTelaOrcamentoPedido(id) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-orcamento-pedido').classList.add('active');
   renderTelaOrcamentoPedido(order);
+  } catch(err) {
+    console.error('Erro ao abrir orçamento:', err);
+    showNotif('Erro ao abrir orçamento: ' + err.message, 'error');
+  }
 }
 
 function fecharTelaOrcamentoPedido() {
@@ -3653,7 +3658,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
           <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
           <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
           <input id="mat-valor-${idx}" class="form-input" style="padding:6px 8px;font-size:13px;font-weight:700;color:#006382;background:#f5f5f5;" value="${calc?fmt(calc.precoFinal):'—'}" readonly>
-          <input id="mat-llh-${idx}" class="form-input" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="${calc&&tempoProdTotal>0?fmt(calc.lucroLiquido/tempoProdTotal):'—'}" readonly>
+          <input id="mat-llh-${idx}" class="form-input" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="${calc&&calc.tempoProdInterno>0?fmt(calc.lucroLiquido/calc.tempoProdInterno):'—'}" readonly>
         </div>
 
         <!-- CUSTOS E TEMPOS (colapsável) -->

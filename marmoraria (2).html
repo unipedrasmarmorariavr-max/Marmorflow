@@ -310,6 +310,9 @@
     <div class="panel" id="panel-orcamento">
       <div id="orcamento-content"></div>
     </div>
+    <div class="panel" id="panel-orcamento-pedido">
+      <div id="orcamento-pedido-content"></div>
+    </div>
     <div class="panel" id="panel-portal">
       <div class="portal-wrap">
         <div class="portal-search">
@@ -849,6 +852,11 @@ async function saveMedidor() {
 function abrirFecharPedido(id) {
   try {
   const o=orders.find(o=>o.id===id); if(!o) return;
+  // Se Comercial ou Dono, abre tela cheia de orçamento
+  if (currentUser === 'comercial' || currentUser === 'dono') {
+    abrirTelаOrcamentoPedido(id);
+    return;
+  }
   fechandoId=id;
   document.getElementById('modal-comercial-title').textContent='Fechar Pedido';
   document.getElementById('modal-comercial-sub').textContent=id+' — '+o.cliente;
@@ -2982,6 +2990,363 @@ function salvarOrcamentoAtual() {
   showNotif('Orçamento salvo! ✓', 'success');
 }
 // ═══════════════════════════════════════════════════════════════════════════
+
+
+// ─── TELA CHEIA DE ORÇAMENTO POR PEDIDO ──────────────────────────────────
+let pedidoOrcAtual = null;
+
+function abrirTelаOrcamentoPedido(id) {
+  const order = orders.find(o => o.id === id);
+  if (!order) return;
+  pedidoOrcAtual = id;
+
+  // Busca ou cria orçamento vinculado ao pedido
+  let orcs = getOrcamentos();
+  let orc = orcs.find(o => o.pedidoId === id);
+  if (!orc) {
+    orc = {
+      id: 'ORC-' + id,
+      pedidoId: id,
+      cliente: order.cliente || '',
+      distancia: 0,
+      transito: 'rapido',
+      status: 'Em aberto',
+      criadoEm: new Date().toISOString(),
+      itens: [{
+        nome: order.peca || '',
+        pedraId: '',
+        largura: 0,
+        comprimento: 0,
+        quantidade: 1,
+        tipoEntrega: order.tipoentrega === 'entrega_instalacao' ? 'instalacao' :
+                     order.tipoentrega === 'so_entrega' ? 'entrega' : 'retirada',
+        areaBipolida: 0, horasAdicionais: 0,
+        compCorte45:0, compMontagem45:0, compPolimentoManual:0, compPolimentoAuto:0,
+        compMeioBoelado:0, compMeioBoeladoDuplo:0, compChanfrado45:0, compChanfradoDuplo:0,
+        compMeiaCana:0, compMeiaCanaDuplo:0, compBoeladoDuplo:0, compChanfroAlongado:0,
+        compCubEsculpida:0, compColagemTopo:0, compWaterJet:0,
+        areaRebaixoItaliano:0, areaRebaixoAmericano:0,
+        qtdFlush:0, qtdFlath:0, qtdRecortes:0, qtdCubas:0,
+        calc: null
+      }]
+    };
+  }
+  orcamentoAtual = JSON.parse(JSON.stringify(orc));
+
+  // Esconde tabs e mostra tela cheia
+  document.querySelector('.tabs').style.display = 'none';
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-orcamento-pedido').classList.add('active');
+  renderTelaOrcamentoPedido(order);
+}
+
+function fecharTelaOrcamentoPedido() {
+  document.querySelector('.tabs').style.display = '';
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-kanban').classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-kanban').classList.add('active');
+  pedidoOrcAtual = null;
+}
+
+function renderTelaOrcamentoPedido(order) {
+  const el = document.getElementById('orcamento-pedido-content');
+  if (!el) return;
+  const cfg = getConfigOrc();
+  const pedras = getPedrasCadastradas();
+  const orc = orcamentoAtual;
+  const { custoHoraEmpresa } = calcularCustoHora();
+
+  // Recalcula
+  orc.itens.forEach(item => {
+    const pedra = pedras.find(p => p.id === item.pedraId);
+    item.distancia = orc.distancia;
+    item.calc = (pedra && item.largura && item.comprimento) ? calcularItem(item, pedra, {...cfg, transito: orc.transito}) : null;
+  });
+
+  const totalGeral = orc.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
+  const custoTotal = orc.itens.reduce((s,it) => s + (it.calc?.custoTotal||0), 0);
+  const lucroTotal = orc.itens.reduce((s,it) => s + (it.calc?.lucroLiquido||0), 0);
+  const margem = totalGeral > 0 ? (lucroTotal/totalGeral*100) : 0;
+  const margemCor = margem >= 30 ? '#4A7C59' : margem >= 20 ? '#B8760A' : '#B85A4A';
+
+  el.innerHTML = `
+  <div style="min-height:100vh;background:var(--cream);padding:0;">
+
+    <!-- Header fixo -->
+    <div style="background:var(--stone);color:white;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:100;">
+      <div style="display:flex;align-items:center;gap:16px;">
+        <button onclick="fecharTelaOrcamentoPedido()" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;">← Voltar</button>
+        <div>
+          <div style="font-size:18px;font-weight:700;">🧮 Orçamento — ${order.cliente}</div>
+          <div style="font-size:12px;opacity:0.7;">${order.id} · ${order.peca||''} · ${order.material||''} · Custo/h: ${fmt(custoHoraEmpresa)}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+        ${totalGeral > 0 ? `
+        <div style="text-align:right;">
+          <div style="font-size:11px;opacity:0.7;">PREÇO FINAL</div>
+          <div style="font-size:22px;font-weight:700;color:#FFD700;">${fmt(totalGeral)}</div>
+        </div>
+        <div style="background:${margemCor};padding:6px 14px;border-radius:8px;text-align:center;">
+          <div style="font-size:10px;opacity:0.8;">MARGEM</div>
+          <div style="font-size:16px;font-weight:700;">${margem.toFixed(1)}%</div>
+        </div>` : ''}
+        <button onclick="salvarOrcamentoPedido()" style="background:var(--gold);color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">💾 Salvar</button>
+        ${totalGeral > 0 ? `<button onclick="salvarEFecharPedido()" style="background:#4A7C59;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">✅ Salvar e Fechar Pedido</button>` : ''}
+      </div>
+    </div>
+
+    <div style="max-width:1200px;margin:0 auto;padding:24px;">
+
+      <!-- Dados do medidor (somente leitura) -->
+      <div style="background:white;border-radius:14px;padding:20px;margin-bottom:20px;box-shadow:var(--shadow);border-left:4px solid var(--gold);">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">📐 Dados da Medição</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
+          <div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;">Cliente</div><div style="font-size:14px;font-weight:600;color:var(--stone);">${order.cliente||'—'}</div></div>
+          <div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;">Peça</div><div style="font-size:14px;font-weight:600;color:var(--stone);">${order.peca||'—'}</div></div>
+          <div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;">Material</div><div style="font-size:14px;font-weight:600;color:var(--stone);">${order.material||'—'}</div></div>
+          <div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;">Conclusão</div><div style="font-size:14px;font-weight:600;color:var(--stone);">${TIPO_LABELS[order.tipoentrega]||order.tipoentrega||'—'}</div></div>
+          <div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;">Endereço</div><div style="font-size:13px;color:var(--stone);">${order.endereco||'—'}</div></div>
+          <div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;">Acesso</div><div style="font-size:13px;color:var(--stone);">${order.acesso||'—'}</div></div>
+        </div>
+      </div>
+
+      <!-- Dados comerciais do orçamento -->
+      <div style="background:white;border-radius:14px;padding:20px;margin-bottom:20px;box-shadow:var(--shadow);">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">🚚 Dados do Orçamento</div>
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">Distância até o cliente (km)</label>
+            <input class="form-input" type="number" id="torc-distancia" value="${orc.distancia||0}" oninput="orcamentoAtual.distancia=parseFloat(this.value)||0;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))"></div>
+          <div class="form-group"><label class="form-label">Trânsito</label>
+            <select class="form-select" id="torc-transito" onchange="orcamentoAtual.transito=this.value;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))">
+              <option value="lento" ${orc.transito==='lento'?'selected':''}>Lento (3 min/km)</option>
+              <option value="intermediario" ${orc.transito==='intermediario'?'selected':''}>Intermediário (2 min/km)</option>
+              <option value="rapido" ${orc.transito==='rapido'?'selected':''}>Rápido (1 min/km)</option>
+            </select>
+          </div>
+          <div class="form-group"><label class="form-label">Status do Orçamento</label>
+            <select class="form-select" id="torc-status" onchange="orcamentoAtual.status=this.value">
+              ${['Em aberto','Aprovado','Fechado','Cancelado'].map(s=>`<option ${orc.status===s?'selected':''}>${s}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group"><label class="form-label">Valor Final (R$) <span style="font-size:10px;color:var(--stone-light);">preenchido após cálculo</span></label>
+            <input class="form-input" id="torc-valor" value="${orc.valorFinal||''}" placeholder="Calculado automaticamente" readonly style="background:var(--cream-dark);">
+          </div>
+        </div>
+      </div>
+
+      <!-- Itens do orçamento -->
+      <div id="torc-itens">
+        ${orc.itens.map((item,idx) => renderItemTelaOrc(item, idx, pedras, cfg, order.id)).join('')}
+      </div>
+
+      <button onclick="adicionarItemTelaOrc('${order.id}')" style="width:100%;padding:14px;background:white;border:2px dashed var(--cream-dark);border-radius:12px;cursor:pointer;font-size:14px;color:var(--stone-light);margin-bottom:20px;">+ Adicionar Peça</button>
+
+      <!-- Itens do cliente (cuba, torneira etc) -->
+      <div style="background:white;border-radius:14px;padding:20px;margin-bottom:20px;box-shadow:var(--shadow);">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">📦 Itens Deixados pelo Cliente</div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;">
+          ${['Cuba','Tomada de Torre','Lixeira','Calha Úmida','Dispenser','Válvula','Torneira'].map(item => {
+            const key = item.toLowerCase().replace(/\s/g,'').replace('ú','u').replace('ã','a');
+            const checked = order.itensCliente?.[key] || false;
+            return `<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;background:var(--cream);padding:8px 14px;border-radius:8px;border:1.5px solid ${checked?'var(--gold)':'var(--cream-dark)'};">
+              <input type="checkbox" ${checked?'checked':''} disabled style="accent-color:var(--gold);"> ${item}
+            </label>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- Resumo financeiro final -->
+      ${totalGeral > 0 ? `
+      <div style="background:var(--stone);color:white;border-radius:14px;padding:24px;box-shadow:var(--shadow);">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:16px;">💰 Resumo Financeiro</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;">
+          <div><div style="font-size:11px;opacity:0.6;">Custo Total</div><div style="font-size:20px;font-weight:700;">${fmt(custoTotal)}</div></div>
+          <div><div style="font-size:11px;opacity:0.6;">Lucro Líquido</div><div style="font-size:20px;font-weight:700;color:#A8D5A2;">${fmt(lucroTotal)}</div></div>
+          <div><div style="font-size:11px;opacity:0.6;">Margem</div><div style="font-size:20px;font-weight:700;color:${margemCor};">${margem.toFixed(1)}%</div></div>
+          <div><div style="font-size:11px;opacity:0.6;">Preço Final</div><div style="font-size:26px;font-weight:700;color:#FFD700;">${fmt(totalGeral)}</div></div>
+        </div>
+      </div>` : ''}
+    </div>
+  </div>`;
+
+  // Atualiza valor no campo
+  const campoValor = document.getElementById('torc-valor');
+  if (campoValor && totalGeral > 0) {
+    campoValor.value = totalGeral.toFixed(2).replace('.',',');
+    orcamentoAtual.valorFinal = totalGeral.toFixed(2).replace('.',',');
+  }
+}
+
+function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
+  const pedra = pedras.find(p => p.id === item.pedraId);
+  const calc = item.calc;
+  const margemCor = calc ? (calc.margem >= 30 ? '#4A7C59' : calc.margem >= 20 ? '#B8760A' : '#B85A4A') : '';
+
+  return `
+  <div style="background:white;border-radius:14px;padding:24px;margin-bottom:16px;box-shadow:var(--shadow);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid var(--cream-dark);">
+      <div style="font-size:16px;font-weight:700;color:var(--stone);">📐 Peça ${idx+1}: ${item.nome||'Sem nome'}</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        ${calc ? `<span style="background:${margemCor};color:white;padding:4px 12px;border-radius:20px;font-size:12px;">Margem: ${calc.margem}%</span>
+        <span style="background:var(--gold);color:white;padding:6px 16px;border-radius:20px;font-size:15px;font-weight:700;">${fmt(calc.precoFinal)}</span>` : ''}
+        ${idx > 0 ? `<button onclick="removerItemTelaOrc(${idx},'${orderId}')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 12px;border-radius:8px;cursor:pointer;">🗑</button>` : ''}
+      </div>
+    </div>
+
+    <!-- Dados básicos -->
+    <div class="form-grid" style="margin-bottom:20px;">
+      <div class="form-group"><label class="form-label">Nome da Peça</label>
+        <input class="form-input" value="${item.nome||''}" placeholder="Ex: Bancada, Pia, Soleira..." oninput="orcamentoAtual.itens[${idx}].nome=this.value"></div>
+      <div class="form-group"><label class="form-label">Pedra / Material *</label>
+        <select class="form-select" onchange="orcamentoAtual.itens[${idx}].pedraId=this.value;recalcularTelaOrc('${orderId}')">
+          <option value="">Selecione a pedra...</option>
+          ${pedras.map(p=>`<option value="${p.id}" ${item.pedraId===p.id?'selected':''}>${p.nome} — R$ ${p.custoM2.toFixed(2).replace('.',',')}/m²</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Largura (m) *</label>
+        <input class="form-input" type="number" step="0.01" value="${item.largura||''}" placeholder="0,00" oninput="orcamentoAtual.itens[${idx}].largura=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+      <div class="form-group"><label class="form-label">Comprimento (m) *</label>
+        <input class="form-input" type="number" step="0.01" value="${item.comprimento||''}" placeholder="0,00" oninput="orcamentoAtual.itens[${idx}].comprimento=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+      <div class="form-group"><label class="form-label">Quantidade</label>
+        <input class="form-input" type="number" value="${item.quantidade||1}" oninput="orcamentoAtual.itens[${idx}].quantidade=parseInt(this.value)||1;recalcularTelaOrc('${orderId}')"></div>
+      <div class="form-group"><label class="form-label">Tipo de Entrega</label>
+        <select class="form-select" onchange="orcamentoAtual.itens[${idx}].tipoEntrega=this.value;recalcularTelaOrc('${orderId}')">
+          <option value="instalacao" ${item.tipoEntrega==='instalacao'?'selected':''}>Com Instalação</option>
+          <option value="entrega" ${item.tipoEntrega==='entrega'?'selected':''}>Só Entrega</option>
+          <option value="retirada" ${item.tipoEntrega==='retirada'?'selected':''}>Retirada na empresa</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Bipolimento (m²)</label>
+        <input class="form-input" type="number" step="0.1" value="${item.areaBipolida||0}" oninput="orcamentoAtual.itens[${idx}].areaBipolida=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+      <div class="form-group"><label class="form-label">Horas Adicionais</label>
+        <input class="form-input" type="number" step="0.25" value="${item.horasAdicionais||0}" oninput="orcamentoAtual.itens[${idx}].horasAdicionais=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+    </div>
+
+    <!-- Acabamentos lineares -->
+    <div style="background:var(--cream);border-radius:10px;padding:16px;margin-bottom:16px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">📏 Acabamentos Lineares (metros)</div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Corte 45° / Meia Esquadria (m)</label><input class="form-input" type="number" step="0.1" value="${item.compCorte45||0}" oninput="orcamentoAtual.itens[${idx}].compCorte45=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Montagem 45° (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMontagem45||0}" oninput="orcamentoAtual.itens[${idx}].compMontagem45=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Polimento Manual (m)</label><input class="form-input" type="number" step="0.1" value="${item.compPolimentoManual||0}" oninput="orcamentoAtual.itens[${idx}].compPolimentoManual=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Polimento Automático (m)</label><input class="form-input" type="number" step="0.1" value="${item.compPolimentoAuto||0}" oninput="orcamentoAtual.itens[${idx}].compPolimentoAuto=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Meio Boleado (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMeioBoelado||0}" oninput="orcamentoAtual.itens[${idx}].compMeioBoelado=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Meio Boleado Duplo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMeioBoeladoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compMeioBoeladoDuplo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Chanfrado 45° (m)</label><input class="form-input" type="number" step="0.1" value="${item.compChanfrado45||0}" oninput="orcamentoAtual.itens[${idx}].compChanfrado45=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Chanfrado Duplo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compChanfradoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compChanfradoDuplo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Meia Cana (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMeiaCana||0}" oninput="orcamentoAtual.itens[${idx}].compMeiaCana=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Meia Cana Duplo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMeiaCanaDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compMeiaCanaDuplo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Boleado Duplo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compBoeladoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compBoeladoDuplo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Chanfro Alongado (m)</label><input class="form-input" type="number" step="0.1" value="${item.compChanfroAlongado||0}" oninput="orcamentoAtual.itens[${idx}].compChanfroAlongado=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Cuba Esculpida (m)</label><input class="form-input" type="number" step="0.1" value="${item.compCubEsculpida||0}" oninput="orcamentoAtual.itens[${idx}].compCubEsculpida=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Colagem de Topo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compColagemTopo||0}" oninput="orcamentoAtual.itens[${idx}].compColagemTopo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Water Jet (m)</label><input class="form-input" type="number" step="0.1" value="${item.compWaterJet||0}" oninput="orcamentoAtual.itens[${idx}].compWaterJet=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+      </div>
+    </div>
+
+    <!-- Serviços especiais -->
+    <div style="background:var(--cream);border-radius:10px;padding:16px;margin-bottom:16px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">🔧 Serviços Especiais</div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Rebaixo Italiano Usinado (m²)</label><input class="form-input" type="number" step="0.1" value="${item.areaRebaixoItaliano||0}" oninput="orcamentoAtual.itens[${idx}].areaRebaixoItaliano=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Rebaixo Americano Colado (m²)</label><input class="form-input" type="number" step="0.1" value="${item.areaRebaixoAmericano||0}" oninput="orcamentoAtual.itens[${idx}].areaRebaixoAmericano=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Sistema Flush (un)</label><input class="form-input" type="number" value="${item.qtdFlush||0}" oninput="orcamentoAtual.itens[${idx}].qtdFlush=parseInt(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Sistema Flath (un)</label><input class="form-input" type="number" value="${item.qtdFlath||0}" oninput="orcamentoAtual.itens[${idx}].qtdFlath=parseInt(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Recortes/Furos sem Polimento (un)</label><input class="form-input" type="number" value="${item.qtdRecortes||0}" oninput="orcamentoAtual.itens[${idx}].qtdRecortes=parseInt(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Furos de Cuba com Polimento (un)</label><input class="form-input" type="number" value="${item.qtdCubas||0}" oninput="orcamentoAtual.itens[${idx}].qtdCubas=parseInt(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+      </div>
+    </div>
+
+    <!-- Detalhamento do cálculo -->
+    ${calc ? `
+    <div style="background:#F0F7F4;border-radius:10px;padding:16px;border-left:3px solid #4A7C59;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#4A7C59;margin-bottom:12px;">📊 Detalhamento do Cálculo</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">
+        <div style="font-size:12px;color:var(--stone-light);">Área base: <strong>${calc.areaBase.toFixed(2)} m²</strong></div>
+        <div style="font-size:12px;color:var(--stone-light);">Com quebra (${pedra?.quebra||0}%): <strong>${calc.areaComQuebra.toFixed(2)} m²</strong></div>
+        <div style="font-size:12px;color:var(--stone-light);">Material: <strong>${fmt(calc.custoMaterial)}</strong></div>
+        <div style="font-size:12px;color:var(--stone-light);">Serra: <strong>${fmt(calc.custoSerra)}</strong></div>
+        <div style="font-size:12px;color:var(--stone-light);">Corte/Montagem: <strong>${fmt(calc.custoMontagem)}</strong></div>
+        <div style="font-size:12px;color:var(--stone-light);">Bipolimento: <strong>${fmt(calc.custoBipolimento)}</strong></div>
+        <div style="font-size:12px;color:var(--stone-light);">Polimento: <strong>${fmt(calc.custoPolimento)}</strong></div>
+        <div style="font-size:12px;color:var(--stone-light);">Acabamentos: <strong>${fmt(calc.custoAcabamentos)}</strong></div>
+        <div style="font-size:12px;color:var(--stone-light);">Esp./Furos: <strong>${fmt(calc.custoEspeciais+calc.custoFuros)}</strong></div>
+        <div style="font-size:12px;color:var(--stone-light);">Water Jet: <strong>${fmt(calc.custoWaterJet)}</strong></div>
+        <div style="font-size:12px;color:var(--stone-light);">Transporte: <strong>${fmt(calc.custoDeslocamento+calc.custoCombustivel)}</strong></div>
+        <div style="font-size:12px;color:var(--stone-light);">Instalação: <strong>${fmt(calc.custoInstalacao)}</strong></div>
+        <div style="font-size:12px;color:var(--stone-light);">Insumos (${cfg.custoInsumo}%): <strong>${fmt(calc.custoInsumos)}</strong></div>
+        <div style="font-size:12px;color:var(--stone-light);">H. Adicionais: <strong>${fmt(calc.custoHorasAdic)}</strong></div>
+        <div style="font-size:13px;font-weight:700;color:var(--stone);">Custo Total: <strong>${fmt(calc.custoTotal)}</strong></div>
+        <div style="font-size:13px;font-weight:700;color:#4A7C59;">Lucro (${calc.margem}%): <strong>${fmt(calc.lucroLiquido)}</strong></div>
+      </div>
+    </div>` : '<div style="background:var(--cream);border-radius:10px;padding:14px;text-align:center;color:var(--stone-light);font-size:13px;">Selecione uma pedra e informe as dimensões para calcular o preço.</div>'}
+  </div>`;
+}
+
+function recalcularTelaOrc(orderId) {
+  const order = orders.find(o => o.id === orderId);
+  if (!order) return;
+  const pedras = getPedrasCadastradas();
+  const cfg = {...getConfigOrc(), transito: orcamentoAtual.transito};
+  orcamentoAtual.itens.forEach(item => {
+    const pedra = pedras.find(p => p.id === item.pedraId);
+    item.distancia = orcamentoAtual.distancia;
+    item.calc = (pedra && item.largura && item.comprimento) ? calcularItem(item, pedra, cfg) : null;
+  });
+  renderTelaOrcamentoPedido(order);
+}
+
+function adicionarItemTelaOrc(orderId) {
+  orcamentoAtual.itens.push({
+    nome:'', pedraId:'', largura:0, comprimento:0, quantidade:1,
+    tipoEntrega:'instalacao', areaBipolida:0, horasAdicionais:0,
+    compCorte45:0, compMontagem45:0, compPolimentoManual:0, compPolimentoAuto:0,
+    compMeioBoelado:0, compMeioBoeladoDuplo:0, compChanfrado45:0, compChanfradoDuplo:0,
+    compMeiaCana:0, compMeiaCanaDuplo:0, compBoeladoDuplo:0, compChanfroAlongado:0,
+    compCubEsculpida:0, compColagemTopo:0, compWaterJet:0,
+    areaRebaixoItaliano:0, areaRebaixoAmericano:0,
+    qtdFlush:0, qtdFlath:0, qtdRecortes:0, qtdCubas:0, calc:null
+  });
+  recalcularTelaOrc(orderId);
+}
+
+function removerItemTelaOrc(idx, orderId) {
+  orcamentoAtual.itens.splice(idx, 1);
+  recalcularTelaOrc(orderId);
+}
+
+async function salvarOrcamentoPedido() {
+  if (!orcamentoAtual) return;
+  let orcs = getOrcamentos();
+  const idx = orcs.findIndex(o => o.id === orcamentoAtual.id);
+  if (idx >= 0) orcs[idx] = orcamentoAtual;
+  else orcs.unshift(orcamentoAtual);
+  salvarOrcamentos(orcs);
+
+  // Salva valor no pedido também
+  const totalGeral = orcamentoAtual.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
+  if (totalGeral > 0 && pedidoOrcAtual) {
+    const order = orders.find(o => o.id === pedidoOrcAtual);
+    if (order) {
+      const valorStr = totalGeral.toFixed(2).replace('.',',');
+      await getSB().from('pedidos').update({valor: valorStr}).eq('id', pedidoOrcAtual);
+      order.valor = valorStr;
+      renderKanban(document.getElementById('search-kanban')?.value||'');
+    }
+  }
+  showNotif('Orçamento salvo! ✓', 'success');
+}
+
+async function salvarEFecharPedido() {
+  await salvarOrcamentoPedido();
+  if (pedidoOrcAtual) {
+    abrirModalConfirmarData(pedidoOrcAtual);
+    fecharTelaOrcamentoPedido();
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 </script>
 

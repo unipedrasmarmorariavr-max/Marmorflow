@@ -2271,12 +2271,12 @@ function salvarPedras(pedras) {
 
 // Grupos de dificuldade
 const GRUPOS_DIFICULDADE = [
-  { id: 1, nome: 'Grupo 1 — Granitos', dif: 1.0, margem: 30 },
-  { id: 2, nome: 'Grupo 2 — Mármores', dif: 1.3, margem: 30 },
-  { id: 3, nome: 'Grupo 3 — Quartzitos', dif: 2.0, margem: 40 },
-  { id: 4, nome: 'Grupo 4 — Quartzitos Quebradiços', dif: 2.5, margem: 40 },
-  { id: 5, nome: 'Grupo 5 — Ultracompactos', dif: 2.3, margem: 40 },
-  { id: 6, nome: 'Grupo 6 — Quartzos', dif: 1.0, margem: 40 },
+  { id: 1, nome: 'Grupo 1 — Granitos',               dif: 1.0, margem: 30, quebra: 11.11 },
+  { id: 2, nome: 'Grupo 2 — Mármores',               dif: 1.3, margem: 30, quebra: 15    },
+  { id: 3, nome: 'Grupo 3 — Quartzitos',             dif: 2.0, margem: 40, quebra: 20    },
+  { id: 4, nome: 'Grupo 4 — Quartzitos Quebradiços', dif: 2.5, margem: 40, quebra: 25    },
+  { id: 5, nome: 'Grupo 5 — Ultracompactos',         dif: 2.3, margem: 40, quebra: 15    },
+  { id: 6, nome: 'Grupo 6 — Quartzos',               dif: 1.0, margem: 40, quebra: 11.11 },
 ];
 
 // Orçamentos salvos
@@ -2320,86 +2320,86 @@ function calcularItem(item, pedra, cfg) {
   const dif = grupo.dif;
   const { custoHoraEmpresa, custoHoraHomem } = calcularCustoHora();
 
-  // Área total
-  let areaBase;
-  if (item.pecas && item.pecas.length > 0) {
-    areaBase = item.pecas.reduce((s,p) => {
-      const partes = (p.medidas||'').toLowerCase().replace(/,/g,'.').split('x');
-      const l = parseFloat(partes[0])||0;
-      const c = parseFloat(partes[1])||0;
-      const areaPeca = Math.round(l * c * (parseInt(p.qtd)||1) * 100) / 100;
-      return s + areaPeca;
-    }, 0);
+  // ÁREA: arredonda peça a peça para produção; sem arredondar para instalação (igual Marmoprice)
+  let areaBase = 0, areaBaseExata = 0;
+  if (item.pecas && item.pecas.length > 0 && item.pecas.some(p => p.medidas)) {
+    item.pecas.forEach(p => {
+      const raw = (p.medidas||'').toLowerCase().replace(/,/g,'.').replace(/\s/g,'');
+      const parts = raw.split('x');
+      const l = parseFloat(parts[0])||0;
+      const c = parseFloat(parts[1])||0;
+      const qtd = parseInt(p.qtd)||1;
+      const exata = l * c * qtd;
+      areaBaseExata += exata;
+      areaBase += Math.round(exata * 100) / 100;
+    });
   } else {
     areaBase = (item.largura||0) * (item.comprimento||0) * (item.quantidade||1);
+    areaBaseExata = areaBase;
   }
-  const areaComQuebra = areaBase * (1 + pedra.quebra / 100);
-  const m2Extra = item.m2ChapaNaoComercial || 0;
+
+  const areaComQuebra = areaBase * (1 + (pedra.quebra||10) / 100);
+  const m2Extra = parseFloat(item.m2ChapaNaoComercial)||0;
   const custoMaterial = (areaComQuebra + m2Extra) * pedra.custoM2;
 
-  // ── TEMPOS DE PRODUÇÃO INTERNA (hr) ──────────────────────────────────────
-  const tSerra            = areaBase * cfg.serra * dif;
-  const tCorte45          = (item.compCorte45||0) * cfg.corte45 * dif;
-  const tCorte45Interno   = (item.compCorte45Interno||0) * cfg.corte45 * dif;
-  const tMontagem45       = (item.compMontagem45||0) * cfg.montagem45 * dif;
-  const tBipolimento      = (item.areaBipolida||0) * cfg.areaBipolida * dif;
-  const tPolimentoManual  = (item.compPolimentoManual||0) * cfg.polimentoManual * dif;
-  const tPolimentoAuto    = (item.compPolimentoAuto||0) * cfg.polimentoAutomatico * dif;
-  const tCubEsculpida     = (item.compCubEsculpida||0) * cfg.cubEsculpida * dif;
-  const tMeioBoelado      = (item.compMeioBoelado||0) * cfg.meioBoelado * dif;
-  const tMeioBoeladoDuplo = (item.compMeioBoeladoDuplo||0) * cfg.meioBoeladoDuplo * dif;
-  const tChanfrado45      = (item.compChanfrado45||0) * cfg.chanfrado45 * dif;
-  const tMeiaCana         = (item.compMeiaCana||0) * cfg.meiaCana * dif;
-  const tMeiaCanaD        = (item.compMeiaCanaDuplo||0) * cfg.meiaCanaDuplo * dif;
-  const tBoeladoDuplo     = (item.compBoeladoDuplo||0) * cfg.boeladoDuplo * dif;
-  const tChanfradoDuplo   = (item.compChanfradoDuplo||0) * cfg.chanfradoDuplo * dif;
-  const tChanfroAlongado  = (item.compChanfroAlongado||0) * cfg.chanfroAlongado * dif;
-  const tColagemTopo      = (item.compColagemTopo||0) * cfg.colagemTopo * dif;
-  const tRebaixoItaliano  = (item.areaRebaixoItaliano||0) * cfg.rebaixoItaliano * dif;
-  const tRebaixoAmericano = (item.areaRebaixoAmericano||0) * cfg.rebaixoAmericano * dif;
-  const tFlush            = (item.qtdFlush||0) * cfg.sistemaFlush * dif;
-  const tFlath            = (item.qtdFlath||0) * cfg.sistemaFlath * dif;
-  const tRecortes         = (item.qtdRecortes||0) * cfg.recortesSemPolimento * dif;
-  const tCubas            = (item.qtdCubas||0) * cfg.corteDPolimento * dif;
-  // Horas Adicionais — suporta formato "HH:MM" ou número decimal
+  // "Comprimento de Acabamento 45° Saia" alimenta CORTE e MONTAGEM (igual Marmoprice)
+  const compSaia      = parseFloat(item.compCorte45)||0;
+  const compMont45Sep = parseFloat(item.compMontagem45)||0;
+  const compMontagem45Total = compSaia + compMont45Sep;
+
+  // TEMPOS DE PRODUÇÃO INTERNA
+  const tSerra            = areaBase * (cfg.serra||0.8) * dif;
+  const tCorte45          = compSaia * (cfg.corte45||0.2) * dif;
+  const tCorte45Interno   = (parseFloat(item.compCorte45Interno)||0) * (cfg.corte45||0.2) * dif;
+  const tMontagem45       = compMontagem45Total * (cfg.montagem45||1.2) * dif;
+  const tBipolimento      = (parseFloat(item.areaBipolida)||0) * (cfg.areaBipolida||2) * dif;
+  const tPolimentoManual  = (parseFloat(item.compPolimentoManual)||0) * (cfg.polimentoManual||0.2) * dif;
+  const tPolimentoAuto    = (parseFloat(item.compPolimentoAuto)||0) * (cfg.polimentoAutomatico||0.15) * dif;
+  const tCubEsculpida     = (parseFloat(item.compCubEsculpida)||0) * (cfg.cubEsculpida||3) * dif;
+  const tMeioBoelado      = (parseFloat(item.compMeioBoelado)||0) * (cfg.meioBoelado||0.5) * dif;
+  const tMeioBoeladoDuplo = (parseFloat(item.compMeioBoeladoDuplo)||0) * (cfg.meioBoeladoDuplo||1) * dif;
+  const tChanfrado45      = (parseFloat(item.compChanfrado45)||0) * (cfg.chanfrado45||1) * dif;
+  const tMeiaCana         = (parseFloat(item.compMeiaCana)||0) * (cfg.meiaCana||1) * dif;
+  const tMeiaCanaD        = (parseFloat(item.compMeiaCanaDuplo)||0) * (cfg.meiaCanaDuplo||2) * dif;
+  const tBoeladoDuplo     = (parseFloat(item.compBoeladoDuplo)||0) * (cfg.boeladoDuplo||2) * dif;
+  const tChanfradoDuplo   = (parseFloat(item.compChanfradoDuplo)||0) * (cfg.chanfradoDuplo||2) * dif;
+  const tChanfroAlongado  = (parseFloat(item.compChanfroAlongado)||0) * (cfg.chanfroAlongado||2) * dif;
+  const tColagemTopo      = (parseFloat(item.compColagemTopo)||0) * (cfg.colagemTopo||0.25) * dif;
+  const tRebaixoItaliano  = (parseFloat(item.areaRebaixoItaliano)||0) * (cfg.rebaixoItaliano||8) * dif;
+  const tRebaixoAmericano = (parseFloat(item.areaRebaixoAmericano)||0) * (cfg.rebaixoAmericano||2) * dif;
+  const tFlush            = (parseInt(item.qtdFlush)||0) * (cfg.sistemaFlush||3) * dif;
+  const tFlath            = (parseInt(item.qtdFlath)||0) * (cfg.sistemaFlath||3) * dif;
+  const tRecortes         = (parseInt(item.qtdRecortes)||0) * (cfg.recortesSemPolimento||0.5) * dif;
+  const tCubas            = (parseInt(item.qtdCubas)||0) * (cfg.corteDPolimento||2) * dif;
   let tHorasAdicionais = 0;
-  const ha = item.horasAdicionais;
-  if (typeof ha === 'string' && ha.includes(':')) {
-    const p = ha.split(':'); tHorasAdicionais = (parseInt(p[0])||0) + (parseInt(p[1])||0)/60;
-  } else { tHorasAdicionais = parseFloat(ha)||0; }
+  const ha = String(item.horasAdicionais||'');
+  if (ha.includes(':')) { const p=ha.split(':'); tHorasAdicionais=(parseInt(p[0])||0)+(parseInt(p[1])||0)/60; }
+  else { tHorasAdicionais = parseFloat(ha)||0; }
 
-  // Tempo total de produção INTERNA
-  const tempoProdInterno = tSerra + tCorte45 + tCorte45Interno + tMontagem45 +
-    tBipolimento + tPolimentoManual + tPolimentoAuto + tCubEsculpida +
-    tMeioBoelado + tMeioBoeladoDuplo + tChanfrado45 + tMeiaCana + tMeiaCanaD +
-    tBoeladoDuplo + tChanfradoDuplo + tChanfroAlongado + tColagemTopo +
-    tRebaixoItaliano + tRebaixoAmericano + tFlush + tFlath + tRecortes + tCubas +
-    tHorasAdicionais;
+  const tempoProdInterno = tSerra+tCorte45+tCorte45Interno+tMontagem45+tBipolimento+
+    tPolimentoManual+tPolimentoAuto+tCubEsculpida+tMeioBoelado+tMeioBoeladoDuplo+
+    tChanfrado45+tMeiaCana+tMeiaCanaD+tBoeladoDuplo+tChanfradoDuplo+tChanfroAlongado+
+    tColagemTopo+tRebaixoItaliano+tRebaixoAmericano+tFlush+tFlath+tRecortes+tCubas+tHorasAdicionais;
 
-  // ── TEMPO DESCARGA/INSTALAÇÃO ─────────────────────────────────────────────
-  const distancia = item.distancia || 0;
-  const idas = item.idas || 1;
-  const minKm = cfg.transito === 'lento' ? (cfg.minKmLento||3) : cfg.transito === 'intermediario' ? (cfg.minKmIntermediario||2) : (cfg.minKmRapido||1);
-  const nPessoas = item.nPessoasInstal ? parseInt(item.nPessoasInstal) : cfg.pessoasInstalacao;
+  // INSTALAÇÃO (usa areaBaseExata, igual Marmoprice)
+  const distancia = parseFloat(item.distancia)||0;
+  const idas = parseInt(item.idas)||1;
+  const minKm = cfg.transito==='lento'?(cfg.minKmLento||3):cfg.transito==='intermediario'?(cfg.minKmIntermediario||2):(cfg.minKmRapido||1);
+  const nPessoas = parseInt(item.nPessoasInstal)||(cfg.pessoasInstalacao||2);
   const tempoDeslocamento = (distancia * 2 * minKm * idas) / 60;
-
   let tempoInstalEntrega = 0;
-  if (item.tempoInstalManual && item.tempoInstalManual !== '0') {
-    // Tempo manual informado pelo usuário (HH:MM ou decimal)
-    const ti = item.tempoInstalManual;
-    if (typeof ti === 'string' && ti.includes(':')) {
-      const p = ti.split(':'); tempoInstalEntrega = (parseInt(p[0])||0) + (parseInt(p[1])||0)/60;
-    } else { tempoInstalEntrega = parseFloat(ti)||0; }
-  } else if (item.tipoEntrega === 'instalacao') {
-    tempoInstalEntrega = areaBase * cfg.horasInstalacaoM2 * nPessoas;
-  } else if (item.tipoEntrega === 'entrega') {
-    tempoInstalEntrega = areaBase * cfg.horasEntregaM2 * cfg.pessoasEntrega;
+  const tim = String(item.tempoInstalManual||'');
+  if (tim && tim !== '0' && tim !== '') {
+    if (tim.includes(':')) { const p=tim.split(':'); tempoInstalEntrega=(parseInt(p[0])||0)+(parseInt(p[1])||0)/60; }
+    else { tempoInstalEntrega = parseFloat(tim)||0; }
+  } else if (item.tipoEntrega==='instalacao') {
+    tempoInstalEntrega = areaBaseExata * (cfg.horasInstalacaoM2||1.5) * nPessoas;
+  } else if (item.tipoEntrega==='entrega') {
+    tempoInstalEntrega = areaBaseExata * (cfg.horasEntregaM2||0.33) * (cfg.pessoasEntrega||1);
   }
-
   const tempoDescargaInstalTotal = tempoDeslocamento + tempoInstalEntrega;
-  const tempoProdTotal = tempoProdInterno; // para LLH usa só produção interna
 
-  // ── CUSTOS ───────────────────────────────────────────────────────────────
+  // CUSTOS
   const custoSerra           = tSerra * custoHoraEmpresa;
   const custoCorte45         = tCorte45 * custoHoraEmpresa;
   const custoCorte45Interno  = tCorte45Interno * custoHoraEmpresa;
@@ -2408,69 +2408,51 @@ function calcularItem(item, pedra, cfg) {
   const custoPolimentoManual = tPolimentoManual * custoHoraEmpresa;
   const custoPolimentoAuto   = tPolimentoAuto * custoHoraEmpresa;
   const custoPolimento       = custoPolimentoManual + custoPolimentoAuto;
-  const custoAcabamentos     = (tCubEsculpida + tMeioBoelado + tMeioBoeladoDuplo + tChanfrado45 +
-    tMeiaCana + tMeiaCanaD + tBoeladoDuplo + tChanfradoDuplo + tChanfroAlongado + tColagemTopo) * custoHoraEmpresa;
-  const custoEspeciais       = (tRebaixoItaliano + tRebaixoAmericano) * custoHoraEmpresa;
-  const custoFuros           = (tFlush + tFlath + tRecortes + tCubas) * custoHoraEmpresa;
-  const custoWaterJet        = (item.compWaterJet||0) * cfg.waterJet;
-  const custoHorasAdic       = tHorasAdicionais * custoHoraEmpresa;
-
-  // Instalação/entrega
-  const custoInstalacao      = tempoInstalEntrega * custoHoraEmpresa;
-  const custoDeslocamento    = tempoDeslocamento * custoHoraEmpresa * nPessoas;
-  const custoCombustivel     = (distancia * 2 * idas / (cfg.consumoCombustivel||8)) * (cfg.custoCombustivel||7);
-
-  // Custos diretos adicionais (entrados manualmente)
+  const custoAcabamentos     = (tCubEsculpida+tMeioBoelado+tMeioBoeladoDuplo+tChanfrado45+
+    tMeiaCana+tMeiaCanaD+tBoeladoDuplo+tChanfradoDuplo+tChanfroAlongado+tColagemTopo)*custoHoraEmpresa;
+  const custoEspeciais       = (tRebaixoItaliano+tRebaixoAmericano)*custoHoraEmpresa;
+  const custoFuros           = (tFlush+tFlath+tRecortes+tCubas)*custoHoraEmpresa;
+  const custoWaterJet        = (parseFloat(item.compWaterJet)||0)*(cfg.waterJet||20);
+  const custoHorasAdic       = tHorasAdicionais*custoHoraEmpresa;
+  const custoInstalacao      = tempoInstalEntrega*custoHoraEmpresa;
+  const custoDeslocamento    = tempoDeslocamento*custoHoraEmpresa*nPessoas;
+  const custoCombustivel     = (distancia*2*idas/(cfg.consumoCombustivel||8))*(cfg.custoCombustivel||7);
   const custoAcessorios      = parseFloat(item.custoAcessorios)||0;
   const custoArgamassa       = parseFloat(item.custoArgamassa)||0;
   const custoAdicionais      = parseFloat(item.custoAdicionais)||0;
   const custoCantoneira      = parseFloat(item.custoCantoneira)||0;
   const custoInsumoInstal    = parseFloat(item.custoInsumoInstal)||0;
 
-  // Custo total sem insumos
-  const custosOp = custoSerra + custoCorte45 + custoCorte45Interno + custoMontagem45 +
-    custoBipolimento + custoPolimento + custoAcabamentos + custoEspeciais +
-    custoFuros + custoWaterJet + custoHorasAdic +
-    custoDeslocamento + custoCombustivel + custoInstalacao +
-    custoMaterial + custoAcessorios + custoArgamassa + custoAdicionais +
-    custoCantoneira + custoInsumoInstal;
+  const custosOp = custoMaterial+custoInstalacao+custoDeslocamento+custoCombustivel+
+    custoSerra+custoCorte45+custoCorte45Interno+custoMontagem45+
+    custoPolimento+custoBipolimento+custoAcabamentos+custoEspeciais+
+    custoFuros+custoWaterJet+custoHorasAdic+
+    custoAcessorios+custoArgamassa+custoAdicionais+custoCantoneira+custoInsumoInstal;
 
-  // Insumos = % sobre o PREÇO DE VENDA
-  const margem = pedra.margem / 100;
-  const precoOps = custosOp / (1 - margem);
-  const custoInsumos = precoOps * ((cfg.custoInsumo||5) / 100);
-
-  const custoTotal = custosOp + custoInsumos;
-  const precoFinal = custoTotal / (1 - margem);
-  const lucroLiquido = precoFinal - custoTotal;
-
-  // ── MÉTRICAS ADICIONAIS (igual Marmoprice) ──────────────────────────────
-  const precoSemMateria = precoFinal - custoMaterial * (precoFinal / custoTotal);
-  const precoServico    = precoFinal - (custoMaterial / custoTotal) * precoFinal; // MO
-  const vmmo            = tempoProdInterno > 0 ? precoFinal / tempoProdInterno : 0; // VMMO
-  const custoServicoPorM2 = areaBase > 0 ? (custoTotal - custoMaterial) / areaBase : 0;
+  const margem = (pedra.margem||30)/100;
+  const precoOps = custosOp/(1-margem);
+  const custoInsumos = precoOps*((cfg.custoInsumo||5)/100);
+  const custoTotal = custosOp+custoInsumos;
+  const precoFinal = custoTotal/(1-margem);
+  const lucroLiquido = precoFinal-custoTotal;
 
   return {
-    areaBase, areaComQuebra, custoMaterial,
+    areaBase, areaBaseExata, areaComQuebra, custoMaterial,
     custoSerra, custoCorte45, custoCorte45Interno, custoMontagem45,
-    custoMontagem: custoCorte45 + custoMontagem45, // retrocompat
+    custoMontagem: custoCorte45+custoMontagem45,
     custoBipolimento, custoPolimento, custoPolimentoManual, custoPolimentoAuto,
     custoAcabamentos, custoEspeciais, custoFuros, custoWaterJet,
     custoHorasAdic, custoDeslocamento, custoCombustivel, custoInstalacao,
     custoAcessorios, custoArgamassa, custoAdicionais, custoCantoneira, custoInsumoInstal,
-    custoInsumos, custoTotal, lucroLiquido, precoFinal,
-    precoSemMateria, precoServico, vmmo, custoServicoPorM2,
-    margem: pedra.margem,
-    tempoProdInterno, tempoProdTotal,
+    custoInsumos, custoTotal, lucroLiquido, precoFinal, margem: pedra.margem,
+    tempoProdInterno, tempoProdTotal: tempoProdInterno,
     tempoDescargaInstalTotal, tempoDeslocamento, tempoInstalEntrega,
-    // tempos individuais para Custos e Tempos
     tSerra, tCorte45, tCorte45Interno, tMontagem45, tBipolimento,
     tPolimentoManual, tPolimentoAuto, tCubas, tRecortes, tFlush, tFlath,
     tRebaixoItaliano, tRebaixoAmericano, tColagemTopo, tMeioBoelado,
     tMeioBoeladoDuplo, tChanfrado45, tChanfradoDuplo, tChanfroAlongado,
     tMeiaCana, tMeiaCanaD, tBoeladoDuplo, tCubEsculpida, tHorasAdicionais,
-    custoHoraEmpresa, custoHoraHomem,
-    custoEstrutura: calcularCustoHora().custoEstrutura
+    custoHoraEmpresa, custoHoraHomem, custoEstrutura: calcularCustoHora().custoEstrutura
   };
 }
 
@@ -2772,7 +2754,8 @@ function abrirFormPedra(id) {
     document.getElementById('pedra-custo').value = '';
     document.getElementById('pedra-margem').value = '30';
     document.getElementById('pedra-margem').dataset.editado = '';
-    document.getElementById('pedra-quebra').value = '10';
+    document.getElementById('pedra-quebra').value = '11.11';
+    document.getElementById('pedra-quebra').dataset.editado = '';
     document.getElementById('pedra-grupo').value = '1';
   }
 }
@@ -2781,10 +2764,11 @@ function editarPedra(id) { abrirFormPedra(id); }
 
 function ajustarMargemPorGrupo(grupoId) {
   const grupo = GRUPOS_DIFICULDADE.find(g => g.id === parseInt(grupoId));
-  const campoMargem = document.getElementById('pedra-margem');
-  if (campoMargem && !campoMargem.dataset.editado && grupo) {
-    campoMargem.value = grupo.margem;
-  }
+  if (!grupo) return;
+  const campoMargem = document.getElementById('pedra-margem') || document.getElementById('prod-margem');
+  const campoQuebra = document.getElementById('pedra-quebra') || document.getElementById('prod-quebra');
+  if (campoMargem && !campoMargem.dataset.editado) campoMargem.value = grupo.margem;
+  if (campoQuebra && !campoQuebra.dataset.editado) campoQuebra.value = grupo.quebra;
 }
 
 function salvarPedraForm() {
@@ -3839,8 +3823,8 @@ async function salvarEFecharPedido() {
 // ─── HELPERS PEÇA A PEÇA ─────────────────────────────────────────────────
 function parseMedidas(str) {
   if (!str) return {l:0, c:0};
-  // Aceita formatos: 1,20x0,60 / 1.20x0.60 / 1,20X0,60
-  const partes = str.toLowerCase().replace(/,/g,'.').split('x');
+  // Aceita: 1,20x0,60 / 1.20x0.60 / 1,20X0,60 / 1,2 X 0,6 (com espaços)
+  const partes = str.toLowerCase().replace(/,/g,'.').replace(/\s/g,'').split('x');
   const l = parseFloat(partes[0]) || 0;
   const c = parseFloat(partes[1]) || 0;
   return {l, c};

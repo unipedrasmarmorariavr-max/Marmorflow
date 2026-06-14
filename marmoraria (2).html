@@ -282,7 +282,8 @@
     <button class="tab-btn" onclick="showTab('dashboard')" id="tab-dashboard">📊 Dashboard</button>
     <button class="tab-btn" onclick="showTab('materiais')" id="tab-materiais">🪨 Materiais</button>
     <button class="tab-btn" onclick="showTab('financeiro')" id="tab-financeiro">💰 Financeiro</button>
-    <button class="tab-btn" onclick="showTab('orcamento')" id="tab-orcamento" style="display:none;">🧮 Orçamento</button>
+    <button class="tab-btn" onclick="showTab('produtos')" id="tab-produtos" style="display:none;">🪨 Produtos</button>
+    <button class="tab-btn" onclick="showTab('configuracoes')" id="tab-configuracoes" style="display:none;">⚙️ Configurações</button>
   </div>
   <div class="content">
     <div class="panel active" id="panel-kanban">
@@ -309,6 +310,12 @@
     </div>
     <div class="panel" id="panel-orcamento">
       <div id="orcamento-content"></div>
+    </div>
+    <div class="panel" id="panel-produtos">
+      <div id="produtos-content"></div>
+    </div>
+    <div class="panel" id="panel-configuracoes">
+      <div id="configuracoes-content"></div>
     </div>
     <div class="panel" id="panel-orcamento-pedido">
       <div id="orcamento-pedido-content"></div>
@@ -692,6 +699,8 @@ function showTab(tab) {
   if (tab==='financeiro') renderFinanceiro();
   if (tab==='orcamento') renderOrcamento();
   if (tab==='agenda') renderAgenda();
+  if (tab==='produtos') renderProdutos();
+  if (tab==='configuracoes') renderConfiguracoes();
 }
 
 // ============ KANBAN ============
@@ -1162,7 +1171,11 @@ function entrar() {
   var tabDash = document.getElementById('tab-dashboard');
   var tabMat = document.getElementById('tab-materiais');
   var tabOrc = document.getElementById('tab-orcamento');
-  if (tabOrc) tabOrc.style.display = (p.canOrcamento) ? '' : 'none';
+  if (tabOrc) tabOrc.style.display = 'none'; // sempre oculto - orçamento é via pasta
+  var tabProd = document.getElementById('tab-produtos');
+  if (tabProd) tabProd.style.display = (currentUser === 'dono' || currentUser === 'comercial') ? '' : 'none';
+  var tabCfg = document.getElementById('tab-configuracoes');
+  if (tabCfg) tabCfg.style.display = (currentUser === 'dono') ? '' : 'none';
   var tabFin = document.getElementById('tab-financeiro');
   var tabPortal = document.getElementById('tab-portal');
   var tabAgenda = document.getElementById('tab-agenda');
@@ -3138,37 +3151,105 @@ function renderTelaOrcamentoPedido(order) {
 
       <!-- CABEÇALHO DO ORÇAMENTO (igual Marmoprice) -->
       <div style="background:white;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
-        <div style="display:grid;grid-template-columns:2fr 2fr 2fr;gap:12px;margin-bottom:12px;">
-          <div><label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Cliente *</label>
-            <input class="form-input" value="${orc.cliente||order.cliente||''}" oninput="orcamentoAtual.cliente=this.value" style="font-weight:600;"></div>
-          <div><label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Endereço da Obra</label>
-            <input class="form-input" value="${orc.enderecoObra||order.endereco||''}" oninput="orcamentoAtual.enderecoObra=this.value"></div>
-          <div><label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Status</label>
+
+        <!-- Linha 1: Cliente, Endereço, Status -->
+        <div style="display:grid;grid-template-columns:2fr 2fr 1fr;gap:12px;margin-bottom:12px;">
+          <div>
+            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Cliente *</label>
+            <input class="form-input" value="${orc.cliente||order.cliente||''}" oninput="orcamentoAtual.cliente=this.value" style="font-weight:600;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Endereço da Obra</label>
+            <input class="form-input" value="${orc.enderecoObra||order.endereco||''}" oninput="orcamentoAtual.enderecoObra=this.value" placeholder="${order.endereco||''}">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Status</label>
             <select class="form-select" onchange="orcamentoAtual.status=this.value">
               ${['À Revisar','Em aberto','Aprovado','Fechado','Cancelado'].map(s=>`<option ${orc.status===s?'selected':''}>${s}</option>`).join('')}
             </select>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 2fr 1fr;gap:12px;align-items:end;">
-          <div><label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Distância (km) *</label>
-            <input class="form-input" type="number" value="${orc.distancia||0}" oninput="orcamentoAtual.distancia=parseFloat(this.value)||0;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))"></div>
-          <div><label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Idas ↺</label>
-            <input class="form-input" type="number" min="1" value="${orc.idas||1}" oninput="orcamentoAtual.idas=parseInt(this.value)||1;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))"></div>
-          <div><label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Trânsito *</label>
-            <div style="display:flex;flex-direction:column;gap:4px;">
-              ${['lento','intermediario','rapido'].map((t,i) => `<label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;">
-                <input type="radio" name="orc-transito" value="${t}" ${(orc.transito||'rapido')===t?'checked':''} onchange="orcamentoAtual.transito=this.value;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))" style="accent-color:#006382;">
-                ${['Lento','Intermediário','Rápido'][i]}</label>`).join('')}
+
+        <!-- Linha 2: Distância, Idas, Trânsito, Origem + Nome, Data -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1.5fr 1.5fr 1fr;gap:12px;align-items:start;margin-bottom:12px;">
+          <div>
+            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Distância (km) *</label>
+            <input class="form-input" type="number" value="${orc.distancia||order.distancia||0}"
+              oninput="orcamentoAtual.distancia=parseFloat(this.value)||0;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Idas ↺ <span style="font-size:10px;color:#999;">(ida+volta cada)</span></label>
+            <input class="form-input" type="number" min="1" value="${orc.idas||1}"
+              oninput="orcamentoAtual.idas=parseInt(this.value)||1;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Trânsito *</label>
+            <div style="display:flex;flex-direction:column;gap:3px;margin-top:2px;">
+              ${['lento','intermediario','rapido'].map((t,i)=>`
+              <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="radio" name="orc-transito" value="${t}" ${(orc.transito||'rapido')===t?'checked':''}
+                  onchange="orcamentoAtual.transito=this.value;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))"
+                  style="accent-color:#006382;">
+                ${['Lento','Intermediário','Rápido'][i]}
+              </label>`).join('')}
             </div>
           </div>
-          <div><label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Origem</label>
-            <select class="form-select" onchange="orcamentoAtual.origem=this.value">
-              <option value="">Buscar...</option>
-              ${(typeof ORIGEM_LABELS !== 'undefined' ? Object.entries(ORIGEM_LABELS) : []).map(([k,v])=>`<option value="${k}" ${orc.origem===k?'selected':''}>${v}</option>`).join('')}
+          <div>
+            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Origem</label>
+            <select class="form-select" id="orc-origem-sel" onchange="orcamentoAtual.origem=this.value;toggleOrigemOrc()">
+              <option value="">Selecione...</option>
+              ${Object.entries(ORIGEM_LABELS).map(([k,v])=>`<option value="${k}" ${(orc.origem||order.origem||'')===k?'selected':''}>${v}</option>`).join('')}
             </select>
           </div>
-          <div><label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Data Prevista</label>
-            <input class="form-input" type="date" value="${orc.dataPrevista||''}" oninput="orcamentoAtual.dataPrevista=this.value"></div>
+          <div id="orc-origemNome-wrap" style="${['arquiteto','construtora','indicacao'].includes(orc.origem||order.origem||'')?'':'display:none;'}">
+            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;" id="orc-origemNome-label">
+              ${orc.origem==='arquiteto'?'Nome do Arquiteto':orc.origem==='construtora'?'Nome da Construtora':'Nome / Referência'}
+            </label>
+            <input class="form-input" id="orc-origemNome-input"
+              value="${orc.origemNome||order.origemNome||''}"
+              placeholder="Nome completo..."
+              oninput="orcamentoAtual.origemNome=normalizarNome(this.value)">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Data Prevista para Execução</label>
+            <input class="form-input" type="date" value="${orc.dataPrevista||''}" oninput="orcamentoAtual.dataPrevista=this.value">
+          </div>
+        </div>
+
+        <!-- Linha 3: Profissional do Projeto, Vendedor Responsável -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Profissional do Projeto <span style="font-size:10px;color:#999;">(arquiteto, designer...)</span></label>
+            <input class="form-input" value="${orc.profissional||order.origemNome||''}"
+              placeholder="Nome do profissional..."
+              oninput="orcamentoAtual.profissional=normalizarNome(this.value)">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Responsável pela Negociação</label>
+            <input class="form-input" value="${orc.vendedor||order.vendedor||''}"
+              placeholder="Nome do vendedor..."
+              oninput="orcamentoAtual.vendedor=normalizarNome(this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- ITENS DO CLIENTE -->
+      <div style="background:white;border-radius:8px;padding:16px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <div style="font-size:12px;font-weight:700;color:#006382;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">📦 Itens Deixados pelo Cliente na Marmoraria</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;">
+          ${['Cuba','Lixeira','Dispenser','Torneira','Tomada de Torre','Calha Úmida','Válvula'].map(item => {
+            const key = item.toLowerCase().replace(/\s+/g,'_').normalize('NFD').replace(/[̀-ͯ]/g,'');
+            const checked = (orc.itensCliente||{})[key] || false;
+            return `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 14px;border-radius:8px;border:1.5px solid ${checked?'#006382':'#e0e0e0'};background:${checked?'#e8f5f8':'white'};font-size:13px;transition:all 0.2s;">
+              <input type="checkbox" ${checked?'checked':''} style="accent-color:#006382;"
+                onchange="if(!orcamentoAtual.itensCliente)orcamentoAtual.itensCliente={};orcamentoAtual.itensCliente['${key}']=this.checked;this.closest('label').style.borderColor=this.checked?'#006382':'#e0e0e0';this.closest('label').style.background=this.checked?'#e8f5f8':'white';">
+              ${item}
+            </label>`;
+          }).join('')}
+        </div>
+        <div style="margin-top:10px;">
+          <input class="form-input" style="font-size:12px;" placeholder="Outros itens deixados pelo cliente..."
+            value="${orc.itensClienteObs||''}" oninput="orcamentoAtual.itensClienteObs=this.value">
         </div>
       </div>
 
@@ -3876,6 +3957,517 @@ function orcTab(event, orderId) {
       next.select();
     }
   }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ABA PRODUTOS — cadastro de chapas igual ao Marmoprice
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderProdutos() {
+  const el = document.getElementById('produtos-content');
+  if (!el) return;
+  const pedras = getPedrasCadastradas();
+
+  el.innerHTML = `
+  <div style="padding:24px;max-width:1100px;margin:0 auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+      <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);">🪨 Produtos</div>
+      <button onclick="abrirFormProduto()" style="background:var(--gold);color:white;border:none;padding:10px 22px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">+ Cadastrar Produto</button>
+    </div>
+
+    <!-- Tabela de produtos -->
+    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
+      <div style="display:grid;grid-template-columns:40px 80px 2fr 1fr 1fr 1fr 2fr 120px;padding:12px 16px;background:var(--stone);color:white;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;gap:8px;align-items:center;">
+        <div></div>
+        <div>Foto</div>
+        <div>Nome</div>
+        <div>Custo (m²)</div>
+        <div>Quebra (%)</div>
+        <div>Margem (%)</div>
+        <div>Grupo</div>
+        <div>Ações</div>
+      </div>
+      ${pedras.length === 0 ? `
+      <div style="text-align:center;padding:60px;color:var(--stone-light);">
+        <div style="font-size:48px;margin-bottom:16px;">🪨</div>
+        <div style="font-size:16px;font-weight:600;">Nenhum produto cadastrado</div>
+        <div style="font-size:13px;margin-top:8px;">Cadastre as chapas que você trabalha</div>
+      </div>` :
+      pedras.map((p, i) => {
+        const grupo = GRUPOS_DIFICULDADE.find(g => g.id === p.grupoId);
+        return `
+        <div style="display:grid;grid-template-columns:40px 80px 2fr 1fr 1fr 1fr 2fr 120px;padding:14px 16px;border-bottom:1px solid var(--cream-dark);gap:8px;align-items:center;${i%2===0?'background:white;':'background:#fafaf8;'}">
+          <div style="font-size:13px;color:var(--stone-light);">${i+1}</div>
+          <div>
+            ${p.foto ? `<img src="${p.foto}" style="width:60px;height:45px;object-fit:cover;border-radius:6px;">` :
+            `<div style="width:60px;height:45px;background:var(--cream-dark);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:18px;">🪨</div>`}
+          </div>
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--stone);">${p.nome}</div>
+            ${p.fornecedor ? `<div style="font-size:11px;color:var(--stone-light);">${p.fornecedor}</div>` : ''}
+          </div>
+          <div style="font-size:14px;font-weight:600;color:var(--stone);">R$ ${(p.custoM2||0).toFixed(2).replace('.',',')}</div>
+          <div style="font-size:14px;color:var(--stone);">${p.quebra||10}%</div>
+          <div style="font-size:14px;color:var(--stone);">${p.margem||30}%</div>
+          <div>
+            <div style="font-size:12px;color:var(--stone);">${grupo?.nome||'—'}</div>
+            <div style="font-size:11px;color:var(--stone-light);">Dif. ${grupo?.dif||1}</div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button onclick="abrirFormProduto('${p.id}')" style="background:var(--cream);border:1.5px solid var(--cream-dark);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--stone);">✏️</button>
+            <button onclick="deletarProduto('${p.id}')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">🗑</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>
+
+  <!-- Modal Produto -->
+  <div class="modal-overlay" id="modal-produto" style="align-items:flex-start;padding:20px;overflow-y:auto;">
+    <div class="modal" style="max-width:680px;margin:0 auto;">
+      <div class="modal-header">
+        <div class="modal-title" id="titulo-modal-produto">Cadastrar Produto</div>
+        <button class="modal-close" onclick="closeModal('modal-produto')">✕</button>
+      </div>
+      <div class="modal-body" id="body-modal-produto"></div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('modal-produto')">Cancelar</button>
+        <button class="btn-primary" onclick="salvarProduto()" style="width:auto;padding:10px 28px;">💾 Salvar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function abrirFormProduto(id) {
+  const pedras = getPedrasCadastradas();
+  const p = id ? pedras.find(x => x.id === id) : null;
+  document.getElementById('titulo-modal-produto').textContent = p ? 'Editar Produto' : 'Cadastrar Produto';
+
+  document.getElementById('body-modal-produto').innerHTML = `
+    <input type="hidden" id="prod-edit-id" value="${id||''}">
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;gap:12px;margin-bottom:4px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+          <input type="radio" name="prod-tipo" value="materia-prima" ${!p||p.tipo==='materia-prima'?'checked':''} style="accent-color:var(--gold);"> Matéria-prima
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+          <input type="radio" name="prod-tipo" value="insumo" ${p?.tipo==='insumo'?'checked':''} style="accent-color:var(--gold);"> Insumo
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+          <input type="radio" name="prod-tipo" value="acessorio" ${p?.tipo==='acessorio'?'checked':''} style="accent-color:var(--gold);"> Acessório
+        </label>
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="form-group span2">
+        <label class="form-label">Nome Comercial *</label>
+        <input class="form-input" id="prod-nome" value="${p?.nome||''}" placeholder="Ex: Granito Preto São Gabriel Polido">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Custo da Matéria-Prima (m²) + Frete *</label>
+        <input class="form-input" id="prod-custo" type="number" step="0.01" value="${p?.custoM2||''}" placeholder="0,00">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Margem de Lucro (%) *</label>
+        <input class="form-input" id="prod-margem" type="number" step="0.1" value="${p?.margem||30}" oninput="this.dataset.editado='sim'">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Margem de Quebra (%)</label>
+        <input class="form-input" id="prod-quebra" type="number" step="0.1" value="${p?.quebra||10}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tipo de Rocha *</label>
+        <select class="form-select" id="prod-grupo" onchange="ajustarMargemPorGrupo(this.value)">
+          ${GRUPOS_DIFICULDADE.map(g => `<option value="${g.id}" ${(p?.grupoId||1)===g.id?'selected':''}>${g.nome}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group span2">
+        <label class="form-label">SKU / Código</label>
+        <input class="form-input" id="prod-sku" value="${p?.sku||''}">
+      </div>
+      <div class="form-group span2">
+        <label class="form-label">Fornecedor</label>
+        <input class="form-input" id="prod-fornecedor" value="${p?.fornecedor||''}">
+      </div>
+    </div>`;
+
+  openModal('modal-produto');
+}
+
+function salvarProduto() {
+  const nome = document.getElementById('prod-nome').value.trim();
+  const custo = parseFloat(document.getElementById('prod-custo').value.replace(',','.')) || 0;
+  const margem = parseFloat(document.getElementById('prod-margem').value) || 30;
+  const quebra = parseFloat(document.getElementById('prod-quebra').value) || 10;
+  const grupoId = parseInt(document.getElementById('prod-grupo').value) || 1;
+  const sku = document.getElementById('prod-sku')?.value || '';
+  const fornecedor = document.getElementById('prod-fornecedor')?.value || '';
+  const tipo = (document.querySelector('input[name="prod-tipo"]:checked')||{}).value || 'materia-prima';
+  const editId = document.getElementById('prod-edit-id').value;
+
+  if (!nome || !custo) { showNotif('Preencha nome e custo!', 'error'); return; }
+
+  let pedras = getPedrasCadastradas();
+  if (editId) {
+    pedras = pedras.map(p => p.id === editId ? {...p, nome, custoM2: custo, margem, quebra, grupoId, sku, fornecedor, tipo} : p);
+  } else {
+    pedras.push({ id: 'p' + Date.now(), nome, custoM2: custo, margem, quebra, grupoId, sku, fornecedor, tipo });
+  }
+  salvarPedras(pedras);
+  closeModal('modal-produto');
+  renderProdutos();
+  showNotif('Produto salvo! ✓', 'success');
+}
+
+function deletarProduto(id) {
+  if (!confirm('Excluir este produto?')) return;
+  salvarPedras(getPedrasCadastradas().filter(p => p.id !== id));
+  renderProdutos();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ABA CONFIGURAÇÕES — Grupo de Gastos + Tempos de Produção
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Gastos padrão (igual Marmoprice)
+const GASTOS_DEFAULT = {
+  producao: {
+    nome: 'PRODUÇÃO',
+    subgrupos: [
+      {
+        nome: 'CUSTOS FIXOS',
+        itens: [
+          { nome: 'ALUGUEL', valor: 4200.00 },
+          { nome: 'FOLHA DE PAGAMENTO', valor: 13552.00 },
+          { nome: '13º SALÁRIO', valor: 1129.30 },
+          { nome: 'FÉRIAS', valor: 376.44 },
+          { nome: '(FGTS)', valor: 1084.13 },
+          { nome: 'INSS (GPS)', valor: 0 },
+          { nome: 'SINDICATO (CONTRIBUIÇÃO)', valor: 0 },
+          { nome: 'SEGURANÇA PRIVADA', valor: 0 },
+          { nome: 'ASSISTENCIA SAUDE', valor: 0 },
+          { nome: 'LIMPEZA ENTULHO', valor: 250.00 },
+          { nome: 'SEGURO DE VIDA', valor: 0 },
+          { nome: 'SEGURO DE VEÍCULOS', valor: 0 },
+        ]
+      },
+      {
+        nome: 'CUSTOS VARIÁVEIS',
+        itens: [
+          { nome: 'ALIMENTAÇÃO (VALE, CESTA E...)', valor: 1920.00 },
+          { nome: 'ENERGIA ELÉTRICA', valor: 552.69 },
+          { nome: 'ÁGUA', valor: 91.08 },
+          { nome: 'COMBUSTÍVEL', valor: 1569.00 },
+          { nome: 'COMISSÕES DA PRODUÇÃO', valor: 0 },
+          { nome: 'EMBALAGENS', valor: 0 },
+          { nome: 'MANUTENÇÃO DE MÁQUINA', valor: 250.00 },
+          { nome: 'FERRAMENTAS DE TRABALHO', valor: 70.92 },
+          { nome: 'MANUTENÇÃO, REVISÕES, IP...', valor: 70.00 },
+        ]
+      },
+      {
+        nome: 'INVESTIMENTOS',
+        itens: [
+          { nome: 'ESTRUTURA', valor: 0 },
+          { nome: 'FERRAMENTAS', valor: 0 },
+          { nome: 'MÁQUINAS', valor: 0 },
+          { nome: 'SEGURANÇA', valor: 0 },
+          { nome: 'VEÍCULOS', valor: 0 },
+        ]
+      }
+    ]
+  },
+  comercial: {
+    nome: 'COMERCIAL E ADM',
+    subgrupos: [
+      {
+        nome: 'DESPESAS FIXAS',
+        itens: [
+          { nome: 'FOLHA DE PAGAMENTO', valor: 5142.26 },
+          { nome: '13º SALÁRIO', valor: 428.52 },
+          { nome: 'FÉRIAS', valor: 142.84 },
+          { nome: 'FGTS SOBRE FOLHA DE PAGAMENTO', valor: 444.33 },
+          { nome: 'CONTABILIDADE', valor: 1400.00 },
+          { nome: 'IPTU', valor: 316.17 },
+          { nome: 'PROLABORE SÓCIOS', valor: 3000.00 },
+          { nome: 'SOFTWARE (MARMOPRICE)', valor: 784.00 },
+          { nome: 'CELULAR', valor: 409.41 },
+          { nome: 'INTERNET', valor: 293.39 },
+          { nome: 'FAXINEIRA', valor: 0 },
+        ]
+      },
+      {
+        nome: 'DESPESAS VARIÁVEIS',
+        itens: [
+          { nome: 'DOAÇÕES E BRINDES', valor: 0 },
+          { nome: 'MATERIAL DE ESCRITÓRIO', valor: 20.00 },
+          { nome: 'PRODUTOS DE HIGIENE E LIM...', valor: 100.00 },
+          { nome: 'MARKETING', valor: 4000.00 },
+          { nome: 'SIMPLES NACIONAL', valor: 7000.00 },
+          { nome: 'DESPESAS FINANCEIRAS (BAN...)', valor: 120.00 },
+          { nome: 'UNIFORMES', valor: 75.00 },
+          { nome: 'EPI', valor: 100.00 },
+          { nome: 'VIAGENS E REPRESENTAÇÕES', valor: 60.00 },
+          { nome: 'RESCISÕES', valor: 0 },
+          { nome: 'DIVIDA', valor: 6105.62 },
+        ]
+      },
+      {
+        nome: 'INVESTIMENTOS',
+        itens: [
+          { nome: 'ESTRUTURA', valor: 0 },
+          { nome: 'FERRAMENTAS DIGITAIS', valor: 0 },
+          { nome: 'MOSTRAS DE ARQ', valor: 0 },
+          { nome: 'SEGURANÇA', valor: 0 },
+          { nome: 'TECNOLOGIA', valor: 0 },
+          { nome: 'VEÍCULOS', valor: 0 },
+        ]
+      }
+    ]
+  }
+};
+
+function getGastos() {
+  try {
+    const s = localStorage.getItem('gastos_marmorflow');
+    return s ? JSON.parse(s) : JSON.parse(JSON.stringify(GASTOS_DEFAULT));
+  } catch(e) { return JSON.parse(JSON.stringify(GASTOS_DEFAULT)); }
+}
+function salvarGastos(g) { localStorage.setItem('gastos_marmorflow', JSON.stringify(g)); }
+
+function renderConfiguracoes() {
+  const el = document.getElementById('configuracoes-content');
+  if (!el) return;
+  el.innerHTML = `
+  <div style="padding:24px;max-width:1200px;margin:0 auto;">
+    <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);margin-bottom:24px;">⚙️ Configurações</div>
+
+    <!-- Tabs internas -->
+    <div style="display:flex;gap:4px;margin-bottom:24px;border-bottom:2px solid var(--cream-dark);padding-bottom:0;">
+      <button onclick="showSubConfig('gastos')" id="subcfg-gastos"
+        style="padding:10px 20px;border:none;background:var(--gold);color:white;border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
+        💰 Grupo de Gastos
+      </button>
+      <button onclick="showSubConfig('tempos')" id="subcfg-tempos"
+        style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
+        ⏱️ Tempos de Produção
+      </button>
+    </div>
+
+    <div id="subcfg-panel-gastos"><div id="gastos-content"></div></div>
+    <div id="subcfg-panel-tempos" style="display:none;"><div id="tempos-content"></div></div>
+  </div>`;
+
+  renderGastos();
+}
+
+function showSubConfig(aba) {
+  ['gastos','tempos'].forEach(a => {
+    const panel = document.getElementById('subcfg-panel-' + a);
+    const btn = document.getElementById('subcfg-' + a);
+    if (panel) panel.style.display = a === aba ? '' : 'none';
+    if (btn) {
+      btn.style.background = a === aba ? 'var(--gold)' : 'var(--cream-dark)';
+      btn.style.color = a === aba ? 'white' : 'var(--stone)';
+    }
+  });
+  if (aba === 'gastos') renderGastos();
+  if (aba === 'tempos') renderTempos();
+}
+
+function renderGastos() {
+  const el = document.getElementById('gastos-content');
+  if (!el) return;
+  const gastos = getGastos();
+  const cfg = getConfigOrc();
+
+  // Custo total = soma de todos os itens
+  let totalGeral = 0;
+  ['producao','comercial'].forEach(g => {
+    gastos[g].subgrupos.forEach(sg => {
+      sg.itens.forEach(it => { totalGeral += it.valor || 0; });
+    });
+  });
+  const custoHora = totalGeral / (cfg.horasProdMes * cfg.qtdFuncionarios);
+  const custoHoraHomem = totalGeral / cfg.horasProdMes;
+
+  el.innerHTML = `
+  <div style="background:var(--stone);color:white;padding:14px 20px;border-radius:10px;margin-bottom:20px;display:flex;gap:24px;flex-wrap:wrap;">
+    <div><span style="font-size:11px;opacity:0.7;">Custo Estrutura:</span> <strong style="color:var(--gold);">R$ ${totalGeral.toFixed(2).replace('.',',')}</strong></div>
+    <div><span style="font-size:11px;opacity:0.7;">Custo Hora Empresa:</span> <strong>R$ ${custoHoraHomem.toFixed(2).replace('.',',')}</strong></div>
+    <div><span style="font-size:11px;opacity:0.7;">Custo Hora Homem:</span> <strong>R$ ${custoHora.toFixed(2).replace('.',',')}</strong></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+    ${['producao','comercial'].map(grupoKey => {
+      const grupo = gastos[grupoKey];
+      return `
+      <div>
+        <div style="background:var(--stone);color:white;padding:10px 16px;border-radius:10px 10px 0 0;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">
+          Grupo: ${grupo.nome}
+        </div>
+        ${grupo.subgrupos.map((sg, sgi) => {
+          const totalSg = sg.itens.reduce((s,it) => s+(it.valor||0), 0);
+          const pctTotal = totalGeral > 0 ? (totalSg/totalGeral*100) : 0;
+          return `
+          <div style="border:1px solid var(--cream-dark);border-top:none;${sgi>0?'border-top:none;':''}">
+            <div style="background:var(--cream);padding:8px 14px;display:flex;align-items:center;gap:8px;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--stone);flex:1;">Subgrupo</div>
+              <input class="form-input" style="max-width:200px;padding:4px 8px;font-size:12px;font-weight:700;" value="${sg.nome}"
+                onblur="atualizarNomeSubgrupo('${grupoKey}',${sgi},this.value)">
+            </div>
+            ${sg.itens.map((it, iti) => {
+              const pctItem = totalGeral > 0 ? (it.valor/totalGeral*100).toFixed(1) : '0.0';
+              return `
+              <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-bottom:1px solid var(--cream-dark);">
+                <input class="form-input" style="flex:2;padding:5px 8px;font-size:12px;" value="${it.nome}"
+                  onblur="atualizarGasto('${grupoKey}',${sgi},${iti},'nome',this.value)">
+                <input class="form-input" style="width:110px;padding:5px 8px;font-size:12px;text-align:right;" value="R$ ${(it.valor||0).toFixed(2).replace('.',',')}"
+                  onblur="atualizarGastoValor('${grupoKey}',${sgi},${iti},this.value)">
+                <span style="font-size:11px;color:var(--stone-light);width:36px;text-align:right;">${pctItem}</span>
+                <button onclick="deletarItemGasto('${grupoKey}',${sgi},${iti})" style="background:#FDEAEA;border:none;color:#B85A4A;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;">🗑</button>
+              </div>`;
+            }).join('')}
+            <div style="padding:8px 12px;background:var(--cream);display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:11px;font-weight:700;color:var(--stone);">TOTAL ${sg.nome.toUpperCase()}→</span>
+              <span style="font-size:13px;font-weight:700;color:var(--stone);">R$ ${totalSg.toFixed(2).replace('.',',')}</span>
+            </div>
+            <div style="padding:6px 12px;display:flex;gap:8px;">
+              <button onclick="adicionarItemGasto('${grupoKey}',${sgi})" style="background:var(--gold);color:white;border:none;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ LANÇAMENTO</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }).join('')}
+  </div>
+  <div style="margin-top:16px;text-align:right;">
+    <button onclick="salvarGastosConfig()" style="background:var(--green);color:white;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">💾 Salvar Configurações</button>
+  </div>`;
+}
+
+function atualizarNomeSubgrupo(grupoKey, sgi, valor) {
+  const g = getGastos(); g[grupoKey].subgrupos[sgi].nome = valor; salvarGastos(g); renderGastos();
+}
+function atualizarGasto(grupoKey, sgi, iti, campo, valor) {
+  const g = getGastos(); g[grupoKey].subgrupos[sgi].itens[iti][campo] = valor; salvarGastos(g);
+}
+function atualizarGastoValor(grupoKey, sgi, iti, valor) {
+  const v = parseFloat(valor.replace('R$','').replace(/\./g,'').replace(',','.').trim()) || 0;
+  const g = getGastos(); g[grupoKey].subgrupos[sgi].itens[iti].valor = v; salvarGastos(g);
+  renderGastos();
+  // Atualiza custo hora na config do orçamento
+  let total = 0;
+  ['producao','comercial'].forEach(gk => g[gk].subgrupos.forEach(sg => sg.itens.forEach(it => total += it.valor||0)));
+  const cfg = getConfigOrc(); cfg.custoEstrutura = total; salvarConfigOrc(cfg);
+}
+function deletarItemGasto(grupoKey, sgi, iti) {
+  const g = getGastos(); g[grupoKey].subgrupos[sgi].itens.splice(iti, 1); salvarGastos(g); renderGastos();
+}
+function adicionarItemGasto(grupoKey, sgi) {
+  const g = getGastos(); g[grupoKey].subgrupos[sgi].itens.push({nome:'NOVO ITEM', valor:0}); salvarGastos(g); renderGastos();
+}
+function salvarGastosConfig() {
+  showNotif('Configurações salvas! ✓', 'success');
+}
+
+// ─── TEMPOS DE PRODUÇÃO ───────────────────────────────────────────────────
+function renderTempos() {
+  const el = document.getElementById('tempos-content');
+  if (!el) return;
+  const cfg = getConfigOrc();
+
+  const campos = [
+    ['Serra (hr/m²)', 'serra', 0.8],
+    ['Corte 45°/meia esquadria (hr/m)', 'corte45', 0.2],
+    ['Montagem 45° (ajuste + colagem) (hr/m)', 'montagem45', 1.2],
+    ['Corte, Desbaste e Polimento de Furo Cuba (hr/un.)', 'corteDPolimento', 2],
+    ['Área Bipolida (h/m²)', 'areaBipolida', 2],
+    ['Sistema Flush (h/un)', 'sistemaFlush', 3],
+    ['Sistema Flath (h/un)', 'sistemaFlath', 3],
+    ['Recortes/Furos sem Polimento (hr/un)', 'recortesSemPolimento', 0.5],
+    ['Rebaixo Italiano Usinado (Fresa + Polimento) hr/m²', 'rebaixoItaliano', 8],
+    ['Rebaixo Americano Colado (Corte + Polimento) hr/m²', 'rebaixoAmericano', 2],
+    ['Comprimento Linear Polimento Automático (hr/m)', 'polimentoAutomatico', 0.15],
+    ['Comprimento Linear Polimento Manual (hr/m)', 'polimentoManual', 0.2],
+    ['Custo de Insumo (%)', 'custoInsumo', 5],
+    ['Acabamento 45° Cuba Esculpida (hr/m)', 'cubEsculpida', 3],
+    ['Acabamento Meio Boleado (hr/m)', 'meioBoelado', 0.5],
+    ['Acabamento Meio Boleado Duplo (hr/m)', 'meioBoeladoDuplo', 1],
+    ['Acabamento Chanfrado 45° (hr/m)', 'chanfrado45', 1],
+    ['Acabamento Meia Cana (hr/m)', 'meiaCana', 1],
+    ['Acabamento Boleado Duplo (hr/m)', 'boeladoDuplo', 2],
+    ['Acabamento Chanfrado Duplo (hr/m)', 'chanfradoDuplo', 2],
+    ['Acabamento Meia Cana Duplo (hr/m)', 'meiaCanaDuplo', 2],
+    ['Quantidade de Funcionários (produção)', 'qtdFuncionarios', 5],
+    ['Colagem de topo (hr/m)', 'colagemTopo', 0.25],
+    ['Chanfro Alongado (hr/m)', 'chanfroAlongado', 2],
+    ['Water Jet (R$/m)', 'waterJet', 20],
+    ['Horas Produtivas/Mês', 'horasProdMes', 176],
+    ['Custo Combustível (R$/L)', 'custoCombustivel', 7.00],
+    ['Consumo Combustível (km/L)', 'consumoCombustivel', 8],
+    ['Horas de Instalação por m²', 'horasInstalacaoM2', 1.5],
+    ['Pessoas na Instalação/Entrega', 'pessoasInstalacao', 2],
+  ];
+
+  el.innerHTML = `
+  <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:24px;">
+    <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:20px;">⏱️ Informações de Produção — Atualize as informações de produção.</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
+      ${campos.map(([label, key, def]) => `
+      <div>
+        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">${label}</label>
+        <input class="form-input" id="tempo-${key}" type="number" step="0.01" value="${cfg[key]!==undefined?cfg[key]:def}"
+          oninput="salvarTempoCfg('${key}',this.value)">
+      </div>`).join('')}
+    </div>
+    <div style="margin-top:20px;text-align:right;">
+      <button onclick="salvarTodosTempos()" style="background:var(--green);color:white;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">💾 Salvar Tempos</button>
+    </div>
+  </div>`;
+}
+
+function salvarTempoCfg(key, valor) {
+  const cfg = getConfigOrc();
+  cfg[key] = parseFloat(valor) || 0;
+  salvarConfigOrc(cfg);
+}
+
+function salvarTodosTempos() {
+  showNotif('Tempos de produção salvos! ✓', 'success');
+}
+// ═══════════════════════════════════════════════════════════════════════════
+
+
+// ─── NORMALIZAÇÃO DE NOMES ───────────────────────────────────────────────────
+function normalizarNome(nome) {
+  if (!nome) return '';
+  // Remove acentos, converte para Title Case, normaliza espaços
+  return nome.trim()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\w/g, c => c.toUpperCase());
+}
+
+function nomesSaoIguais(a, b) {
+  if (!a || !b) return false;
+  const norm = s => s.trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ');
+  return norm(a) === norm(b);
+}
+
+function toggleOrigemOrc() {
+  const sel = document.getElementById('orc-origem-sel');
+  const wrap = document.getElementById('orc-origemNome-wrap');
+  const lbl = document.getElementById('orc-origemNome-label');
+  if (!sel || !wrap) return;
+  const v = sel.value;
+  const mostrar = ['arquiteto','construtora','indicacao'].includes(v);
+  wrap.style.display = mostrar ? '' : 'none';
+  if (lbl) lbl.textContent = v==='arquiteto'?'Nome do Arquiteto':v==='construtora'?'Nome da Construtora':'Nome / Referência';
 }
 // ─────────────────────────────────────────────────────────────────────────────
 

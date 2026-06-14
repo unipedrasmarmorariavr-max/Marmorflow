@@ -3081,311 +3081,375 @@ function renderTelaOrcamentoPedido(order) {
   const orc = orcamentoAtual;
   const { custoHoraEmpresa } = calcularCustoHora();
 
-  // Recalcula
+  // Recalcula todos os itens
   orc.itens.forEach(item => {
     const pedra = pedras.find(p => p.id === item.pedraId);
     item.distancia = orc.distancia;
-    item.calc = (pedra && item.largura && item.comprimento) ? calcularItem(item, pedra, {...cfg, transito: orc.transito}) : null;
+    item.idas = orc.idas || 1;
+    const areaTotal = calcAreaTotalItem(item);
+    item.calc = (pedra && areaTotal > 0) ? calcularItem(item, pedra, {...cfg, transito: orc.transito}) : null;
   });
 
   const totalGeral = orc.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
   const custoTotal = orc.itens.reduce((s,it) => s + (it.calc?.custoTotal||0), 0);
   const lucroTotal = orc.itens.reduce((s,it) => s + (it.calc?.lucroLiquido||0), 0);
   const margem = totalGeral > 0 ? (lucroTotal/totalGeral*100) : 0;
-  const margemCor = margem >= 30 ? '#4A7C59' : margem >= 20 ? '#B8760A' : '#B85A4A';
+  const margemCor = margem >= 30 ? '#2E7D32' : margem >= 15 ? '#B8760A' : '#B85A4A';
+  const tempoProdTotal = orc.itens.reduce((s,it) => s+(it.calc?.tempoProdTotal||0), 0);
+  const llh = tempoProdTotal > 0 ? lucroTotal/tempoProdTotal : 0;
 
   el.innerHTML = `
-  <div style="min-height:100vh;background:var(--cream);padding:0;">
+  <div style="min-height:100vh;background:#f5f5f5;padding-bottom:80px;">
 
-    <!-- Header fixo -->
-    <div style="background:var(--stone);color:white;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:100;">
+    <!-- HEADER FIXO -->
+    <div style="background:#1a2332;color:white;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.3);">
       <div style="display:flex;align-items:center;gap:16px;">
-        <button onclick="fecharTelaOrcamentoPedido()" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;">← Voltar</button>
+        <button onclick="fecharTelaOrcamentoPedido()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:white;padding:7px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">← Voltar</button>
         <div>
-          <div style="font-size:18px;font-weight:700;">🧮 Orçamento — ${order.cliente}</div>
-          <div style="font-size:12px;opacity:0.7;">${order.id} · ${order.peca||''} · ${order.material||''} · Custo/h operário: ${fmt(custoHoraEmpresa)}</div>
+          <div style="font-size:16px;font-weight:700;">${order.cliente} — Orçamento</div>
+          <div style="font-size:11px;opacity:0.6;">${order.id} · ${order.peca||''} · Custo/h: ${fmt(custoHoraEmpresa)}</div>
         </div>
       </div>
-      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-        <div style="text-align:right;${totalGeral>0?'':'display:none;'}" id="header-total-wrap">
-          <div style="font-size:11px;opacity:0.7;">PREÇO FINAL</div>
-          <div id="header-total" style="font-size:22px;font-weight:700;color:#FFD700;">${fmt(totalGeral)}</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        ${totalGeral > 0 ? `
+        <div style="text-align:right;background:rgba(255,255,255,0.08);padding:8px 16px;border-radius:8px;">
+          <div style="font-size:10px;opacity:0.6;text-transform:uppercase;">Custo Total</div>
+          <div style="font-size:15px;font-weight:700;">${fmt(custoTotal)}</div>
         </div>
-        <div id="header-margem" style="background:${margemCor};padding:6px 14px;border-radius:8px;text-align:center;${totalGeral>0?'':'display:none;'}">
-          <div style="font-size:10px;opacity:0.8;">MARGEM</div>
+        <div style="text-align:right;background:rgba(255,255,255,0.08);padding:8px 16px;border-radius:8px;">
+          <div style="font-size:10px;opacity:0.6;text-transform:uppercase;">Valor de Venda</div>
+          <div style="font-size:18px;font-weight:900;color:#FFD700;">${fmt(totalGeral)}</div>
+        </div>
+        <div style="background:${margemCor};padding:8px 14px;border-radius:8px;text-align:center;">
+          <div style="font-size:10px;opacity:0.8;text-transform:uppercase;">Margem</div>
           <div style="font-size:16px;font-weight:700;">${margem.toFixed(1)}%</div>
         </div>
-        <button onclick="imprimirOrcamento()" style="background:#2C2C2C;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">🖨️ Salvar e Imprimir</button>
-        <button onclick="salvarOrcamentoPedido()" style="background:var(--gold);color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">💾 Salvar</button>
-        ${totalGeral > 0 ? `<button onclick="salvarEFecharPedido()" style="background:#4A7C59;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">✅ Salvar e Fechar Pedido</button>` : ''}
+        <div style="text-align:right;background:rgba(255,255,255,0.08);padding:8px 16px;border-radius:8px;">
+          <div style="font-size:10px;opacity:0.6;text-transform:uppercase;">LLH</div>
+          <div style="font-size:15px;font-weight:700;color:#A8D5A2;">${fmt(llh)}</div>
+        </div>` : ''}
+        <button onclick="imprimirOrcamento()" style="background:#006382;color:white;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">🖨️ Salvar e Imprimir</button>
+        <button onclick="salvarOrcamentoPedido()" style="background:#2E7D32;color:white;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">💾 Salvar</button>
+        ${totalGeral > 0 ? `<button onclick="salvarEFecharPedido()" style="background:var(--gold);color:white;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">✅ Fechar Pedido</button>` : ''}
       </div>
     </div>
 
-    <div style="max-width:1200px;margin:0 auto;padding:24px;">
+    <div style="max-width:1300px;margin:0 auto;padding:20px;">
 
-      <!-- Dados do medidor (somente leitura) -->
-      <div style="background:white;border-radius:14px;padding:20px;margin-bottom:20px;box-shadow:var(--shadow);border-left:4px solid var(--gold);">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">📐 Dados da Medição</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
-          <div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;">Cliente</div><div style="font-size:14px;font-weight:600;color:var(--stone);">${order.cliente||'—'}</div></div>
-          <div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;">Peça</div><div style="font-size:14px;font-weight:600;color:var(--stone);">${order.peca||'—'}</div></div>
-          <div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;">Material</div><div style="font-size:14px;font-weight:600;color:var(--stone);">${order.material||'—'}</div></div>
-          <div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;">Conclusão</div><div style="font-size:14px;font-weight:600;color:var(--stone);">${TIPO_LABELS[order.tipoentrega]||order.tipoentrega||'—'}</div></div>
-          <div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;">Endereço</div><div style="font-size:13px;color:var(--stone);">${order.endereco||'—'}</div></div>
-          <div><div style="font-size:10px;color:var(--stone-light);text-transform:uppercase;">Acesso</div><div style="font-size:13px;color:var(--stone);">${order.acesso||'—'}</div></div>
+      <!-- CABEÇALHO DO ORÇAMENTO (igual Marmoprice) -->
+      <div style="background:white;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <div style="display:grid;grid-template-columns:2fr 2fr 2fr;gap:12px;margin-bottom:12px;">
+          <div><label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Cliente *</label>
+            <input class="form-input" value="${orc.cliente||order.cliente||''}" oninput="orcamentoAtual.cliente=this.value" style="font-weight:600;"></div>
+          <div><label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Endereço da Obra</label>
+            <input class="form-input" value="${orc.enderecoObra||order.endereco||''}" oninput="orcamentoAtual.enderecoObra=this.value"></div>
+          <div><label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Status</label>
+            <select class="form-select" onchange="orcamentoAtual.status=this.value">
+              ${['À Revisar','Em aberto','Aprovado','Fechado','Cancelado'].map(s=>`<option ${orc.status===s?'selected':''}>${s}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 2fr 1fr;gap:12px;align-items:end;">
+          <div><label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Distância (km) *</label>
+            <input class="form-input" type="number" value="${orc.distancia||0}" oninput="orcamentoAtual.distancia=parseFloat(this.value)||0;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))"></div>
+          <div><label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Idas ↺</label>
+            <input class="form-input" type="number" min="1" value="${orc.idas||1}" oninput="orcamentoAtual.idas=parseInt(this.value)||1;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))"></div>
+          <div><label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Trânsito *</label>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              ${['lento','intermediario','rapido'].map((t,i) => `<label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="radio" name="orc-transito" value="${t}" ${(orc.transito||'rapido')===t?'checked':''} onchange="orcamentoAtual.transito=this.value;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))" style="accent-color:#006382;">
+                ${['Lento','Intermediário','Rápido'][i]}</label>`).join('')}
+            </div>
+          </div>
+          <div><label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Origem</label>
+            <select class="form-select" onchange="orcamentoAtual.origem=this.value">
+              <option value="">Buscar...</option>
+              ${(typeof ORIGEM_LABELS !== 'undefined' ? Object.entries(ORIGEM_LABELS) : []).map(([k,v])=>`<option value="${k}" ${orc.origem===k?'selected':''}>${v}</option>`).join('')}
+            </select>
+          </div>
+          <div><label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Data Prevista</label>
+            <input class="form-input" type="date" value="${orc.dataPrevista||''}" oninput="orcamentoAtual.dataPrevista=this.value"></div>
         </div>
       </div>
 
-      <!-- Dados comerciais do orçamento -->
-      <div style="background:white;border-radius:14px;padding:20px;margin-bottom:20px;box-shadow:var(--shadow);">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">🚚 Dados do Orçamento</div>
-        <div class="form-grid">
-          <div class="form-group"><label class="form-label">Distância até o cliente (km)</label>
-            <input class="form-input" type="number" id="torc-distancia" value="${orc.distancia||0}" oninput="orcamentoAtual.distancia=parseFloat(this.value)||0;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))"></div>
-          <div class="form-group"><label class="form-label">Nº de Idas à Obra <span style="font-size:10px;color:var(--stone-light);">entrega + instalação</span></label>
-            <input class="form-input" type="number" min="1" id="torc-idas" value="${orc.idas||1}" oninput="orcamentoAtual.idas=parseInt(this.value)||1;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))"></div>
-          <div class="form-group"><label class="form-label">Trânsito</label>
-            <select class="form-select" id="torc-transito" onchange="orcamentoAtual.transito=this.value;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))">
-              <option value="lento" ${orc.transito==='lento'?'selected':''}>Lento (3 min/km)</option>
-              <option value="intermediario" ${orc.transito==='intermediario'?'selected':''}>Intermediário (2 min/km)</option>
-              <option value="rapido" ${orc.transito==='rapido'?'selected':''}>Rápido (1 min/km)</option>
-            </select>
-          </div>
-          <div class="form-group"><label class="form-label">Status do Orçamento</label>
-            <select class="form-select" id="torc-status" onchange="orcamentoAtual.status=this.value">
-              ${['Em aberto','Aprovado','Fechado','Cancelado'].map(s=>`<option ${orc.status===s?'selected':''}>${s}</option>`).join('')}
-            </select>
-          </div>
-          <div class="form-group"><label class="form-label">Valor Final (R$) <span style="font-size:10px;color:var(--stone-light);">preenchido após cálculo</span></label>
-            <input class="form-input" id="torc-valor" value="${orc.valorFinal||''}" placeholder="Calculado automaticamente" readonly style="background:var(--cream-dark);">
-          </div>
-        </div>
-      </div>
-
-      <!-- Itens do orçamento -->
+      <!-- ITENS -->
       <div id="torc-itens">
         ${orc.itens.map((item,idx) => renderItemTelaOrc(item, idx, pedras, cfg, order.id)).join('')}
       </div>
 
-      <button onclick="adicionarItemTelaOrc('${order.id}')" style="width:100%;padding:14px;background:white;border:2px dashed var(--cream-dark);border-radius:12px;cursor:pointer;font-size:14px;color:var(--stone-light);margin-bottom:20px;">+ Adicionar Peça</button>
-
-      <!-- Itens do cliente (cuba, torneira etc) -->
-      <div style="background:white;border-radius:14px;padding:20px;margin-bottom:20px;box-shadow:var(--shadow);">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">📦 Itens Deixados pelo Cliente</div>
-        <div style="display:flex;flex-wrap:wrap;gap:12px;">
-          ${['Cuba','Tomada de Torre','Lixeira','Calha Úmida','Dispenser','Válvula','Torneira'].map(item => {
-            const key = item.toLowerCase().replace(/\s/g,'').replace('ú','u').replace('ã','a');
-            const checked = order.itensCliente?.[key] || false;
-            return `<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;background:var(--cream);padding:8px 14px;border-radius:8px;border:1.5px solid ${checked?'var(--gold)':'var(--cream-dark)'};">
-              <input type="checkbox" ${checked?'checked':''} disabled style="accent-color:var(--gold);"> ${item}
-            </label>`;
-          }).join('')}
-        </div>
+      <!-- BOTÃO ADICIONAR ITEM -->
+      <div style="text-align:center;margin-bottom:20px;">
+        <button onclick="adicionarItemTelaOrc('${order.id}')" style="background:#006382;color:white;border:none;padding:10px 28px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">+ ITEM</button>
       </div>
 
-      <!-- Resumo financeiro final -->
+      <!-- DESCONTO GERAL / SIMULADOR -->
       ${totalGeral > 0 ? `
-      <div style="background:var(--stone);color:white;border-radius:14px;padding:24px;box-shadow:var(--shadow);margin-bottom:16px;">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:16px;">💰 Resumo Financeiro</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:16px;">
-          <div><div style="font-size:11px;opacity:0.6;">Custo Total</div><div style="font-size:20px;font-weight:700;">${fmt(custoTotal)}</div></div>
-          <div><div style="font-size:11px;opacity:0.6;">Lucro Líquido</div><div style="font-size:20px;font-weight:700;color:#A8D5A2;">${fmt(lucroTotal)}</div></div>
-          <div><div style="font-size:11px;opacity:0.6;">Margem</div><div style="font-size:20px;font-weight:700;color:${margemCor};">${margem.toFixed(1)}%</div></div>
-          <div><div style="font-size:11px;opacity:0.6;">Preço Final</div><div style="font-size:26px;font-weight:700;color:#FFD700;">${fmt(totalGeral)}</div></div>
-        </div>
-        <!-- Detalhamento instalação e tempo -->
-        <div style="border-top:1px solid rgba(255,255,255,0.15);padding-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
-          <div><div style="font-size:11px;opacity:0.6;">Custo Instalação</div><div style="font-size:16px;font-weight:700;color:#FFD700;">${fmt(orc.itens.reduce((s,it)=>s+(it.calc?.custoInstalacao||0),0))}</div></div>
-          <div><div style="font-size:11px;opacity:0.6;">Custo Transporte</div><div style="font-size:16px;font-weight:700;">${fmt(orc.itens.reduce((s,it)=>s+(it.calc?.custoDeslocamento||0)+(it.calc?.custoCombustivel||0),0))}</div></div>
-          <div><div style="font-size:11px;opacity:0.6;">Tempo Instal./Entrega</div><div style="font-size:16px;font-weight:700;">${(()=>{const t=orc.itens.reduce((s,it)=>s+(it.calc?.tempoProdTotal||0),0);const h=Math.floor(t);const m=Math.round((t-h)*60);return h+':'+(m<10?'0':'')+m;})()}h</div></div>
-          <div><div style="font-size:11px;opacity:0.6;">LLH: R$ (Lucro/Hora)</div><div style="font-size:16px;font-weight:700;color:#A8D5A2;">${(()=>{const tp=orc.itens.reduce((s,it)=>s+(it.calc?.tempoProdTotal||0),0)||1;return fmt(lucroTotal/tp);})()}</div></div>
-        </div>
-      </div>
-
-      <!-- SIMULADOR DE PREÇO -->
-      <div style="background:white;border-radius:14px;padding:24px;box-shadow:var(--shadow);">
-        <div style="font-size:13px;font-weight:700;color:var(--stone);margin-bottom:4px;">🧮 Simulador de Preço — Desconto Geral</div>
-        <div style="font-size:12px;color:var(--stone-light);margin-bottom:16px;">Digite um valor ou margem para ver o resultado — use para avaliar propostas concorrentes</div>
-        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 16px;border-radius:8px;border:2px solid var(--gold);background:#FBF8F2;font-size:13px;font-weight:600;">
-            <input type="radio" name="sim-modo" value="total" checked onchange="simularPreco(${custoTotal})" style="accent-color:var(--gold);"> Pelo Total
+      <div style="background:white;border-radius:8px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,0.08);margin-bottom:16px;">
+        <div style="font-size:14px;font-weight:700;color:#333;margin-bottom:16px;">🧮 Desconto Geral — Simulador de Preço</div>
+        <div style="display:flex;gap:10px;margin-bottom:16px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 16px;border-radius:6px;border:2px solid #006382;background:#e8f5f8;font-size:13px;font-weight:600;">
+            <input type="radio" name="sim-modo" value="total" checked onchange="simularPreco(${custoTotal})" style="accent-color:#006382;"> Pelo Total
           </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 16px;border-radius:8px;border:2px solid var(--cream-dark);font-size:13px;">
-            <input type="radio" name="sim-modo" value="margem" onchange="simularPreco(${custoTotal})" style="accent-color:var(--gold);"> Pela Margem
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 16px;border-radius:6px;border:2px solid #ddd;font-size:13px;">
+            <input type="radio" name="sim-modo" value="margem" onchange="simularPreco(${custoTotal})" style="accent-color:#006382;"> Pela Margem
           </label>
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px;">
-          <div>
-            <div style="font-size:11px;color:var(--stone-light);margin-bottom:4px;font-weight:700;">MEU CUSTO TOTAL</div>
-            <input class="form-input" value="${fmt(custoTotal)}" readonly style="background:var(--cream-dark);font-weight:700;color:var(--stone);">
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--stone-light);margin-bottom:4px;font-weight:700;" id="sim-label-valor">VALOR DO CONCORRENTE (R$)</div>
-            <input class="form-input" id="sim-valor" type="text" placeholder="Ex: R$ 2.500,00"
-              oninput="simularPreco(${custoTotal})" style="font-weight:700;border-color:var(--gold);border-width:2px;">
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--stone-light);margin-bottom:4px;font-weight:700;" id="sim-label-margem">MARGEM QUE TERIA (%)</div>
-            <input class="form-input" id="sim-margem" type="text" placeholder="Ex: 30"
-              oninput="simularPreco(${custoTotal})" style="font-weight:700;">
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--stone-light);margin-bottom:4px;font-weight:700;">LUCRO LÍQUIDO (R$)</div>
-            <input class="form-input" id="sim-lucro" placeholder="—" readonly style="background:var(--cream-dark);font-weight:700;">
-          </div>
-          <div>
-            <div style="font-size:11px;color:var(--stone-light);margin-bottom:4px;font-weight:700;">LLH — LUCRO/HORA</div>
-            <input class="form-input" id="sim-llh" placeholder="—" readonly style="background:var(--cream-dark);font-weight:700;">
-          </div>
+          <div><div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600;">CUSTO TOTAL</div>
+            <input class="form-input" value="${fmt(custoTotal)}" readonly style="background:#f5f5f5;font-weight:700;"></div>
+          <div><div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600;" id="sim-label-valor">VALOR DO CONCORRENTE</div>
+            <input class="form-input" id="sim-valor" type="text" placeholder="R$ 0,00" oninput="simularPreco(${custoTotal})" style="font-weight:700;border-color:#006382;border-width:2px;"></div>
+          <div><div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600;" id="sim-label-margem">MARGEM LUCRO (%)</div>
+            <input class="form-input" id="sim-margem" type="text" placeholder="0,000" oninput="simularPreco(${custoTotal})" style="font-weight:700;"></div>
+          <div><div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600;">LUCRO LÍQUIDO</div>
+            <input class="form-input" id="sim-lucro" placeholder="—" readonly style="background:#f5f5f5;font-weight:700;"></div>
+          <div><div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600;">LLH (R$/hora)</div>
+            <input class="form-input" id="sim-llh" placeholder="—" readonly style="background:#f5f5f5;font-weight:700;"></div>
         </div>
-        <!-- Resultado visual com números -->
-        <div id="sim-resultado" style="display:none;border-radius:10px;padding:16px;border:2px solid transparent;">
-          <div style="font-size:13px;font-weight:700;margin-bottom:10px;" id="sim-titulo"></div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">
-            <div style="background:rgba(0,0,0,0.05);border-radius:8px;padding:10px;">
-              <div style="font-size:10px;opacity:0.7;margin-bottom:2px;">MEU CUSTO</div>
-              <div style="font-size:16px;font-weight:700;" id="sim-r-custo">${fmt(custoTotal)}</div>
-            </div>
-            <div style="background:rgba(0,0,0,0.05);border-radius:8px;padding:10px;">
-              <div style="font-size:10px;opacity:0.7;margin-bottom:2px;">VALOR COBRADO</div>
-              <div style="font-size:16px;font-weight:700;" id="sim-r-valor">—</div>
-            </div>
-            <div style="background:rgba(0,0,0,0.05);border-radius:8px;padding:10px;">
-              <div style="font-size:10px;opacity:0.7;margin-bottom:2px;">LUCRO / PREJUÍZO</div>
-              <div style="font-size:18px;font-weight:900;" id="sim-r-lucro">—</div>
-            </div>
-            <div style="background:rgba(0,0,0,0.05);border-radius:8px;padding:10px;">
-              <div style="font-size:10px;opacity:0.7;margin-bottom:2px;">MARGEM REAL</div>
-              <div style="font-size:18px;font-weight:900;" id="sim-r-margem">—</div>
-            </div>
-            <div style="background:rgba(0,0,0,0.05);border-radius:8px;padding:10px;">
-              <div style="font-size:10px;opacity:0.7;margin-bottom:2px;">LUCRO POR HORA</div>
-              <div style="font-size:16px;font-weight:700;" id="sim-r-llh">—</div>
-            </div>
+        <div id="sim-resultado" style="display:none;border-radius:8px;padding:14px;border-left:4px solid #ccc;">
+          <div style="font-size:13px;font-weight:700;margin-bottom:8px;" id="sim-titulo"></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;">
+            <div><div style="font-size:10px;color:#666;">MEU CUSTO</div><div style="font-size:15px;font-weight:700;" id="sim-r-custo"></div></div>
+            <div><div style="font-size:10px;color:#666;">VALOR COBRADO</div><div style="font-size:15px;font-weight:700;" id="sim-r-valor"></div></div>
+            <div><div style="font-size:10px;color:#666;">LUCRO / PREJUÍZO</div><div style="font-size:17px;font-weight:900;" id="sim-r-lucro"></div></div>
+            <div><div style="font-size:10px;color:#666;">MARGEM REAL</div><div style="font-size:17px;font-weight:900;" id="sim-r-margem"></div></div>
+            <div><div style="font-size:10px;color:#666;">LUCRO/HORA</div><div style="font-size:15px;font-weight:700;" id="sim-r-llh"></div></div>
           </div>
-          <div style="margin-top:10px;font-size:14px;font-weight:700;" id="sim-r-conclusao"></div>
+          <div style="margin-top:8px;font-size:13px;font-weight:600;" id="sim-r-conclusao"></div>
         </div>
       </div>` : ''}
+
+    </div>
+
+    <!-- RODAPÉ FIXO (igual Marmoprice) -->
+    <div style="position:fixed;bottom:0;left:0;right:0;background:white;border-top:1px solid #ddd;padding:10px 24px;display:flex;gap:12px;align-items:center;z-index:99;box-shadow:0 -2px 8px rgba(0,0,0,0.08);">
+      <div style="display:flex;align-items:center;gap:8px;background:#f5f5f5;padding:8px 14px;border-radius:6px;cursor:pointer;" onclick="abrirDescontoGeral(${custoTotal}, ${totalGeral}, ${margem.toFixed(3)}, ${lucroTotal}, ${llh.toFixed(2)})">
+        <span style="font-size:18px;">🧮</span>
+        <span style="font-size:12px;font-weight:600;color:#333;">Desconto<br>Geral</span>
+      </div>
+      <div style="flex:1;display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;">
+        <div><label style="font-size:10px;color:#666;">Observações gerais</label><input class="form-input" style="padding:6px 10px;" value="${orc.obsGeral||''}" oninput="orcamentoAtual.obsGeral=this.value"></div>
+        <div><label style="font-size:10px;color:#666;">Prazo de Entrega</label><input class="form-input" style="padding:6px 10px;" value="${orc.prazoEntrega||''}" oninput="orcamentoAtual.prazoEntrega=this.value"></div>
+        <div><label style="font-size:10px;color:#666;">Desconto (%)</label><input class="form-input" style="padding:6px 10px;" type="number" value="${orc.desconto||0}" oninput="orcamentoAtual.desconto=parseFloat(this.value)||0"></div>
+      </div>
+      <button onclick="imprimirOrcamento()" style="background:#1a2332;color:white;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">SALVAR E IMPRIMIR</button>
+      <button onclick="salvarOrcamentoPedido()" style="background:#006382;color:white;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">SALVAR</button>
+      <button onclick="fecharTelaOrcamentoPedido()" style="background:#dc3545;color:white;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">VOLTAR</button>
     </div>
   </div>`;
 
-  // Atualiza valor no campo
   const campoValor = document.getElementById('torc-valor');
   if (campoValor && totalGeral > 0) {
     campoValor.value = totalGeral.toFixed(2).replace('.',',');
-    orcamentoAtual.valorFinal = totalGeral.toFixed(2).replace('.',',');
+    orcamentoAtual.valorFinal = campoValor.value;
   }
 }
 
 function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
   const pedra = pedras.find(p => p.id === item.pedraId);
   const calc = item.calc;
-  const margemCor = calc ? (calc.margem >= 30 ? '#4A7C59' : calc.margem >= 20 ? '#B8760A' : '#B85A4A') : '';
+  const areaTotal = calcAreaTotalItem(item);
+
+  const custoTemposHTML = calc ? `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;">
+      <div style="border:1px solid #e0e0e0;border-radius:6px 0 0 6px;overflow:hidden;">
+        <div style="background:#2C2C2C;color:white;padding:8px 12px;font-size:11px;font-weight:700;">CUSTOS DO ORÇAMENTO</div>
+        ${[
+          ['Custo de Matéria Prima com Quebra', calc.custoMaterial],
+          ['Custo de Descarga/Instalação', calc.custoInstalacao],
+          ['Custo de Deslocamento', calc.custoDeslocamento],
+          ['Custo de Combustível', calc.custoCombustivel],
+          ['Custo Serra', calc.custoSerra],
+          ['Custo Corte 45', (calc.custoMontagem||0)/2],
+          ['Custo Montagem 45', (calc.custoMontagem||0)/2],
+          ['Custo Polimento Manual', calc.custoPolimento],
+          ['Custo Área Bipolimento', calc.custoBipolimento],
+          ['Custo Acabamentos', calc.custoAcabamentos],
+          ['Custo Esp./Furos', calc.custoEspeciais+calc.custoFuros],
+          ['Custo Water Jet', calc.custoWaterJet],
+          ['Custo Horas Adicionais', calc.custoHorasAdic],
+          ['Custo de Insumos', calc.custoInsumos],
+          ['Custo Total do Produto', calc.custoTotal],
+        ].map(([nome, val]) => `<div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #f0f0f0;font-size:12px;">
+          <span style="color:#555;">${nome}</span><span style="font-weight:600;">${fmt(val||0)}</span>
+        </div>`).join('')}
+        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#f9f9f9;font-size:12px;font-weight:700;">
+          <span>Lucro Líquido</span><span style="color:#2E7D32;">${fmt(calc.lucroLiquido)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #e0e0e0;font-size:13px;font-weight:700;">
+          <span>Preço Final do Produto</span><span style="color:#006382;">${fmt(calc.precoFinal)}</span>
+        </div>
+      </div>
+      <div style="border:1px solid #e0e0e0;border-left:none;border-radius:0 6px 6px 0;overflow:hidden;">
+        <div style="background:#2C2C2C;color:white;padding:8px 12px;font-size:11px;font-weight:700;">(TEMPO PRODUTIVO + TEMPO IMPRODUTIVO)</div>
+        ${[
+          ['Tempo de Serra', calc.custoSerra/((cfg&&cfg.serra)||0.8)/62.66],
+          ['Tempo de Montagem em 45°', (calc.custoMontagem||0)/62.66],
+          ['Tempo Instalação/Entrega', calc.custoInstalacao/62.66],
+          ['Tempo Total de Produção', calc.tempoProdTotal],
+        ].map(([nome, val]) => {
+          const h = Math.floor(val||0); const m = Math.round(((val||0)-h)*60);
+          return `<div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #f0f0f0;font-size:12px;">
+            <span style="color:#555;">${nome}</span><span style="font-weight:600;">${h}:${m<10?'0':''}${m}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : '';
 
   return `
-  <div style="background:white;border-radius:14px;padding:24px;margin-bottom:16px;box-shadow:var(--shadow);">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid var(--cream-dark);">
-      <div style="font-size:16px;font-weight:700;color:var(--stone);">📐 Peça ${idx+1}: ${item.nome||'Sem nome'}</div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <span id="preco-item-${idx}" style="background:var(--gold);color:white;padding:6px 16px;border-radius:20px;font-size:15px;font-weight:700;${calc?'':'display:none;'}">${calc?fmt(calc.precoFinal):''}</span>
-        ${idx > 0 ? `<button onclick="removerItemTelaOrc(${idx},'${orderId}')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 12px;border-radius:8px;cursor:pointer;">🗑</button>` : ''}
-      </div>
-    </div>
-
-    <!-- Dados básicos -->
-    <div class="form-grid" style="margin-bottom:16px;">
-      <div class="form-group span2"><label class="form-label">Pedra / Material *</label>
-        <select class="form-select" onchange="orcamentoAtual.itens[${idx}].pedraId=this.value;recalcularTelaOrc('${orderId}')">
-          <option value="">Selecione a pedra...</option>
-          ${pedras.map(p=>`<option value="${p.id}" ${item.pedraId===p.id?'selected':''}>${p.nome} — R$ ${p.custoM2.toFixed(2).replace('.',',')}/m²</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-group span2"><label class="form-label">Tipo de Entrega</label>
-        <select class="form-select" onchange="orcamentoAtual.itens[${idx}].tipoEntrega=this.value;recalcularTelaOrc('${orderId}')">
-          <option value="instalacao" ${item.tipoEntrega==='instalacao'?'selected':''}>Com Instalação</option>
-          <option value="entrega" ${item.tipoEntrega==='entrega'?'selected':''}>Só Entrega</option>
-          <option value="retirada" ${item.tipoEntrega==='retirada'?'selected':''}>Retirada na empresa</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- Peça a Peça -->
-    <div style="background:var(--cream);border-radius:10px;padding:16px;margin-bottom:16px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);">📐 Peças (nome × medidas × quantidade)</div>
-        <div style="font-size:12px;color:var(--stone-light);">Área Total: <strong id="area-total-${idx}" style="color:var(--stone);">${(item.pecas||[]).reduce((s,p)=>{const m=parseMedidas(p.medidas);return s+(m.l*m.c*(parseInt(p.qtd)||1));},0).toFixed(2)} m²</strong></div>
-      </div>
-      <div id="pecas-lista-${idx}">
-        ${(item.pecas||[{nome:'',medidas:'',qtd:'1'}]).map((peca,pi)=>`
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
-          <input class="form-input" style="flex:2;" placeholder="Nome (ex: bancada)" value="${peca.nome||''}"
-            oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].nome=this.value"
-            onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarPecaItem(${idx},'${orderId}');}">
-          <input class="form-input" style="flex:1;font-family:monospace;" placeholder="1,20x0,60" value="${peca.medidas||''}"
-            oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].medidas=this.value"
-            onblur="recalcularTelaOrc('${orderId}')"
-            onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarPecaItem(${idx},'${orderId}');}">
-          <input class="form-input" style="width:70px;text-align:center;" type="number" min="1" placeholder="Qtd" value="${peca.qtd||1}"
-            oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].qtd=this.value"
-            onblur="recalcularTelaOrc('${orderId}')"
-            onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarPecaItem(${idx},'${orderId}');}">
-          ${(item.pecas||[]).length > 1 ? `<button onclick="removerPecaItem(${idx},${pi},'${orderId}')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">✕</button>` : ''}
-        </div>`).join('')}
-      </div>
-      <button onclick="adicionarPecaItem(${idx},'${orderId}')" style="background:white;border:1.5px dashed var(--cream-dark);color:var(--stone-light);padding:6px 16px;border-radius:8px;cursor:pointer;font-size:12px;margin-top:4px;width:100%;">+ Adicionar peça (ou pressione Enter)</button>
-    </div>
-
-    <!-- Acabamentos lineares -->
-    <div style="background:var(--cream);border-radius:10px;padding:16px;margin-bottom:16px;">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">📏 Acabamentos Lineares (metros)</div>
-      <div class="form-grid">
-        <div class="form-group"><label class="form-label">Corte 45° / Meia Esquadria (m)</label><input class="form-input" type="number" step="0.1" value="${item.compCorte45||0}" oninput="orcamentoAtual.itens[${idx}].compCorte45=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Montagem em 45° (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMontagem45||0}" oninput="orcamentoAtual.itens[${idx}].compMontagem45=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Comp. Polimento Reto 2cm Manual (m)</label><input class="form-input" type="number" step="0.1" value="${item.compPolimentoManual||0}" oninput="orcamentoAtual.itens[${idx}].compPolimentoManual=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Comp. Polimento Automático (m)</label><input class="form-input" type="number" step="0.1" value="${item.compPolimentoAuto||0}" oninput="orcamentoAtual.itens[${idx}].compPolimentoAuto=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Acabamento Meio Boleado (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMeioBoelado||0}" oninput="orcamentoAtual.itens[${idx}].compMeioBoelado=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Acabamento Meio Acabamento Boleado Duplo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMeioBoeladoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compMeioBoeladoDuplo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Acabamento Chanfrado 45° (m)</label><input class="form-input" type="number" step="0.1" value="${item.compChanfrado45||0}" oninput="orcamentoAtual.itens[${idx}].compChanfrado45=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Acabamento Chanfrado Duplo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compChanfradoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compChanfradoDuplo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Acabamento Meia Cana (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMeiaCana||0}" oninput="orcamentoAtual.itens[${idx}].compMeiaCana=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Acabamento Meia Cana Duplo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMeiaCanaDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compMeiaCanaDuplo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Acabamento Boleado Duplo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compBoeladoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compBoeladoDuplo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Chanfro Alongado (m)</label><input class="form-input" type="number" step="0.1" value="${item.compChanfroAlongado||0}" oninput="orcamentoAtual.itens[${idx}].compChanfroAlongado=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Acab. 45° Cuba Esculpida (m)</label><input class="form-input" type="number" step="0.1" value="${item.compCubEsculpida||0}" oninput="orcamentoAtual.itens[${idx}].compCubEsculpida=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Acabamento Colagem de Topo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compColagemTopo||0}" oninput="orcamentoAtual.itens[${idx}].compColagemTopo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Comp. Linear de Water Jet (m)</label><input class="form-input" type="number" step="0.1" value="${item.compWaterJet||0}" oninput="orcamentoAtual.itens[${idx}].compWaterJet=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-      </div>
-    </div>
-
-    <!-- Serviços especiais -->
-    <div style="background:var(--cream);border-radius:10px;padding:16px;margin-bottom:16px;">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">🔧 Serviços Especiais</div>
-      <div class="form-grid">
-        <div class="form-group"><label class="form-label">Área Bipolida (m²)</label><input class="form-input" type="number" step="0.1" value="${item.areaBipolida||0}" oninput="orcamentoAtual.itens[${idx}].areaBipolida=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Horas Adicionais (hr)</label><input class="form-input" type="number" step="0.25" value="${item.horasAdicionais||0}" oninput="orcamentoAtual.itens[${idx}].horasAdicionais=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group span2" style="background:#FFF8E7;border-radius:10px;padding:14px;border-left:3px solid var(--gold);">
-          <label class="form-label">M² de Compra de Chapa <span style="font-size:10px;color:var(--stone-light);font-weight:400;">— chapa não comercial (cliente paga a chapa toda, m² extra é adicionado ao preço)</span></label>
-          <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
-            <input class="form-input" type="number" step="0.1" style="max-width:150px;" value="${item.m2ChapaNaoComercial||0}"
-              oninput="orcamentoAtual.itens[${idx}].m2ChapaNaoComercial=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')">
-            <span style="font-size:12px;color:var(--stone-light);">m² extras que o cliente paga além do que será usado</span>
-          </div>
+  <div style="background:white;border-radius:8px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08);overflow:hidden;">
+    <!-- Cabeçalho do item -->
+    <div style="background:#f8f8f8;border-bottom:1px solid #e0e0e0;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="font-size:13px;font-weight:700;color:#333;min-width:80px;">ITEM ${idx+1}</div>
+      <div style="flex:1;display:grid;grid-template-columns:1.5fr 1.5fr 1fr 2fr;gap:8px;align-items:center;">
+        <div><label style="font-size:10px;color:#666;">Nome do Item *</label>
+          <input class="form-input" style="padding:6px 10px;" value="${item.nome||''}" placeholder="bancada, pia..." oninput="orcamentoAtual.itens[${idx}].nome=this.value"></div>
+        <div><label style="font-size:10px;color:#666;">Ambiente *</label>
+          <input class="form-input" style="padding:6px 10px;" value="${item.ambiente||''}" placeholder="cozinha, banheiro..." oninput="orcamentoAtual.itens[${idx}].ambiente=this.value"></div>
+        <div><label style="font-size:10px;color:#666;">Tipo de entrega</label>
+          <select class="form-select" style="padding:6px 10px;" onchange="orcamentoAtual.itens[${idx}].tipoEntrega=this.value;recalcularTelaOrc('${orderId}')">
+            <option value="instalacao" ${item.tipoEntrega==='instalacao'?'selected':''}>Com instalação</option>
+            <option value="entrega" ${item.tipoEntrega==='entrega'?'selected':''}>Somente entrega</option>
+            <option value="retirada" ${item.tipoEntrega==='retirada'?'selected':''}>Retirada</option>
+          </select>
         </div>
-        <div class="form-group"><label class="form-label">Rebaixo Italiano Usinado (m²)</label><input class="form-input" type="number" step="0.1" value="${item.areaRebaixoItaliano||0}" oninput="orcamentoAtual.itens[${idx}].areaRebaixoItaliano=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Rebaixo Americano Colado (m²)</label><input class="form-input" type="number" step="0.1" value="${item.areaRebaixoAmericano||0}" oninput="orcamentoAtual.itens[${idx}].areaRebaixoAmericano=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Sistema Flush (un)</label><input class="form-input" type="number" value="${item.qtdFlush||0}" oninput="orcamentoAtual.itens[${idx}].qtdFlush=parseInt(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Sistema Flath (un)</label><input class="form-input" type="number" value="${item.qtdFlath||0}" oninput="orcamentoAtual.itens[${idx}].qtdFlath=parseInt(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Furos (Recorte Bruto) (un)</label><input class="form-input" type="number" value="${item.qtdRecortes||0}" oninput="orcamentoAtual.itens[${idx}].qtdRecortes=parseInt(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Recortes com Polimento - Cubas (un)</label><input class="form-input" type="number" value="${item.qtdCubas||0}" oninput="orcamentoAtual.itens[${idx}].qtdCubas=parseInt(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div><label style="font-size:10px;color:#666;">Observações</label>
+          <input class="form-input" style="padding:6px 10px;" value="${item.obsItem||''}" oninput="orcamentoAtual.itens[${idx}].obsItem=this.value"></div>
       </div>
+      ${idx > 0 ? `<button onclick="removerItemTelaOrc(${idx},'${orderId}')" style="background:#dc3545;border:none;color:white;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;">🗑 ITEM</button>` : ''}
     </div>
 
-    <!-- Detalhamento do cálculo -->
-    <div id="det-item-${idx}" style="background:#F0F7F4;border-radius:10px;padding:16px;border-left:3px solid #4A7C59;${calc?'':'display:none;'}">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#4A7C59;margin-bottom:12px;">📊 Detalhamento do Cálculo</div>
-      ${calc ? renderDetalhamento(calc, cfg, pedra) : ''}
+    <div style="padding:16px;">
+      <!-- PEÇA A PEÇA -->
+      <div style="margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:12px;font-weight:700;color:#333;">Peça a Peça</span>
+          <span style="font-size:11px;color:#006382;">✏️</span>
+          <span style="font-size:11px;color:#666;">«</span>
+        </div>
+        <div id="pecas-lista-${idx}">
+          ${(item.pecas||[{nome:'',medidas:'',qtd:'1'}]).map((peca,pi) => `
+          <div style="display:grid;grid-template-columns:2fr 1.2fr 0.6fr auto;gap:6px;margin-bottom:6px;align-items:center;">
+            <input class="form-input orc-tab-input" style="padding:6px 10px;" placeholder="Nome da peça" value="${peca.nome||''}"
+              oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].nome=this.value"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarPecaItem(${idx},'${orderId}');}else if(event.key==='Tab'){event.preventDefault();const all=document.querySelectorAll('.orc-tab-input');const i=Array.from(all).indexOf(this);if(i>=0&&all[i+(event.shiftKey?-1:1)])all[i+(event.shiftKey?-1:1)].focus();}">
+            <input class="form-input orc-tab-input" style="padding:6px 10px;font-family:monospace;" placeholder="1,20x0,60" value="${peca.medidas||''}"
+              oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].medidas=this.value"
+              onblur="recalcularTelaOrc('${orderId}')"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarPecaItem(${idx},'${orderId}');}else if(event.key==='Tab'){event.preventDefault();const all=document.querySelectorAll('.orc-tab-input');const i=Array.from(all).indexOf(this);if(i>=0&&all[i+(event.shiftKey?-1:1)])all[i+(event.shiftKey?-1:1)].focus();}">
+            <input class="form-input orc-tab-input" style="padding:6px 10px;text-align:center;" type="number" min="1" placeholder="Qtd" value="${peca.qtd||1}"
+              oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].qtd=this.value"
+              onblur="recalcularTelaOrc('${orderId}')"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarPecaItem(${idx},'${orderId}');}else if(event.key==='Tab'){event.preventDefault();const all=document.querySelectorAll('.orc-tab-input');const i=Array.from(all).indexOf(this);if(i>=0&&all[i+(event.shiftKey?-1:1)])all[i+(event.shiftKey?-1:1)].focus();}">
+            <div style="display:flex;gap:4px;">
+              <button onclick="adicionarPecaItem(${idx},'${orderId}')" style="background:#006382;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;">+</button>
+              ${(item.pecas||[]).length>1?`<button onclick="removerPecaItem(${idx},${pi},'${orderId}')" style="background:#dc3545;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;">✕</button>`:''}
+            </div>
+          </div>`).join('')}
+        </div>
+        <div style="font-size:12px;color:#333;margin-top:8px;">Área Total de Pedra (m²): <strong>${areaTotal.toFixed(2)}</strong></div>
+      </div>
+
+      <!-- CAMPOS DE ACABAMENTO (layout igual Marmoprice — grid 5 colunas) -->
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">
+        ${[
+          ['Compr. de Acab. 45° Saia (m)', 'compCorte45'],
+          ['Compr. Polimento Reto 2cm Manual (m)', 'compPolimentoManual'],
+          ['Compr. Polimento Automático (m)', 'compPolimentoAuto'],
+          ['Área de Bipolimento (m²)', 'areaBipolida'],
+          ['Compr. de Acab. 45° / Cuba Esculpida (m)', 'compCubEsculpida'],
+          ['M² de Compra de Chapa', 'm2ChapaNaoComercial'],
+          ['Acab. Colagem de Topo (m)', 'compColagemTopo'],
+          ['Acab. Meio Boleado (m)', 'compMeioBoelado'],
+          ['Acab. Meio Boleado Duplo (m)', 'compMeioBoeladoDuplo'],
+          ['Acab. Chanfrado 45° (m)', 'compChanfrado45'],
+          ['Acab. Chanfrado Duplo (m)', 'compChanfradoDuplo'],
+          ['Chanfro Alongado (m)', 'compChanfroAlongado'],
+          ['Acab. Meia Cana (m)', 'compMeiaCana'],
+          ['Acab. Meia Cana Duplo (m)', 'compMeiaCanaDuplo'],
+          ['Acab. Boleado Duplo (m)', 'compBoeladoDuplo'],
+        ].map(([label, field]) => `
+          <div>
+            <label style="font-size:10px;color:#666;display:block;margin-bottom:3px;">${label}</label>
+            <input class="form-input orc-tab-input" type="number" step="0.1" style="padding:6px 8px;font-size:13px;" value="${item[field]||0}"
+              onblur="orcamentoAtual.itens[${idx}].${field}=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"
+              onkeydown="if(event.key==='Tab'){event.preventDefault();const all=document.querySelectorAll('.orc-tab-input');const i=Array.from(all).indexOf(this);if(i>=0&&all[i+(event.shiftKey?-1:1)])all[i+(event.shiftKey?-1:1)].focus();}">
+          </div>`).join('')}
+      </div>
+
+      <!-- CAMPOS ESPECIAIS (linha 2) -->
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px;">
+        ${[
+          ['Tempo Instalação/Entrega (hr)', 'tempoInstalManual', 'text'],
+          ['Nº Pessoas Descarga/Instal.', 'nPessoasInstal', 'number'],
+          ['Recortes com Polimento (Cubas)', 'qtdCubas', 'number'],
+          ['Furos (Recorte Bruto)', 'qtdRecortes', 'number'],
+          ['Sistema Flush (un)', 'qtdFlush', 'number'],
+          ['Sistema Flath (un)', 'qtdFlath', 'number'],
+          ['Montagem em 45° (m)', 'compMontagem45', 'number'],
+          ['Rebaixo Italiano Usinado (m²)', 'areaRebaixoItaliano', 'number'],
+          ['Rebaixo Americano Colado (m²)', 'areaRebaixoAmericano', 'number'],
+          ['Horas Adicionais', 'horasAdicionais', 'number'],
+          ['Comp. Linear de Water Jet (m)', 'compWaterJet', 'number'],
+        ].map(([label, field, type]) => `
+          <div>
+            <label style="font-size:10px;color:#666;display:block;margin-bottom:3px;">${label}</label>
+            <input class="form-input orc-tab-input" type="${type}" step="0.1" style="padding:6px 8px;font-size:13px;" value="${item[field]||0}"
+              onblur="orcamentoAtual.itens[${idx}].${field}=${type==='number'?'parseFloat':'(v=>v)'}(this.value)||0;recalcularTelaOrc('${orderId}')"
+              onkeydown="if(event.key==='Tab'){event.preventDefault();const all=document.querySelectorAll('.orc-tab-input');const i=Array.from(all).indexOf(this);if(i>=0&&all[i+(event.shiftKey?-1:1)])all[i+(event.shiftKey?-1:1)].focus();}">
+          </div>`).join('')}
+      </div>
+
+      <!-- MATERIAIS (igual Marmoprice) -->
+      <div style="border-top:1px solid #e0e0e0;padding-top:16px;">
+        <div style="font-size:13px;font-weight:700;color:#333;margin-bottom:10px;">Materiais</div>
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;align-items:end;margin-bottom:6px;">
+          <div style="font-size:10px;color:#666;">Nome *</div>
+          <div style="font-size:10px;color:#666;">Custo do Material (m²) *</div>
+          <div style="font-size:10px;color:#666;">Dif. de Trabalho *</div>
+          <div style="font-size:10px;color:#666;">Margem Lucro (%) *</div>
+          <div style="font-size:10px;color:#666;">Com. Vendedor (%)</div>
+          <div style="font-size:10px;color:#666;">Com. Terceiros (%)</div>
+          <div style="font-size:10px;color:#666;">Com. Interna (%)</div>
+          <div style="font-size:10px;color:#666;">Valor de Venda (R$)</div>
+          <div style="font-size:10px;color:#666;">LL/H</div>
+        </div>
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;align-items:center;">
+          <div>
+            <select class="form-select" style="padding:6px 8px;font-size:12px;" onchange="orcamentoAtual.itens[${idx}].pedraId=this.value;recalcularTelaOrc('${orderId}')">
+              <option value="">Selecione...</option>
+              ${pedras.map(p=>`<option value="${p.id}" ${item.pedraId===p.id?'selected':''}>${p.nome}</option>`).join('')}
+            </select>
+            ${pedra ? `<div style="font-size:10px;color:#888;margin-top:2px;">${GRUPOS_DIFICULDADE.find(g=>g.id===pedra.grupoId)?.nome||''}</div>` : ''}
+          </div>
+          <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;" value="${pedra?.custoM2||0}" readonly style="background:#f5f5f5;">
+          <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;" value="${(GRUPOS_DIFICULDADE.find(g=>g.id===pedra?.grupoId)?.dif||1).toFixed(1)}" readonly style="background:#f5f5f5;">
+          <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;" value="${pedra?.margem||30}" readonly style="background:#f5f5f5;">
+          <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;" value="0" readonly style="background:#f5f5f5;">
+          <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;" value="0" readonly style="background:#f5f5f5;">
+          <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;" value="0" readonly style="background:#f5f5f5;">
+          <input class="form-input" style="padding:6px 8px;font-size:13px;font-weight:700;color:#006382;" value="${calc?fmt(calc.precoFinal):'—'}" readonly style="background:#f5f5f5;">
+          <input class="form-input" style="padding:6px 8px;font-size:13px;" value="${calc&&tempoProdTotal>0?fmt(calc.lucroLiquido/tempoProdTotal):'—'}" readonly style="background:#f5f5f5;">
+        </div>
+
+        <!-- CUSTOS E TEMPOS (colapsável) -->
+        <details style="margin-top:12px;">
+          <summary style="cursor:pointer;padding:10px 14px;background:#f0f0f0;border-radius:6px;font-size:13px;font-weight:600;color:#333;list-style:none;display:flex;justify-content:space-between;">
+            <span>Custos e tempos</span><span>▼</span>
+          </summary>
+          <div style="margin-top:1px;border:1px solid #e0e0e0;border-radius:0 0 6px 6px;overflow:hidden;">
+            ${custoTemposHTML}
+          </div>
+        </details>
+
+        <!-- Botões do item -->
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button onclick="adicionarItemTelaOrc('${orderId}')" style="background:#006382;color:white;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">+ MATERIAL</button>
+          <button onclick="adicionarItemTelaOrc('${orderId}')" style="background:#17a2b8;color:white;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">📋 ITEM</button>
+          ${idx>0?`<button onclick="removerItemTelaOrc(${idx},'${orderId}')" style="background:#dc3545;color:white;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">🗑 ITEM</button>`:''}
+        </div>
+      </div>
     </div>
-    ${!calc ? '<div style="background:var(--cream);border-radius:10px;padding:14px;text-align:center;color:var(--stone-light);font-size:13px;">Selecione uma pedra e informe as dimensões para calcular o preço.</div>' : ''}
   </div>`;
 }
 
@@ -3402,78 +3466,24 @@ function recalcularTelaOrc(orderId) {
     const areaTotal = calcAreaTotalItem(item);
     item.calc = (pedra && areaTotal > 0) ? calcularItem(item, pedra, cfg) : null;
 
-    // Atualiza área total sem re-renderizar
     const elArea = document.getElementById('area-total-' + idx);
     if (elArea) elArea.textContent = areaTotal.toFixed(2) + ' m²';
 
-    // Atualiza preço do item sem re-renderizar
     const elPreco = document.getElementById('preco-item-' + idx);
     if (elPreco) {
       elPreco.textContent = item.calc ? fmt(item.calc.precoFinal) : '';
       elPreco.style.display = item.calc ? '' : 'none';
     }
-
-    // Atualiza detalhamento
-    const elDet = document.getElementById('det-item-' + idx);
-    if (elDet && item.calc) {
-      elDet.innerHTML = renderDetalhamento(item.calc, cfg, pedra);
-    }
   });
 
-  // Atualiza resumo geral no header
   atualizarResumoHeader();
-}
-
-function atualizarResumoHeader() {
-  const totalGeral = orcamentoAtual.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
-  const custoTotal = orcamentoAtual.itens.reduce((s,it) => s + (it.calc?.custoTotal||0), 0);
-  const lucroTotal = orcamentoAtual.itens.reduce((s,it) => s + (it.calc?.lucroLiquido||0), 0);
-  const margem = totalGeral > 0 ? (lucroTotal/totalGeral*100) : 0;
-  const margemCor = margem >= 30 ? '#4A7C59' : margem >= 20 ? '#B8760A' : '#B85A4A';
-
-  const elTotal = document.getElementById('header-total');
-  const elMargem = document.getElementById('header-margem');
-  if (elTotal) elTotal.textContent = fmt(totalGeral);
-  if (elMargem) { elMargem.textContent = margem.toFixed(1) + '%'; elMargem.style.background = margemCor; }
-
-  const campoValor = document.getElementById('torc-valor');
-  if (campoValor && totalGeral > 0) {
-    campoValor.value = totalGeral.toFixed(2).replace('.',',');
-    orcamentoAtual.valorFinal = campoValor.value;
-  }
-}
-
-function renderDetalhamento(calc, cfg, pedra) {
-  if (!calc) return '';
-  return `
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">
-      <div style="font-size:12px;color:var(--stone-light);">Área base: <strong>${calc.areaBase.toFixed(2)} m²</strong></div>
-      <div style="font-size:12px;color:var(--stone-light);">Com quebra (${pedra?.quebra||0}%): <strong>${calc.areaComQuebra.toFixed(2)} m²</strong></div>
-      <div style="font-size:12px;color:var(--stone-light);">Material: <strong>${fmt(calc.custoMaterial)}</strong></div>
-      <div style="font-size:12px;color:var(--stone-light);">Serra: <strong>${fmt(calc.custoSerra)}</strong></div>
-      <div style="font-size:12px;color:var(--stone-light);">Corte/Montagem: <strong>${fmt(calc.custoMontagem)}</strong></div>
-      <div style="font-size:12px;color:var(--stone-light);">Bipolimento: <strong>${fmt(calc.custoBipolimento)}</strong></div>
-      <div style="font-size:12px;color:var(--stone-light);">Polimento: <strong>${fmt(calc.custoPolimento)}</strong></div>
-      <div style="font-size:12px;color:var(--stone-light);">Acabamentos: <strong>${fmt(calc.custoAcabamentos)}</strong></div>
-      <div style="font-size:12px;color:var(--stone-light);">Esp./Furos: <strong>${fmt(calc.custoEspeciais+calc.custoFuros)}</strong></div>
-      <div style="font-size:12px;color:var(--stone-light);">Water Jet: <strong>${fmt(calc.custoWaterJet)}</strong></div>
-      <div style="font-size:12px;color:var(--stone-light);">Transporte: <strong>${fmt(calc.custoDeslocamento+calc.custoCombustivel)}</strong></div>
-      <div style="font-size:12px;color:var(--stone-light);">Instalação: <strong>${fmt(calc.custoInstalacao)}</strong></div>
-      <div style="font-size:12px;color:var(--stone-light);">Insumos (${cfg.custoInsumo}%): <strong>${fmt(calc.custoInsumos)}</strong></div>
-      <div style="font-size:12px;color:var(--stone-light);">H. Adicionais: <strong>${fmt(calc.custoHorasAdic)}</strong></div>
-    </div>
-    <div style="display:flex;gap:16px;padding-top:10px;border-top:1px dashed var(--cream-dark);margin-top:8px;">
-      <div style="font-size:12px;color:var(--stone-light);">Custo Total: <strong style="color:var(--stone);">${fmt(calc.custoTotal)}</strong></div>
-      <div style="font-size:12px;color:var(--stone-light);">Lucro (${calc.margem}%): <strong style="color:var(--green);">${fmt(calc.lucroLiquido)}</strong></div>
-      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-left:auto;">Preço Final: ${fmt(calc.precoFinal)}</div>
-    </div>`;
 }
 
 function adicionarItemTelaOrc(orderId) {
   orcamentoAtual.itens.push({
-    nome:'', pedraId:'', largura:0, comprimento:0, quantidade:1,
+    nome:'', ambiente:'', pedraId:'', tipoEntrega:'instalacao',
     pecas:[{nome:'', medidas:'', qtd:'1'}],
-    tipoEntrega:'instalacao', areaBipolida:0, horasAdicionais:0,
+    areaBipolida:0, horasAdicionais:0, m2ChapaNaoComercial:0,
     compCorte45:0, compMontagem45:0, compPolimentoManual:0, compPolimentoAuto:0,
     compMeioBoelado:0, compMeioBoeladoDuplo:0, compChanfrado45:0, compChanfradoDuplo:0,
     compMeiaCana:0, compMeiaCanaDuplo:0, compBoeladoDuplo:0, compChanfroAlongado:0,
@@ -3481,12 +3491,12 @@ function adicionarItemTelaOrc(orderId) {
     areaRebaixoItaliano:0, areaRebaixoAmericano:0,
     qtdFlush:0, qtdFlath:0, qtdRecortes:0, qtdCubas:0, calc:null
   });
-  recalcularTelaOrc(orderId);
+  renderTelaOrcamentoPedido(orders.find(o=>o.id===orderId));
 }
 
 function removerItemTelaOrc(idx, orderId) {
   orcamentoAtual.itens.splice(idx, 1);
-  recalcularTelaOrc(orderId);
+  renderTelaOrcamentoPedido(orders.find(o=>o.id===orderId));
 }
 
 async function salvarOrcamentoPedido() {
@@ -3497,7 +3507,6 @@ async function salvarOrcamentoPedido() {
   else orcs.unshift(orcamentoAtual);
   salvarOrcamentos(orcs);
 
-  // Salva valor no pedido também
   const totalGeral = orcamentoAtual.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
   if (totalGeral > 0 && pedidoOrcAtual) {
     const order = orders.find(o => o.id === pedidoOrcAtual);
@@ -3850,6 +3859,23 @@ function simularPreco(custoTotal) {
 function ajustarTempoInstal(valor) {
   // Permite editar manualmente o tempo de instalação
   // Por enquanto apenas visual — futuro: propagar para o cálculo
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+
+// ─── NAVEGAÇÃO POR TAB NOS ACABAMENTOS ───────────────────────────────────────
+function orcTab(event, orderId) {
+  if (event.key !== 'Tab') return;
+  event.preventDefault();
+  const inputs = Array.from(document.querySelectorAll('.orc-tab-input'));
+  const idx = inputs.indexOf(event.target);
+  if (idx >= 0) {
+    const next = event.shiftKey ? inputs[idx-1] : inputs[idx+1];
+    if (next) {
+      next.focus();
+      next.select();
+    }
+  }
 }
 // ─────────────────────────────────────────────────────────────────────────────
 

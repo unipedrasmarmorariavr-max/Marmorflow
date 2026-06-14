@@ -2283,13 +2283,19 @@ function salvarOrcamentos(orcs) {
 // ─── CÁLCULO DO ORÇAMENTO ────────────────────────────────────────────────
 function calcularCustoHora() {
   const cfg = getConfigOrc();
-  const horasMes = cfg.horasProdMes * cfg.qtdFuncionarios;
+  const horasMes = cfg.horasProdMes; // horas produtivas por mês (ex: 176h)
+  const horasTotaisMes = horasMes * cfg.qtdFuncionarios; // total de horas de todos os funcionários
   // Depreciação mensal
   const depreciacaoMensal = (cfg.valorMaquinas * (1 - cfg.valorResidual/100)) / (cfg.anosDepreciacao * 12);
   const custoTotal = cfg.custoEstrutura + depreciacaoMensal;
+  // Custo Hora Empresa = custo total ÷ total de horas de todos os funcionários
+  const custoHoraEmpresa = custoTotal / horasTotaisMes;
+  // Custo Hora Homem = custo hora empresa × qtd funcionários (= custo por hora por funcionário)
+  // Na prática: operações usam custo hora homem que já embute o custo da empresa por operário
+  const custoHoraHomem = custoTotal / horasMes; // = custo hora empresa × nFuncionarios
   return {
-    custoHoraEmpresa: custoTotal / horasMes,
-    custoHoraHomem: custoTotal / (horasMes / cfg.qtdFuncionarios),
+    custoHoraEmpresa,   // R$ 62,66 — usado nas operações de produção
+    custoHoraHomem,     // R$ 313,28 — custo total da empresa por hora produtiva
     custoEstrutura: custoTotal,
     horasMes
   };
@@ -2308,7 +2314,9 @@ function calcularItem(item, pedra, cfg) {
       const partes = (p.medidas||'').toLowerCase().replace(/,/g,'.').split('x');
       const l = parseFloat(partes[0])||0;
       const c = parseFloat(partes[1])||0;
-      return s + (l * c * (parseInt(p.qtd)||1));
+      // Arredonda cada peça para 2 decimais (igual Marmoprice)
+      const areaPeca = Math.round(l * c * (parseInt(p.qtd)||1) * 100) / 100;
+      return s + areaPeca;
     }, 0);
   } else {
     areaBase = (item.largura||0) * (item.comprimento||0) * (item.quantidade||1);
@@ -2316,7 +2324,8 @@ function calcularItem(item, pedra, cfg) {
   const areaComQuebra = areaBase * (1 + pedra.quebra / 100);
 
   // Custo matéria prima
-  const custoMaterial = areaComQuebra * pedra.custoM2;
+  const m2Extra = item.m2ChapaNaoComercial || 0;
+  const custoMaterial = (areaComQuebra + m2Extra) * pedra.custoM2;
 
   // Perímetro para polimento (2 × largura + 2 × comprimento) × quantidade
   const perimetro = (2 * item.largura + 2 * item.comprimento) * item.quantidade;
@@ -2370,9 +2379,10 @@ function calcularItem(item, pedra, cfg) {
   // Custo instalação/transporte
   const distancia = item.distancia || 0;
   const minKm = cfg.transito === 'lento' ? cfg.minKmLento : cfg.transito === 'intermediario' ? cfg.minKmIntermediario : cfg.minKmRapido;
-  const tempoDeslocamento = (distancia * 2 * minKm) / 60; // em horas
-  const custoDeslocamento = tempoDeslocamento * custoHoraEmpresa;
-  const custoCombustivel = (distancia * 2 / cfg.consumoCombustivel) * cfg.custoCombustivel;
+  const idas = item.idas || 1;
+  const tempoDeslocamento = (distancia * 2 * minKm * idas) / 60; // em horas × nº de idas
+  const custoDeslocamento = tempoDeslocamento * custoHoraEmpresa * cfg.pessoasInstalacao;
+  const custoCombustivel = (distancia * 2 * idas / cfg.consumoCombustivel) * cfg.custoCombustivel;
 
   let custoInstalacao = 0;
   if (item.tipoEntrega === 'instalacao') {
@@ -2388,13 +2398,15 @@ function calcularItem(item, pedra, cfg) {
                    custoAcabamentos + custoEspeciais + custoFuros + custoWaterJet +
                    custoHorasAdic + custoDeslocamento + custoCombustivel + custoInstalacao + custoMaterial;
 
-  // Insumos = % sobre todos os outros custos
-  const custoInsumos = custosOp * (cfg.custoInsumo / 100);
+  // Insumos = % sobre o PREÇO DE VENDA de todos os custos operacionais
+  // Fórmula: insumos = (custosOp / (1 - margem)) × insumo%
+  const margem = pedra.margem / 100;
+  const precoOps = custosOp / (1 - margem); // preço de venda dos custos
+  const custoInsumos = precoOps * (cfg.custoInsumo / 100);
 
   const custoTotal = custosOp + custoInsumos;
 
-  // Margem de lucro
-  const margem = pedra.margem / 100;
+  // Preço final inclui margem sobre o custo total (já com insumos)
   const precoFinal = custoTotal / (1 - margem);
   const lucroLiquido = precoFinal - custoTotal;
 
@@ -2427,8 +2439,9 @@ function renderOrcamento() {
         <div>
           <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);">🧮 Orçamentos</div>
           <div style="font-size:12px;color:var(--stone-light);margin-top:2px;">
-            Custo Hora Empresa: <strong style="color:var(--gold);">${fmt(custoHoraEmpresa)}</strong>
-            &nbsp;|&nbsp; Custo Estrutura Mensal: <strong style="color:var(--stone);">${fmt(custoEstrutura)}</strong>
+            Custo/h por Operário: <strong style="color:var(--gold);">${fmt(custoHoraEmpresa)}</strong>
+            &nbsp;|&nbsp; Custo/h Empresa: <strong style="color:var(--stone);">${fmt(custoHoraHomem)}</strong>
+            &nbsp;|&nbsp; Estrutura Mensal: <strong style="color:var(--stone-light);">${fmt(custoEstrutura)}</strong>
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -2871,7 +2884,7 @@ function renderItemOrcamento(item, idx, pedras, cfg) {
           <option value="retirada" ${item.tipoEntrega==='retirada'?'selected':''}>Retirada</option>
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Bipolimento (m²)</label>
+      <div class="form-group"><label class="form-label">Área Bipolida (m²)</label>
         <input class="form-input" type="number" step="0.1" value="${item.areaBipolida||0}" oninput="orcamentoAtual.itens[${idx}].areaBipolida=parseFloat(this.value)||0;recalcularOrcamento()"></div>
       <div class="form-group"><label class="form-label">Horas Adicionais (hr)</label>
         <input class="form-input" type="number" step="0.25" value="${item.horasAdicionais||0}" oninput="orcamentoAtual.itens[${idx}].horasAdicionais=parseFloat(this.value)||0;recalcularOrcamento()"></div>
@@ -2883,33 +2896,33 @@ function renderItemOrcamento(item, idx, pedras, cfg) {
       <div class="form-grid">
         <div class="form-group"><label class="form-label">Corte 45° / Meia Esquadria (m)</label>
           <input class="form-input" type="number" step="0.1" value="${item.compCorte45||0}" oninput="orcamentoAtual.itens[${idx}].compCorte45=parseFloat(this.value)||0;recalcularOrcamento()"></div>
-        <div class="form-group"><label class="form-label">Montagem 45° (m)</label>
+        <div class="form-group"><label class="form-label">Montagem em 45° (m)</label>
           <input class="form-input" type="number" step="0.1" value="${item.compMontagem45||0}" oninput="orcamentoAtual.itens[${idx}].compMontagem45=parseFloat(this.value)||0;recalcularOrcamento()"></div>
-        <div class="form-group"><label class="form-label">Polimento Manual (m)</label>
+        <div class="form-group"><label class="form-label">Comp. Polimento Reto 2cm Manual (m)</label>
           <input class="form-input" type="number" step="0.1" value="${item.compPolimentoManual||0}" oninput="orcamentoAtual.itens[${idx}].compPolimentoManual=parseFloat(this.value)||0;recalcularOrcamento()"></div>
-        <div class="form-group"><label class="form-label">Polimento Automático (m)</label>
+        <div class="form-group"><label class="form-label">Comp. Polimento Automático (m)</label>
           <input class="form-input" type="number" step="0.1" value="${item.compPolimentoAuto||0}" oninput="orcamentoAtual.itens[${idx}].compPolimentoAuto=parseFloat(this.value)||0;recalcularOrcamento()"></div>
-        <div class="form-group"><label class="form-label">Meio Boleado (m)</label>
+        <div class="form-group"><label class="form-label">Acabamento Meio Boleado (m)</label>
           <input class="form-input" type="number" step="0.1" value="${item.compMeioBoelado||0}" oninput="orcamentoAtual.itens[${idx}].compMeioBoelado=parseFloat(this.value)||0;recalcularOrcamento()"></div>
-        <div class="form-group"><label class="form-label">Meio Boleado Duplo (m)</label>
+        <div class="form-group"><label class="form-label">Acabamento Meio Acabamento Boleado Duplo (m)</label>
           <input class="form-input" type="number" step="0.1" value="${item.compMeioBoeladoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compMeioBoeladoDuplo=parseFloat(this.value)||0;recalcularOrcamento()"></div>
-        <div class="form-group"><label class="form-label">Chanfrado 45° (m)</label>
+        <div class="form-group"><label class="form-label">Acabamento Chanfrado 45° (m)</label>
           <input class="form-input" type="number" step="0.1" value="${item.compChanfrado45||0}" oninput="orcamentoAtual.itens[${idx}].compChanfrado45=parseFloat(this.value)||0;recalcularOrcamento()"></div>
-        <div class="form-group"><label class="form-label">Chanfrado Duplo (m)</label>
+        <div class="form-group"><label class="form-label">Acabamento Chanfrado Duplo (m)</label>
           <input class="form-input" type="number" step="0.1" value="${item.compChanfradoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compChanfradoDuplo=parseFloat(this.value)||0;recalcularOrcamento()"></div>
-        <div class="form-group"><label class="form-label">Meia Cana (m)</label>
+        <div class="form-group"><label class="form-label">Acabamento Meia Cana (m)</label>
           <input class="form-input" type="number" step="0.1" value="${item.compMeiaCana||0}" oninput="orcamentoAtual.itens[${idx}].compMeiaCana=parseFloat(this.value)||0;recalcularOrcamento()"></div>
-        <div class="form-group"><label class="form-label">Meia Cana Duplo (m)</label>
+        <div class="form-group"><label class="form-label">Acabamento Meia Cana Duplo (m)</label>
           <input class="form-input" type="number" step="0.1" value="${item.compMeiaCanaDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compMeiaCanaDuplo=parseFloat(this.value)||0;recalcularOrcamento()"></div>
-        <div class="form-group"><label class="form-label">Boleado Duplo (m)</label>
+        <div class="form-group"><label class="form-label">Acabamento Boleado Duplo (m)</label>
           <input class="form-input" type="number" step="0.1" value="${item.compBoeladoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compBoeladoDuplo=parseFloat(this.value)||0;recalcularOrcamento()"></div>
         <div class="form-group"><label class="form-label">Chanfro Alongado (m)</label>
           <input class="form-input" type="number" step="0.1" value="${item.compChanfroAlongado||0}" oninput="orcamentoAtual.itens[${idx}].compChanfroAlongado=parseFloat(this.value)||0;recalcularOrcamento()"></div>
-        <div class="form-group"><label class="form-label">Acabamento Cuba Esculpida (m)</label>
+        <div class="form-group"><label class="form-label">Acabamento Acab. 45° Cuba Esculpida (m)</label>
           <input class="form-input" type="number" step="0.1" value="${item.compCubEsculpida||0}" oninput="orcamentoAtual.itens[${idx}].compCubEsculpida=parseFloat(this.value)||0;recalcularOrcamento()"></div>
-        <div class="form-group"><label class="form-label">Colagem de Topo (m)</label>
+        <div class="form-group"><label class="form-label">Acabamento Colagem de Topo (m)</label>
           <input class="form-input" type="number" step="0.1" value="${item.compColagemTopo||0}" oninput="orcamentoAtual.itens[${idx}].compColagemTopo=parseFloat(this.value)||0;recalcularOrcamento()"></div>
-        <div class="form-group"><label class="form-label">Water Jet (m)</label>
+        <div class="form-group"><label class="form-label">Comp. Linear de Water Jet (m)</label>
           <input class="form-input" type="number" step="0.1" value="${item.compWaterJet||0}" oninput="orcamentoAtual.itens[${idx}].compWaterJet=parseFloat(this.value)||0;recalcularOrcamento()"></div>
       </div>
     </div>
@@ -2926,9 +2939,9 @@ function renderItemOrcamento(item, idx, pedras, cfg) {
           <input class="form-input" type="number" step="1" value="${item.qtdFlush||0}" oninput="orcamentoAtual.itens[${idx}].qtdFlush=parseInt(this.value)||0;recalcularOrcamento()"></div>
         <div class="form-group"><label class="form-label">Sistema Flath (un)</label>
           <input class="form-input" type="number" step="1" value="${item.qtdFlath||0}" oninput="orcamentoAtual.itens[${idx}].qtdFlath=parseInt(this.value)||0;recalcularOrcamento()"></div>
-        <div class="form-group"><label class="form-label">Recortes/Furos sem Polimento (un)</label>
+        <div class="form-group"><label class="form-label">Furos (Recorte Bruto) (un)</label>
           <input class="form-input" type="number" step="1" value="${item.qtdRecortes||0}" oninput="orcamentoAtual.itens[${idx}].qtdRecortes=parseInt(this.value)||0;recalcularOrcamento()"></div>
-        <div class="form-group"><label class="form-label">Furos de Cuba com Polimento (un)</label>
+        <div class="form-group"><label class="form-label">Recortes com Polimento - Cubas (un)</label>
           <input class="form-input" type="number" step="1" value="${item.qtdCubas||0}" oninput="orcamentoAtual.itens[${idx}].qtdCubas=parseInt(this.value)||0;recalcularOrcamento()"></div>
       </div>
     </div>
@@ -3090,7 +3103,7 @@ function renderTelaOrcamentoPedido(order) {
         <button onclick="fecharTelaOrcamentoPedido()" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;">← Voltar</button>
         <div>
           <div style="font-size:18px;font-weight:700;">🧮 Orçamento — ${order.cliente}</div>
-          <div style="font-size:12px;opacity:0.7;">${order.id} · ${order.peca||''} · ${order.material||''} · Custo/h: ${fmt(custoHoraEmpresa)}</div>
+          <div style="font-size:12px;opacity:0.7;">${order.id} · ${order.peca||''} · ${order.material||''} · Custo/h operário: ${fmt(custoHoraEmpresa)}</div>
         </div>
       </div>
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
@@ -3129,6 +3142,8 @@ function renderTelaOrcamentoPedido(order) {
         <div class="form-grid">
           <div class="form-group"><label class="form-label">Distância até o cliente (km)</label>
             <input class="form-input" type="number" id="torc-distancia" value="${orc.distancia||0}" oninput="orcamentoAtual.distancia=parseFloat(this.value)||0;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))"></div>
+          <div class="form-group"><label class="form-label">Nº de Idas à Obra <span style="font-size:10px;color:var(--stone-light);">entrega + instalação</span></label>
+            <input class="form-input" type="number" min="1" id="torc-idas" value="${orc.idas||1}" oninput="orcamentoAtual.idas=parseInt(this.value)||1;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))"></div>
           <div class="form-group"><label class="form-label">Trânsito</label>
             <select class="form-select" id="torc-transito" onchange="orcamentoAtual.transito=this.value;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))">
               <option value="lento" ${orc.transito==='lento'?'selected':''}>Lento (3 min/km)</option>
@@ -3170,13 +3185,85 @@ function renderTelaOrcamentoPedido(order) {
 
       <!-- Resumo financeiro final -->
       ${totalGeral > 0 ? `
-      <div style="background:var(--stone);color:white;border-radius:14px;padding:24px;box-shadow:var(--shadow);">
+      <div style="background:var(--stone);color:white;border-radius:14px;padding:24px;box-shadow:var(--shadow);margin-bottom:16px;">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:16px;">💰 Resumo Financeiro</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:16px;">
           <div><div style="font-size:11px;opacity:0.6;">Custo Total</div><div style="font-size:20px;font-weight:700;">${fmt(custoTotal)}</div></div>
           <div><div style="font-size:11px;opacity:0.6;">Lucro Líquido</div><div style="font-size:20px;font-weight:700;color:#A8D5A2;">${fmt(lucroTotal)}</div></div>
           <div><div style="font-size:11px;opacity:0.6;">Margem</div><div style="font-size:20px;font-weight:700;color:${margemCor};">${margem.toFixed(1)}%</div></div>
           <div><div style="font-size:11px;opacity:0.6;">Preço Final</div><div style="font-size:26px;font-weight:700;color:#FFD700;">${fmt(totalGeral)}</div></div>
+        </div>
+        <!-- Detalhamento instalação e tempo -->
+        <div style="border-top:1px solid rgba(255,255,255,0.15);padding-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
+          <div><div style="font-size:11px;opacity:0.6;">Custo Instalação</div><div style="font-size:16px;font-weight:700;color:#FFD700;">${fmt(orc.itens.reduce((s,it)=>s+(it.calc?.custoInstalacao||0),0))}</div></div>
+          <div><div style="font-size:11px;opacity:0.6;">Custo Transporte</div><div style="font-size:16px;font-weight:700;">${fmt(orc.itens.reduce((s,it)=>s+(it.calc?.custoDeslocamento||0)+(it.calc?.custoCombustivel||0),0))}</div></div>
+          <div><div style="font-size:11px;opacity:0.6;">Tempo Instal./Entrega</div><div style="font-size:16px;font-weight:700;">${(()=>{const t=orc.itens.reduce((s,it)=>s+(it.calc?.tempoProdTotal||0),0);const h=Math.floor(t);const m=Math.round((t-h)*60);return h+':'+(m<10?'0':'')+m;})()}h</div></div>
+          <div><div style="font-size:11px;opacity:0.6;">LLH: R$ (Lucro/Hora)</div><div style="font-size:16px;font-weight:700;color:#A8D5A2;">${(()=>{const tp=orc.itens.reduce((s,it)=>s+(it.calc?.tempoProdTotal||0),0)||1;return fmt(lucroTotal/tp);})()}</div></div>
+        </div>
+      </div>
+
+      <!-- SIMULADOR DE PREÇO -->
+      <div style="background:white;border-radius:14px;padding:24px;box-shadow:var(--shadow);">
+        <div style="font-size:13px;font-weight:700;color:var(--stone);margin-bottom:4px;">🧮 Simulador de Preço — Desconto Geral</div>
+        <div style="font-size:12px;color:var(--stone-light);margin-bottom:16px;">Digite um valor ou margem para ver o resultado — use para avaliar propostas concorrentes</div>
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 16px;border-radius:8px;border:2px solid var(--gold);background:#FBF8F2;font-size:13px;font-weight:600;">
+            <input type="radio" name="sim-modo" value="total" checked onchange="simularPreco(${custoTotal})" style="accent-color:var(--gold);"> Pelo Total
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 16px;border-radius:8px;border:2px solid var(--cream-dark);font-size:13px;">
+            <input type="radio" name="sim-modo" value="margem" onchange="simularPreco(${custoTotal})" style="accent-color:var(--gold);"> Pela Margem
+          </label>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px;">
+          <div>
+            <div style="font-size:11px;color:var(--stone-light);margin-bottom:4px;font-weight:700;">MEU CUSTO TOTAL</div>
+            <input class="form-input" value="${fmt(custoTotal)}" readonly style="background:var(--cream-dark);font-weight:700;color:var(--stone);">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--stone-light);margin-bottom:4px;font-weight:700;" id="sim-label-valor">VALOR DO CONCORRENTE (R$)</div>
+            <input class="form-input" id="sim-valor" type="text" placeholder="Ex: R$ 2.500,00"
+              oninput="simularPreco(${custoTotal})" style="font-weight:700;border-color:var(--gold);border-width:2px;">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--stone-light);margin-bottom:4px;font-weight:700;" id="sim-label-margem">MARGEM QUE TERIA (%)</div>
+            <input class="form-input" id="sim-margem" type="text" placeholder="Ex: 30"
+              oninput="simularPreco(${custoTotal})" style="font-weight:700;">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--stone-light);margin-bottom:4px;font-weight:700;">LUCRO LÍQUIDO (R$)</div>
+            <input class="form-input" id="sim-lucro" placeholder="—" readonly style="background:var(--cream-dark);font-weight:700;">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--stone-light);margin-bottom:4px;font-weight:700;">LLH — LUCRO/HORA</div>
+            <input class="form-input" id="sim-llh" placeholder="—" readonly style="background:var(--cream-dark);font-weight:700;">
+          </div>
+        </div>
+        <!-- Resultado visual com números -->
+        <div id="sim-resultado" style="display:none;border-radius:10px;padding:16px;border:2px solid transparent;">
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px;" id="sim-titulo"></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">
+            <div style="background:rgba(0,0,0,0.05);border-radius:8px;padding:10px;">
+              <div style="font-size:10px;opacity:0.7;margin-bottom:2px;">MEU CUSTO</div>
+              <div style="font-size:16px;font-weight:700;" id="sim-r-custo">${fmt(custoTotal)}</div>
+            </div>
+            <div style="background:rgba(0,0,0,0.05);border-radius:8px;padding:10px;">
+              <div style="font-size:10px;opacity:0.7;margin-bottom:2px;">VALOR COBRADO</div>
+              <div style="font-size:16px;font-weight:700;" id="sim-r-valor">—</div>
+            </div>
+            <div style="background:rgba(0,0,0,0.05);border-radius:8px;padding:10px;">
+              <div style="font-size:10px;opacity:0.7;margin-bottom:2px;">LUCRO / PREJUÍZO</div>
+              <div style="font-size:18px;font-weight:900;" id="sim-r-lucro">—</div>
+            </div>
+            <div style="background:rgba(0,0,0,0.05);border-radius:8px;padding:10px;">
+              <div style="font-size:10px;opacity:0.7;margin-bottom:2px;">MARGEM REAL</div>
+              <div style="font-size:18px;font-weight:900;" id="sim-r-margem">—</div>
+            </div>
+            <div style="background:rgba(0,0,0,0.05);border-radius:8px;padding:10px;">
+              <div style="font-size:10px;opacity:0.7;margin-bottom:2px;">LUCRO POR HORA</div>
+              <div style="font-size:16px;font-weight:700;" id="sim-r-llh">—</div>
+            </div>
+          </div>
+          <div style="margin-top:10px;font-size:14px;font-weight:700;" id="sim-r-conclusao"></div>
         </div>
       </div>` : ''}
     </div>
@@ -3253,20 +3340,20 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">📏 Acabamentos Lineares (metros)</div>
       <div class="form-grid">
         <div class="form-group"><label class="form-label">Corte 45° / Meia Esquadria (m)</label><input class="form-input" type="number" step="0.1" value="${item.compCorte45||0}" oninput="orcamentoAtual.itens[${idx}].compCorte45=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Montagem 45° (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMontagem45||0}" oninput="orcamentoAtual.itens[${idx}].compMontagem45=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Polimento Manual (m)</label><input class="form-input" type="number" step="0.1" value="${item.compPolimentoManual||0}" oninput="orcamentoAtual.itens[${idx}].compPolimentoManual=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Polimento Automático (m)</label><input class="form-input" type="number" step="0.1" value="${item.compPolimentoAuto||0}" oninput="orcamentoAtual.itens[${idx}].compPolimentoAuto=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Meio Boleado (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMeioBoelado||0}" oninput="orcamentoAtual.itens[${idx}].compMeioBoelado=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Meio Boleado Duplo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMeioBoeladoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compMeioBoeladoDuplo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Chanfrado 45° (m)</label><input class="form-input" type="number" step="0.1" value="${item.compChanfrado45||0}" oninput="orcamentoAtual.itens[${idx}].compChanfrado45=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Chanfrado Duplo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compChanfradoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compChanfradoDuplo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Meia Cana (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMeiaCana||0}" oninput="orcamentoAtual.itens[${idx}].compMeiaCana=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Meia Cana Duplo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMeiaCanaDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compMeiaCanaDuplo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Boleado Duplo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compBoeladoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compBoeladoDuplo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Montagem em 45° (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMontagem45||0}" oninput="orcamentoAtual.itens[${idx}].compMontagem45=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Comp. Polimento Reto 2cm Manual (m)</label><input class="form-input" type="number" step="0.1" value="${item.compPolimentoManual||0}" oninput="orcamentoAtual.itens[${idx}].compPolimentoManual=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Comp. Polimento Automático (m)</label><input class="form-input" type="number" step="0.1" value="${item.compPolimentoAuto||0}" oninput="orcamentoAtual.itens[${idx}].compPolimentoAuto=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Acabamento Meio Boleado (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMeioBoelado||0}" oninput="orcamentoAtual.itens[${idx}].compMeioBoelado=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Acabamento Meio Acabamento Boleado Duplo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMeioBoeladoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compMeioBoeladoDuplo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Acabamento Chanfrado 45° (m)</label><input class="form-input" type="number" step="0.1" value="${item.compChanfrado45||0}" oninput="orcamentoAtual.itens[${idx}].compChanfrado45=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Acabamento Chanfrado Duplo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compChanfradoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compChanfradoDuplo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Acabamento Meia Cana (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMeiaCana||0}" oninput="orcamentoAtual.itens[${idx}].compMeiaCana=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Acabamento Meia Cana Duplo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compMeiaCanaDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compMeiaCanaDuplo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Acabamento Boleado Duplo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compBoeladoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compBoeladoDuplo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
         <div class="form-group"><label class="form-label">Chanfro Alongado (m)</label><input class="form-input" type="number" step="0.1" value="${item.compChanfroAlongado||0}" oninput="orcamentoAtual.itens[${idx}].compChanfroAlongado=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Cuba Esculpida (m)</label><input class="form-input" type="number" step="0.1" value="${item.compCubEsculpida||0}" oninput="orcamentoAtual.itens[${idx}].compCubEsculpida=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Colagem de Topo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compColagemTopo||0}" oninput="orcamentoAtual.itens[${idx}].compColagemTopo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Water Jet (m)</label><input class="form-input" type="number" step="0.1" value="${item.compWaterJet||0}" oninput="orcamentoAtual.itens[${idx}].compWaterJet=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Acab. 45° Cuba Esculpida (m)</label><input class="form-input" type="number" step="0.1" value="${item.compCubEsculpida||0}" oninput="orcamentoAtual.itens[${idx}].compCubEsculpida=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Acabamento Colagem de Topo (m)</label><input class="form-input" type="number" step="0.1" value="${item.compColagemTopo||0}" oninput="orcamentoAtual.itens[${idx}].compColagemTopo=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Comp. Linear de Water Jet (m)</label><input class="form-input" type="number" step="0.1" value="${item.compWaterJet||0}" oninput="orcamentoAtual.itens[${idx}].compWaterJet=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
       </div>
     </div>
 
@@ -3274,14 +3361,22 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
     <div style="background:var(--cream);border-radius:10px;padding:16px;margin-bottom:16px;">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">🔧 Serviços Especiais</div>
       <div class="form-grid">
-        <div class="form-group"><label class="form-label">Bipolimento (m²)</label><input class="form-input" type="number" step="0.1" value="${item.areaBipolida||0}" oninput="orcamentoAtual.itens[${idx}].areaBipolida=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Área Bipolida (m²)</label><input class="form-input" type="number" step="0.1" value="${item.areaBipolida||0}" oninput="orcamentoAtual.itens[${idx}].areaBipolida=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
         <div class="form-group"><label class="form-label">Horas Adicionais (hr)</label><input class="form-input" type="number" step="0.25" value="${item.horasAdicionais||0}" oninput="orcamentoAtual.itens[${idx}].horasAdicionais=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group span2" style="background:#FFF8E7;border-radius:10px;padding:14px;border-left:3px solid var(--gold);">
+          <label class="form-label">M² de Compra de Chapa <span style="font-size:10px;color:var(--stone-light);font-weight:400;">— chapa não comercial (cliente paga a chapa toda, m² extra é adicionado ao preço)</span></label>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
+            <input class="form-input" type="number" step="0.1" style="max-width:150px;" value="${item.m2ChapaNaoComercial||0}"
+              oninput="orcamentoAtual.itens[${idx}].m2ChapaNaoComercial=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')">
+            <span style="font-size:12px;color:var(--stone-light);">m² extras que o cliente paga além do que será usado</span>
+          </div>
+        </div>
         <div class="form-group"><label class="form-label">Rebaixo Italiano Usinado (m²)</label><input class="form-input" type="number" step="0.1" value="${item.areaRebaixoItaliano||0}" oninput="orcamentoAtual.itens[${idx}].areaRebaixoItaliano=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
         <div class="form-group"><label class="form-label">Rebaixo Americano Colado (m²)</label><input class="form-input" type="number" step="0.1" value="${item.areaRebaixoAmericano||0}" oninput="orcamentoAtual.itens[${idx}].areaRebaixoAmericano=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
         <div class="form-group"><label class="form-label">Sistema Flush (un)</label><input class="form-input" type="number" value="${item.qtdFlush||0}" oninput="orcamentoAtual.itens[${idx}].qtdFlush=parseInt(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
         <div class="form-group"><label class="form-label">Sistema Flath (un)</label><input class="form-input" type="number" value="${item.qtdFlath||0}" oninput="orcamentoAtual.itens[${idx}].qtdFlath=parseInt(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Recortes/Furos sem Polimento (un)</label><input class="form-input" type="number" value="${item.qtdRecortes||0}" oninput="orcamentoAtual.itens[${idx}].qtdRecortes=parseInt(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-        <div class="form-group"><label class="form-label">Furos de Cuba com Polimento (un)</label><input class="form-input" type="number" value="${item.qtdCubas||0}" oninput="orcamentoAtual.itens[${idx}].qtdCubas=parseInt(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Furos (Recorte Bruto) (un)</label><input class="form-input" type="number" value="${item.qtdRecortes||0}" oninput="orcamentoAtual.itens[${idx}].qtdRecortes=parseInt(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Recortes com Polimento - Cubas (un)</label><input class="form-input" type="number" value="${item.qtdCubas||0}" oninput="orcamentoAtual.itens[${idx}].qtdCubas=parseInt(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
       </div>
     </div>
 
@@ -3303,6 +3398,7 @@ function recalcularTelaOrc(orderId) {
   orcamentoAtual.itens.forEach((item, idx) => {
     const pedra = pedras.find(p => p.id === item.pedraId);
     item.distancia = orcamentoAtual.distancia;
+    item.idas = orcamentoAtual.idas || 1;
     const areaTotal = calcAreaTotalItem(item);
     item.calc = (pedra && areaTotal > 0) ? calcularItem(item, pedra, cfg) : null;
 
@@ -3436,10 +3532,11 @@ function parseMedidas(str) {
 }
 
 function calcAreaTotalItem(item) {
-  // Soma área de todas as peças
+  // Arredonda cada peça para 2 decimais antes de somar (igual Marmoprice)
   return (item.pecas||[]).reduce((s,p) => {
     const m = parseMedidas(p.medidas);
-    return s + (m.l * m.c * (parseInt(p.qtd)||1));
+    const areaPeca = Math.round(m.l * m.c * (parseInt(p.qtd)||1) * 100) / 100;
+    return s + areaPeca;
   }, 0);
 }
 
@@ -3646,6 +3743,113 @@ function imprimirOrcamento() {
   const win = window.open('', '_blank');
   win.document.write(html);
   win.document.close();
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+
+// ─── SIMULADOR DE PREÇO ──────────────────────────────────────────────────────
+function simularPreco(custoTotal) {
+  const modo = (document.querySelector('input[name="sim-modo"]:checked')||{}).value || 'total';
+  const elValor = document.getElementById('sim-valor');
+  const elMargem = document.getElementById('sim-margem');
+  const elLucro = document.getElementById('sim-lucro');
+  const elLLH = document.getElementById('sim-llh');
+  const elRes = document.getElementById('sim-resultado');
+  const elLabelValor = document.getElementById('sim-label-valor');
+  const elLabelMargem = document.getElementById('sim-label-margem');
+  if (!elValor || !elMargem || !elRes) return;
+
+  const tempoProd = (orcamentoAtual?.itens||[]).reduce((s,it) => s+(it.calc?.tempoProdTotal||0), 0) || 1;
+
+  let valorTotal = 0, lucro = 0, margemCalc = 0;
+
+  if (modo === 'total') {
+    elLabelValor.textContent = 'VALOR DO CONCORRENTE (R$)';
+    elLabelMargem.textContent = 'MARGEM QUE TERIA (%)';
+    elValor.style.borderColor = 'var(--gold)';
+    elMargem.style.borderColor = 'var(--cream-dark)';
+    elMargem.readOnly = true;
+    elValor.readOnly = false;
+
+    const valorStr = elValor.value.replace(/R\$/g,'').replace(/\./g,'').replace(',','.').trim();
+    valorTotal = parseFloat(valorStr) || 0;
+    if (valorTotal <= 0) { elRes.style.display='none'; return; }
+    lucro = valorTotal - custoTotal;
+    margemCalc = lucro / valorTotal * 100;
+    elMargem.value = margemCalc.toFixed(3).replace('.',',');
+  } else {
+    elLabelValor.textContent = 'VALOR RESULTANTE (R$)';
+    elLabelMargem.textContent = 'MARGEM DESEJADA (%)';
+    elMargem.style.borderColor = 'var(--gold)';
+    elValor.style.borderColor = 'var(--cream-dark)';
+    elValor.readOnly = true;
+    elMargem.readOnly = false;
+
+    const margemStr = elMargem.value.replace(',','.').trim();
+    margemCalc = parseFloat(margemStr) || 0;
+    if (margemCalc >= 100) { elRes.style.display='none'; return; }
+    valorTotal = custoTotal / (1 - margemCalc/100);
+    lucro = valorTotal - custoTotal;
+    elValor.value = fmt(valorTotal);
+  }
+
+  const llh = lucro / tempoProd;
+  elLucro.value = fmt(lucro);
+  elLLH.value = fmt(llh);
+
+  // Resultado com números claros
+  const temLucro = lucro >= 0;
+  const corFundo = margemCalc >= 30 ? '#E8F5E9' : margemCalc >= 10 ? '#FFF8E7' : margemCalc >= 0 ? '#FFF3CD' : '#FDEAEA';
+  const corBorda = margemCalc >= 30 ? '#4A7C59' : margemCalc >= 10 ? '#B8760A' : margemCalc >= 0 ? '#CC8800' : '#B85A4A';
+
+  elRes.style.display = 'block';
+  elRes.style.background = corFundo;
+  elRes.style.borderColor = corBorda;
+  elRes.style.color = 'var(--stone)';
+
+  document.getElementById('sim-r-custo').textContent = fmt(custoTotal);
+  document.getElementById('sim-r-valor').textContent = fmt(valorTotal);
+
+  const elRLucro = document.getElementById('sim-r-lucro');
+  elRLucro.textContent = (temLucro ? '+' : '') + fmt(lucro);
+  elRLucro.style.color = temLucro ? '#2E7D32' : '#B85A4A';
+
+  const elRMargem = document.getElementById('sim-r-margem');
+  elRMargem.textContent = (margemCalc >= 0 ? '+' : '') + margemCalc.toFixed(2) + '%';
+  elRMargem.style.color = margemCalc >= 30 ? '#2E7D32' : margemCalc >= 0 ? '#B8760A' : '#B85A4A';
+
+  const elRLLH = document.getElementById('sim-r-llh');
+  elRLLH.textContent = fmt(llh) + '/h';
+  elRLLH.style.color = llh >= 30 ? '#2E7D32' : llh >= 0 ? '#B8760A' : '#B85A4A';
+
+  const elTit = document.getElementById('sim-titulo');
+  const elConc = document.getElementById('sim-r-conclusao');
+  if (margemCalc < 0) {
+    elTit.textContent = '❌ PREJUÍZO!';
+    elTit.style.color = '#B85A4A';
+    elConc.textContent = `Cobrindo esse valor você terá um prejuízo de ${fmt(Math.abs(lucro))} (${Math.abs(margemCalc).toFixed(2)}% negativo)`;
+    elConc.style.color = '#B85A4A';
+  } else if (margemCalc < 10) {
+    elTit.textContent = '⚠️ MARGEM MUITO BAIXA';
+    elTit.style.color = '#CC8800';
+    elConc.textContent = `Apenas ${margemCalc.toFixed(2)}% de margem — muito arriscado para absorver imprevistos`;
+    elConc.style.color = '#CC8800';
+  } else if (margemCalc < 30) {
+    elTit.textContent = '⚠️ ABAIXO DO IDEAL';
+    elTit.style.color = '#B8760A';
+    elConc.textContent = `${margemCalc.toFixed(2)}% de margem — lucro de ${fmt(lucro)} mas abaixo da meta de 30%`;
+    elConc.style.color = '#B8760A';
+  } else {
+    elTit.textContent = '✅ MARGEM SAUDÁVEL';
+    elTit.style.color = '#2E7D32';
+    elConc.textContent = `${margemCalc.toFixed(2)}% de margem — lucro de ${fmt(lucro)} — vale fechar!`;
+    elConc.style.color = '#2E7D32';
+  }
+}
+
+function ajustarTempoInstal(valor) {
+  // Permite editar manualmente o tempo de instalação
+  // Por enquanto apenas visual — futuro: propagar para o cálculo
 }
 // ─────────────────────────────────────────────────────────────────────────────
 

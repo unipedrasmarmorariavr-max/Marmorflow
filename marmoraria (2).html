@@ -2269,6 +2269,27 @@ function salvarPedras(pedras) {
   localStorage.setItem('pedras_cadastradas', JSON.stringify(pedras));
 }
 
+// Resolve pedra por ID primeiro, depois por nome (fallback para versões antigas)
+function resolverPedra(pedras, item) {
+  if (!pedras || !item) return null;
+  // 1. Por ID exato
+  if (item.pedraId) {
+    const p = pedras.find(x => x.id === item.pedraId);
+    if (p) return p;
+  }
+  // 2. Por nome (fallback — quando ID mudou entre versões)
+  if (item.pedraId) {
+    const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+    const p = pedras.find(x => norm(x.nome) === norm(item.pedraId) || norm(x.nome).includes(norm(item.pedraId)) || norm(item.pedraId).includes(norm(x.nome)));
+    if (p) { item.pedraId = p.id; return p; } // corrige o ID automaticamente
+  }
+  // 3. Se tem custoM2Override mas nenhuma pedra casou, cria pedra virtual
+  if (item.custoM2Override && item.custoM2Override > 0) {
+    return { custoM2: item.custoM2Override, margem: item.margemOverride||30, quebra: item.quebraOverride||11.11, grupoId: 1 };
+  }
+  return null;
+}
+
 // Grupos de dificuldade
 const GRUPOS_DIFICULDADE = [
   { id: 1, nome: 'Grupo 1 — Granitos',               dif: 1.0, margem: 30, quebra: 11.11 },
@@ -2338,9 +2359,12 @@ function calcularItem(item, pedra, cfg) {
     areaBaseExata = areaBase;
   }
 
-  const areaComQuebra = areaBase * (1 + (pedra.quebra||10) / 100);
+  const quebraUsar = parseFloat(item.quebraOverride) || pedra.quebra || 11.11;
+  const margemUsar = parseFloat(item.margemOverride) || pedra.margem || 30;
+  const areaComQuebra = areaBase * (1 + quebraUsar / 100);
   const m2Extra = parseFloat(item.m2ChapaNaoComercial)||0;
-  const custoMaterial = (areaComQuebra + m2Extra) * pedra.custoM2;
+  const custoM2 = parseFloat(item.custoM2Override) || pedra.custoM2 || 0;
+  const custoMaterial = (areaComQuebra + m2Extra) * custoM2;
 
   // "Comprimento de Acabamento 45° Saia" alimenta CORTE e MONTAGEM (igual Marmoprice)
   const compSaia      = parseFloat(item.compCorte45)||0;
@@ -2429,7 +2453,7 @@ function calcularItem(item, pedra, cfg) {
     custoFuros+custoWaterJet+custoHorasAdic+
     custoAcessorios+custoArgamassa+custoAdicionais+custoCantoneira+custoInsumoInstal;
 
-  const margem = (pedra.margem||30)/100;
+  const margem = margemUsar/100;
   const precoOps = custosOp/(1-margem);
   const custoInsumos = precoOps*((cfg.custoInsumo||5)/100);
   const custoTotal = custosOp+custoInsumos;
@@ -2444,7 +2468,7 @@ function calcularItem(item, pedra, cfg) {
     custoAcabamentos, custoEspeciais, custoFuros, custoWaterJet,
     custoHorasAdic, custoDeslocamento, custoCombustivel, custoInstalacao,
     custoAcessorios, custoArgamassa, custoAdicionais, custoCantoneira, custoInsumoInstal,
-    custoInsumos, custoTotal, lucroLiquido, precoFinal, margem: pedra.margem,
+    custoInsumos, custoTotal, lucroLiquido, precoFinal, margem: margemUsar,
     tempoProdInterno, tempoProdTotal: tempoProdInterno,
     tempoDescargaInstalTotal, tempoDeslocamento, tempoInstalEntrega,
     tSerra, tCorte45, tCorte45Interno, tMontagem45, tBipolimento,
@@ -2835,7 +2859,7 @@ function renderFormOrcamento() {
 
   // Recalcula todos os itens
   orc.itens.forEach(item => {
-    const pedra = pedras.find(p => p.id === item.pedraId);
+    const pedra = resolverPedra(pedras, item);
     item.calc = pedra ? calcularItem(item, pedra, cfg) : null;
   });
 
@@ -2888,7 +2912,7 @@ function renderFormOrcamento() {
 }
 
 function renderItemOrcamento(item, idx, pedras, cfg) {
-  const pedra = pedras.find(p => p.id === item.pedraId);
+  const pedra = resolverPedra(pedras, item);
   const calc = item.calc;
 
   return `
@@ -3027,7 +3051,7 @@ function recalcularOrcamento() {
   const pedras = getPedrasCadastradas();
   const cfg = {...getConfigOrc(), transito: orcamentoAtual.transito};
   orcamentoAtual.itens.forEach(item => {
-    const pedra = pedras.find(p => p.id === item.pedraId);
+    const pedra = resolverPedra(pedras, item);
     item.distancia = orcamentoAtual.distancia;
     item.calc = (pedra && item.largura && item.comprimento) ? calcularItem(item, pedra, cfg) : null;
   });
@@ -3095,6 +3119,17 @@ function abrirTelaOrcamentoPedido(id) {
   }
   orcamentoAtual = JSON.parse(JSON.stringify(orc));
 
+  // Inicializa: resolve pedra por ID ou nome, corrige custoM2Override
+  const pedrasCad = getPedrasCadastradas();
+  orcamentoAtual.itens.forEach(item => {
+    const p = resolverPedra(pedrasCad, item);
+    if (p && p.custoM2) {
+      if (!item.custoM2Override) item.custoM2Override = p.custoM2;
+      if (!item.margemOverride) item.margemOverride = p.margem;
+      if (!item.quebraOverride) item.quebraOverride = p.quebra;
+    }
+  });
+
   // Esconde tabs e mostra tela cheia
   document.querySelector('.tabs').style.display = 'none';
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -3121,7 +3156,7 @@ function renderTelaOrcamentoPedido(order) {
 
   // Recalcula todos os itens
   orc.itens.forEach(item => {
-    const pedra = pedras.find(p => p.id === item.pedraId);
+    const pedra = resolverPedra(pedras, item);
     item.distancia = orc.distancia;
     item.idas = orc.idas || 1;
     const areaTotal = calcAreaTotalItem(item);
@@ -3353,7 +3388,7 @@ function renderTelaOrcamentoPedido(order) {
 }
 
 function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
-  const pedra = pedras.find(p => p.id === item.pedraId);
+  const pedra = resolverPedra(pedras, item);
   const calc = item.calc;
   const areaTotal = calcAreaTotalItem(item);
 
@@ -3493,9 +3528,40 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
 
       <!-- CAMPOS ESPECIAIS (linha 2) -->
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px;">
+
+        <!-- Tempo Instalação/Entrega — calculado automaticamente, editável -->
+        <div>
+          <label style="font-size:10px;color:#666;display:block;margin-bottom:3px;">
+            Tempo Instalação/Entrega (hr)
+            <span style="font-size:9px;color:#006382;margin-left:4px;" title="Calculado automaticamente. Clique para editar manualmente.">✏️ auto</span>
+          </label>
+          <input id="campo-tempo-instal-${idx}" class="form-input orc-tab-input" type="text" placeholder="calculando..."
+            style="padding:6px 8px;font-size:13px;background:#e8f4f7;color:#006382;font-weight:600;"
+            value="${(()=>{
+              if(item.tempoInstalManual && item.tempoInstalManual !== '0' && item.tempoInstalManual !== '') return item.tempoInstalManual;
+              if(calc) { const h=Math.floor(calc.tempoInstalEntrega); const m=Math.round((calc.tempoInstalEntrega-h)*60); return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); }
+              return '00:00';
+            })()}"
+            onblur="
+              var v=this.value.trim();
+              if(v && v!=='00:00'){orcamentoAtual.itens[${idx}].tempoInstalManual=v;}
+              else{orcamentoAtual.itens[${idx}].tempoInstalManual='';}
+              recalcularTelaOrc('${orderId}')">
+        </div>
+
+        <!-- Nº Pessoas — calculado automaticamente, editável -->
+        <div>
+          <label style="font-size:10px;color:#666;display:block;margin-bottom:3px;">
+            Nº Pessoas Descarga/Instal.
+            <span style="font-size:9px;color:#006382;margin-left:4px;">✏️ auto</span>
+          </label>
+          <input id="campo-pessoas-${idx}" class="form-input orc-tab-input" type="number" min="1"
+            style="padding:6px 8px;font-size:13px;background:#e8f4f7;color:#006382;font-weight:600;"
+            value="${item.nPessoasInstal || getConfigOrc().pessoasInstalacao || 2}"
+            onblur="orcamentoAtual.itens[${idx}].nPessoasInstal=parseInt(this.value)||2;recalcularTelaOrc('${orderId}')">
+        </div>
+
         ${[
-          ['Tempo Instalação/Entrega (hr)', 'tempoInstalManual', 'text'],
-          ['Nº Pessoas Descarga/Instal.', 'nPessoasInstal', 'number'],
           ['Recortes com Polimento (Cubas)', 'qtdCubas', 'number'],
           ['Furos (Recorte Bruto)', 'qtdRecortes', 'number'],
           ['Sistema Flush (un)', 'qtdFlush', 'number'],
@@ -3558,15 +3624,31 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
         </div>
         <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;align-items:center;">
           <div>
-            <select class="form-select" style="padding:6px 8px;font-size:12px;" onchange="orcamentoAtual.itens[${idx}].pedraId=this.value;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${orderId}'))">
+            <select class="form-select" style="padding:6px 8px;font-size:12px;" onchange="
+              orcamentoAtual.itens[${idx}].pedraId=this.value;
+              var p=getPedrasCadastradas().find(x=>x.id===this.value);
+              if(p){
+                orcamentoAtual.itens[${idx}].custoM2Override=p.custoM2;
+                orcamentoAtual.itens[${idx}].margemOverride=p.margem;
+                orcamentoAtual.itens[${idx}].quebraOverride=p.quebra;
+                var el=document.getElementById('mat-custo-${idx}');
+                if(el) el.value=p.custoM2;
+                var ed=document.getElementById('mat-dif-${idx}');
+                var g=GRUPOS_DIFICULDADE.find(x=>x.id===p.grupoId);
+                if(ed&&g) ed.value=g.dif.toFixed(1);
+                var em=document.getElementById('mat-margem-${idx}');
+                if(em) em.value=p.margem;
+              }
+              recalcularTelaOrc('${orderId}')">
               <option value="">Selecione...</option>
               ${pedras.map(p=>`<option value="${p.id}" ${item.pedraId===p.id?'selected':''}>${p.nome}</option>`).join('')}
             </select>
-            ${pedra ? `<div style="font-size:10px;color:#888;margin-top:2px;">${GRUPOS_DIFICULDADE.find(g=>g.id===pedra.grupoId)?.nome||''}</div>` : ''}
+            ${pedra ? `<div style="font-size:10px;color:#888;margin-top:2px;">${GRUPOS_DIFICULDADE.find(g=>g.id===pedra.grupoId)?.nome||''} · Quebra: ${pedra.quebra||11.11}%</div>` : ''}
           </div>
-          <input id="mat-custo-${idx}" class="form-input" type="number" style="padding:6px 8px;font-size:13px;background:#f0f7fa;font-weight:700;color:#006382;" value="${pedra?.custoM2||0}" readonly>
-          <input id="mat-dif-${idx}" class="form-input" type="number" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="${(GRUPOS_DIFICULDADE.find(g=>g.id===pedra?.grupoId)?.dif||1).toFixed(1)}" readonly>
-          <input id="mat-margem-${idx}" class="form-input" type="number" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="${pedra?.margem||30}" readonly>
+          <input id="mat-custo-${idx}" class="form-input" type="number" step="0.01" style="padding:6px 8px;font-size:13px;font-weight:700;color:#006382;border:2px solid #006382;" value="${item.custoM2Override||pedra?.custoM2||0}"
+            onblur="orcamentoAtual.itens[${idx}].custoM2Override=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')">
+          <input id="mat-dif-${idx}" class="form-input" type="number" step="0.1" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="${(GRUPOS_DIFICULDADE.find(g=>g.id===pedra?.grupoId)?.dif||1).toFixed(1)}" readonly>
+          <input id="mat-margem-${idx}" class="form-input" type="number" step="0.1" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="${item.margemOverride||pedra?.margem||30}" readonly>
           <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
           <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
           <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
@@ -3603,7 +3685,7 @@ function recalcularTelaOrc(orderId) {
   const { custoHoraEmpresa } = calcularCustoHora();
 
   orcamentoAtual.itens.forEach((item, idx) => {
-    const pedra = pedras.find(p => p.id === item.pedraId);
+    const pedra = resolverPedra(pedras, item);
     item.distancia = orcamentoAtual.distancia;
     item.idas = orcamentoAtual.idas || 1;
     const areaTotal = calcAreaTotalItem(item);
@@ -3615,7 +3697,15 @@ function recalcularTelaOrc(orderId) {
 
     // Atualiza campos da linha de material
     const elCusto = document.getElementById('mat-custo-' + idx);
-    if (elCusto) elCusto.value = pedra ? pedra.custoM2.toFixed(2) : '0';
+    if (elCusto) {
+      // Se não tem override ainda, busca da pedra resolvida
+      if (!item.custoM2Override && pedra && pedra.custoM2) {
+        item.custoM2Override = pedra.custoM2;
+        item.margemOverride = pedra.margem;
+        item.quebraOverride = pedra.quebra;
+      }
+      elCusto.value = item.custoM2Override || (pedra ? pedra.custoM2 : 0) || 0;
+    }
 
     const elDif = document.getElementById('mat-dif-' + idx);
     if (elDif) { const g = pedra ? (GRUPOS_DIFICULDADE.find(x=>x.id===pedra.grupoId)||{dif:1}) : {dif:1}; elDif.value = g.dif.toFixed(1); }
@@ -3628,6 +3718,21 @@ function recalcularTelaOrc(orderId) {
 
     const elLLH = document.getElementById('mat-llh-' + idx);
     if (elLLH) elLLH.value = item.calc && item.calc.tempoProdTotal > 0 ? (item.calc.lucroLiquido/item.calc.tempoProdTotal).toFixed(2).replace('.',',') : '—';
+
+    // Atualiza Tempo Instalação/Entrega calculado (só se não foi editado manualmente)
+    const elTempoInstal = document.getElementById('campo-tempo-instal-' + idx);
+    if (elTempoInstal && item.calc && (!item.tempoInstalManual || item.tempoInstalManual === '' || item.tempoInstalManual === '0')) {
+      const h = Math.floor(item.calc.tempoInstalEntrega||0);
+      const m = Math.round(((item.calc.tempoInstalEntrega||0)-h)*60);
+      elTempoInstal.value = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+      elTempoInstal.style.background = '#e8f4f7'; // azul = calculado
+    }
+
+    // Atualiza Nº Pessoas (padrão das configurações se não editado)
+    const elPessoas = document.getElementById('campo-pessoas-' + idx);
+    if (elPessoas && !item.nPessoasInstal) {
+      elPessoas.value = cfg.pessoasInstalacao || 2;
+    }
 
     // Atualiza badge preço no header do item
     const elPreco = document.getElementById('preco-item-' + idx);
@@ -3967,7 +4072,7 @@ function imprimirOrcamento() {
 
   // Recalcula todos os itens
   orc.itens.forEach(item => {
-    const pedra = pedras.find(p => p.id === item.pedraId);
+    const pedra = resolverPedra(pedras, item);
     item.distancia = orc.distancia;
     item.calc = (pedra && calcAreaTotalItem(item) > 0) ? calcularItem(item, pedra, {...cfg, transito: orc.transito}) : null;
   });
@@ -3977,7 +4082,7 @@ function imprimirOrcamento() {
   const numOrc = orc.id.replace('ORC-','').substring(0,10);
 
   const itensPrint = orc.itens.map(item => {
-    const pedra = pedras.find(p => p.id === item.pedraId);
+    const pedra = resolverPedra(pedras, item);
     if (!item.calc || !pedra) return '';
     const pecas = (item.pecas||[]).filter(p => p.medidas);
     const pecasHTML = pecas.map(p => {

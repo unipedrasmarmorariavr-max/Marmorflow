@@ -2301,8 +2301,18 @@ function calcularItem(item, pedra, cfg) {
   const dif = grupo.dif;
   const { custoHoraEmpresa } = calcularCustoHora();
 
-  // Área total com quebra
-  const areaBase = item.largura * item.comprimento * item.quantidade;
+  // Área total — usa sistema peça a peça se disponível
+  let areaBase;
+  if (item.pecas && item.pecas.length > 0) {
+    areaBase = item.pecas.reduce((s,p) => {
+      const partes = (p.medidas||'').toLowerCase().replace(/,/g,'.').split('x');
+      const l = parseFloat(partes[0])||0;
+      const c = parseFloat(partes[1])||0;
+      return s + (l * c * (parseInt(p.qtd)||1));
+    }, 0);
+  } else {
+    areaBase = (item.largura||0) * (item.comprimento||0) * (item.quantidade||1);
+  }
   const areaComQuebra = areaBase * (1 + pedra.quebra / 100);
 
   // Custo matéria prima
@@ -3018,6 +3028,7 @@ function abrirTelaOrcamentoPedido(id) {
         largura: 0,
         comprimento: 0,
         quantidade: 1,
+        pecas: [{nome: order.peca||'', medidas:'', qtd:'1'}],
         tipoEntrega: order.tipoentrega === 'entrega_instalacao' ? 'instalacao' :
                      order.tipoentrega === 'so_entrega' ? 'entrega' : 'retirada',
         areaBipolida: 0, horasAdicionais: 0,
@@ -3196,21 +3207,13 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
     </div>
 
     <!-- Dados básicos -->
-    <div class="form-grid" style="margin-bottom:20px;">
-      <div class="form-group"><label class="form-label">Nome da Peça</label>
-        <input class="form-input" value="${item.nome||''}" placeholder="Ex: Bancada, Pia, Soleira..." oninput="orcamentoAtual.itens[${idx}].nome=this.value"></div>
-      <div class="form-group"><label class="form-label">Pedra / Material *</label>
+    <div class="form-grid" style="margin-bottom:16px;">
+      <div class="form-group span2"><label class="form-label">Pedra / Material *</label>
         <select class="form-select" onchange="orcamentoAtual.itens[${idx}].pedraId=this.value;recalcularTelaOrc('${orderId}')">
           <option value="">Selecione a pedra...</option>
           ${pedras.map(p=>`<option value="${p.id}" ${item.pedraId===p.id?'selected':''}>${p.nome} — R$ ${p.custoM2.toFixed(2).replace('.',',')}/m²</option>`).join('')}
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Largura (m) *</label>
-        <input class="form-input" type="number" step="0.01" value="${item.largura||''}" placeholder="0,00" oninput="orcamentoAtual.itens[${idx}].largura=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-      <div class="form-group"><label class="form-label">Comprimento (m) *</label>
-        <input class="form-input" type="number" step="0.01" value="${item.comprimento||''}" placeholder="0,00" oninput="orcamentoAtual.itens[${idx}].comprimento=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
-      <div class="form-group"><label class="form-label">Quantidade</label>
-        <input class="form-input" type="number" value="${item.quantidade||1}" oninput="orcamentoAtual.itens[${idx}].quantidade=parseInt(this.value)||1;recalcularTelaOrc('${orderId}')"></div>
       <div class="form-group"><label class="form-label">Tipo de Entrega</label>
         <select class="form-select" onchange="orcamentoAtual.itens[${idx}].tipoEntrega=this.value;recalcularTelaOrc('${orderId}')">
           <option value="instalacao" ${item.tipoEntrega==='instalacao'?'selected':''}>Com Instalação</option>
@@ -3218,10 +3221,31 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
           <option value="retirada" ${item.tipoEntrega==='retirada'?'selected':''}>Retirada na empresa</option>
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Bipolimento (m²)</label>
-        <input class="form-input" type="number" step="0.1" value="${item.areaBipolida||0}" oninput="orcamentoAtual.itens[${idx}].areaBipolida=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
       <div class="form-group"><label class="form-label">Horas Adicionais</label>
         <input class="form-input" type="number" step="0.25" value="${item.horasAdicionais||0}" oninput="orcamentoAtual.itens[${idx}].horasAdicionais=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+    </div>
+
+    <!-- Peça a Peça -->
+    <div style="background:var(--cream);border-radius:10px;padding:16px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);">📐 Peças (nome × medidas × quantidade)</div>
+        <div style="font-size:12px;color:var(--stone-light);">Área Total: <strong style="color:var(--stone);">${(item.pecas||[]).reduce((s,p)=>{const m=parseMedidas(p.medidas);return s+(m.l*m.c*(parseInt(p.qtd)||1));},0).toFixed(2)} m²</strong></div>
+      </div>
+      <div id="pecas-lista-${idx}">
+        ${(item.pecas||[{nome:'',medidas:'',qtd:'1'}]).map((peca,pi)=>`
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+          <input class="form-input" style="flex:2;" placeholder="Nome (ex: bancada)" value="${peca.nome||''}"
+            oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].nome=this.value">
+          <input class="form-input" style="flex:1;font-family:monospace;" placeholder="1,20x0,60" value="${peca.medidas||''}"
+            oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].medidas=this.value;recalcularTelaOrc('${orderId}')"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarPecaItem(${idx},'${orderId}');}">
+          <input class="form-input" style="width:70px;text-align:center;" type="number" min="1" placeholder="Qtd" value="${peca.qtd||1}"
+            oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].qtd=this.value;recalcularTelaOrc('${orderId}')"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarPecaItem(${idx},'${orderId}');}">
+          ${(item.pecas||[]).length > 1 ? `<button onclick="removerPecaItem(${idx},${pi},'${orderId}')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">✕</button>` : ''}
+        </div>`).join('')}
+      </div>
+      <button onclick="adicionarPecaItem(${idx},'${orderId}')" style="background:white;border:1.5px dashed var(--cream-dark);color:var(--stone-light);padding:6px 16px;border-radius:8px;cursor:pointer;font-size:12px;margin-top:4px;width:100%;">+ Adicionar peça (ou pressione Enter)</button>
     </div>
 
     <!-- Acabamentos lineares -->
@@ -3301,6 +3325,7 @@ function recalcularTelaOrc(orderId) {
 function adicionarItemTelaOrc(orderId) {
   orcamentoAtual.itens.push({
     nome:'', pedraId:'', largura:0, comprimento:0, quantidade:1,
+    pecas:[{nome:'', medidas:'', qtd:'1'}],
     tipoEntrega:'instalacao', areaBipolida:0, horasAdicionais:0,
     compCorte45:0, compMontagem45:0, compPolimentoManual:0, compPolimentoAuto:0,
     compMeioBoelado:0, compMeioBoeladoDuplo:0, compChanfrado45:0, compChanfradoDuplo:0,
@@ -3345,6 +3370,45 @@ async function salvarEFecharPedido() {
     abrirModalConfirmarData(pedidoOrcAtual);
     fecharTelaOrcamentoPedido();
   }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+
+// ─── HELPERS PEÇA A PEÇA ─────────────────────────────────────────────────
+function parseMedidas(str) {
+  if (!str) return {l:0, c:0};
+  // Aceita formatos: 1,20x0,60 / 1.20x0.60 / 1,20X0,60
+  const partes = str.toLowerCase().replace(/,/g,'.').split('x');
+  const l = parseFloat(partes[0]) || 0;
+  const c = parseFloat(partes[1]) || 0;
+  return {l, c};
+}
+
+function calcAreaTotalItem(item) {
+  // Soma área de todas as peças
+  return (item.pecas||[]).reduce((s,p) => {
+    const m = parseMedidas(p.medidas);
+    return s + (m.l * m.c * (parseInt(p.qtd)||1));
+  }, 0);
+}
+
+function adicionarPecaItem(idx, orderId) {
+  if (!orcamentoAtual.itens[idx].pecas) orcamentoAtual.itens[idx].pecas = [];
+  orcamentoAtual.itens[idx].pecas.push({nome:'', medidas:'', qtd:'1'});
+  recalcularTelaOrc(orderId);
+  // Foca no novo campo nome
+  setTimeout(() => {
+    const lista = document.getElementById('pecas-lista-'+idx);
+    if (lista) {
+      const inputs = lista.querySelectorAll('input');
+      if (inputs.length > 0) inputs[inputs.length-3].focus();
+    }
+  }, 50);
+}
+
+function removerPecaItem(idx, pi, orderId) {
+  orcamentoAtual.itens[idx].pecas.splice(pi, 1);
+  recalcularTelaOrc(orderId);
 }
 // ─────────────────────────────────────────────────────────────────────────────
 

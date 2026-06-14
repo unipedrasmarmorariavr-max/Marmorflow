@@ -3333,6 +3333,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
   const calc = item.calc;
   const areaTotal = calcAreaTotalItem(item);
 
+  const custoHoraRef = calcularCustoHora().custoHoraEmpresa;
   const custoTemposHTML = calc ? `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;">
       <div style="border:1px solid #e0e0e0;border-radius:6px 0 0 6px;overflow:hidden;">
@@ -3343,15 +3344,14 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
           ['Custo de Deslocamento', calc.custoDeslocamento],
           ['Custo de Combustível', calc.custoCombustivel],
           ['Custo Serra', calc.custoSerra],
-          ['Custo Corte 45', (calc.custoMontagem||0)/2],
-          ['Custo Montagem 45', (calc.custoMontagem||0)/2],
-          ['Custo Polimento Manual', calc.custoPolimento],
+          ['Custo Corte/Montagem 45°', calc.custoMontagem||0],
+          ['Custo Polimento', calc.custoPolimento],
           ['Custo Área Bipolimento', calc.custoBipolimento],
           ['Custo Acabamentos', calc.custoAcabamentos],
-          ['Custo Esp./Furos', calc.custoEspeciais+calc.custoFuros],
+          ['Custo Esp./Furos', (calc.custoEspeciais||0)+(calc.custoFuros||0)],
           ['Custo Water Jet', calc.custoWaterJet],
           ['Custo Horas Adicionais', calc.custoHorasAdic],
-          ['Custo de Insumos', calc.custoInsumos],
+          ['Custo de Insumos (5% s/venda)', calc.custoInsumos],
           ['Custo Total do Produto', calc.custoTotal],
         ].map(([nome, val]) => `<div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #f0f0f0;font-size:12px;">
           <span style="color:#555;">${nome}</span><span style="font-weight:600;">${fmt(val||0)}</span>
@@ -3364,18 +3364,25 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
         </div>
       </div>
       <div style="border:1px solid #e0e0e0;border-left:none;border-radius:0 6px 6px 0;overflow:hidden;">
-        <div style="background:#2C2C2C;color:white;padding:8px 12px;font-size:11px;font-weight:700;">(TEMPO PRODUTIVO + TEMPO IMPRODUTIVO)</div>
+        <div style="background:#2C2C2C;color:white;padding:8px 12px;font-size:11px;font-weight:700;">TEMPO PRODUTIVO (hr)</div>
         ${[
-          ['Tempo de Serra', calc.custoSerra/((cfg&&cfg.serra)||0.8)/62.66],
-          ['Tempo de Montagem em 45°', (calc.custoMontagem||0)/62.66],
-          ['Tempo Instalação/Entrega', calc.custoInstalacao/62.66],
-          ['Tempo Total de Produção', calc.tempoProdTotal],
+          ['Tempo de Serra', custoHoraRef > 0 ? (calc.custoSerra / custoHoraRef) : 0],
+          ['Tempo Corte/Montagem 45°', custoHoraRef > 0 ? ((calc.custoMontagem||0) / custoHoraRef) : 0],
+          ['Tempo Polimento', custoHoraRef > 0 ? ((calc.custoPolimento||0) / custoHoraRef) : 0],
+          ['Tempo Bipolimento', custoHoraRef > 0 ? ((calc.custoBipolimento||0) / custoHoraRef) : 0],
+          ['Tempo Acabamentos', custoHoraRef > 0 ? ((calc.custoAcabamentos||0) / custoHoraRef) : 0],
+          ['Tempo Esp./Furos', custoHoraRef > 0 ? (((calc.custoEspeciais||0)+(calc.custoFuros||0)) / custoHoraRef) : 0],
+          ['Tempo Hrs Adicionais', calc.tempoProdTotal && custoHoraRef > 0 ? ((calc.custoHorasAdic||0) / custoHoraRef) : 0],
+          ['Tempo Total de Produção', calc.tempoProdTotal||0],
         ].map(([nome, val]) => {
           const h = Math.floor(val||0); const m = Math.round(((val||0)-h)*60);
-          return `<div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #f0f0f0;font-size:12px;">
-            <span style="color:#555;">${nome}</span><span style="font-weight:600;">${h}:${m<10?'0':''}${m}</span>
-          </div>`;
+          const isTotal = nome.includes('Total');
+          return `<div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #f0f0f0;font-size:12px;${isTotal?'background:#f9f9f9;font-weight:700;':''}">\n            <span style="color:${isTotal?'#333':'#555'};">${nome}</span><span style="font-weight:600;">${h}h${m<10?'0':''}${m}min</span>\n          </div>`;
         }).join('')}
+        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#e8f4f7;font-size:12px;font-weight:700;border-top:2px solid #006382;">
+          <span style="color:#006382;">LLH (Lucro/Hora)</span>
+          <span style="color:#006382;">${calc.tempoProdTotal>0?fmt(calc.lucroLiquido/calc.tempoProdTotal):fmt(0)}/h</span>
+        </div>
       </div>
     </div>` : '';
 
@@ -3499,15 +3506,15 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
         </div>
         <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;align-items:center;">
           <div>
-            <select class="form-select" style="padding:6px 8px;font-size:12px;" onchange="orcamentoAtual.itens[${idx}].pedraId=this.value;recalcularTelaOrc('${orderId}')">
+            <select class="form-select" style="padding:6px 8px;font-size:12px;" onchange="orcamentoAtual.itens[${idx}].pedraId=this.value;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${orderId}'))">
               <option value="">Selecione...</option>
               ${pedras.map(p=>`<option value="${p.id}" ${item.pedraId===p.id?'selected':''}>${p.nome}</option>`).join('')}
             </select>
             ${pedra ? `<div style="font-size:10px;color:#888;margin-top:2px;">${GRUPOS_DIFICULDADE.find(g=>g.id===pedra.grupoId)?.nome||''}</div>` : ''}
           </div>
-          <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;" value="${pedra?.custoM2||0}" readonly style="background:#f5f5f5;">
-          <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;" value="${(GRUPOS_DIFICULDADE.find(g=>g.id===pedra?.grupoId)?.dif||1).toFixed(1)}" readonly style="background:#f5f5f5;">
-          <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;" value="${pedra?.margem||30}" readonly style="background:#f5f5f5;">
+          <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;background:#f0f7fa;font-weight:700;color:#006382;" value="${pedra?.custoM2||0}" readonly>
+          <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="${(GRUPOS_DIFICULDADE.find(g=>g.id===pedra?.grupoId)?.dif||1).toFixed(1)}" readonly>
+          <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="${pedra?.margem||30}" readonly>
           <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;" value="0" readonly style="background:#f5f5f5;">
           <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;" value="0" readonly style="background:#f5f5f5;">
           <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;" value="0" readonly style="background:#f5f5f5;">
@@ -3516,12 +3523,12 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
         </div>
 
         <!-- CUSTOS E TEMPOS (colapsável) -->
-        <details style="margin-top:12px;">
-          <summary style="cursor:pointer;padding:10px 14px;background:#f0f0f0;border-radius:6px;font-size:13px;font-weight:600;color:#333;list-style:none;display:flex;justify-content:space-between;">
-            <span>Custos e tempos</span><span>▼</span>
+        <details style="margin-top:12px;" ${calc ? 'open' : ''}>
+          <summary style="cursor:pointer;padding:10px 14px;background:#f0f0f0;border-radius:6px;font-size:13px;font-weight:600;color:#333;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+            <span>Custos e tempos ${calc ? `<span style="font-size:11px;font-weight:400;color:#006382;margin-left:8px;">Preço: ${fmt(calc.precoFinal)} · Margem: ${calc.margem}%</span>` : '<span style="font-size:11px;font-weight:400;color:#999;margin-left:8px;">preencha material e medidas para calcular</span>'}</span><span>▼</span>
           </summary>
           <div style="margin-top:1px;border:1px solid #e0e0e0;border-radius:0 0 6px 6px;overflow:hidden;">
-            ${custoTemposHTML}
+            ${custoTemposHTML || `<div style="padding:20px;text-align:center;color:#999;font-size:13px;">⚠️ Selecione um material e preencha as medidas das peças para ver o detalhamento de custos.</div>`}
           </div>
         </details>
 

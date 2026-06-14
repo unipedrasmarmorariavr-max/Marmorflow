@@ -3149,83 +3149,85 @@ function renderTelaOrcamentoPedido(order) {
 
     <div style="max-width:1300px;margin:0 auto;padding:20px;">
 
-      <!-- CABEÇALHO DO ORÇAMENTO (igual Marmoprice) -->
+      <!-- CABEÇALHO DO ORÇAMENTO -->
       <div style="background:white;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
 
-        <!-- Linha 1: Cliente, Endereço, Status -->
-        <div style="display:grid;grid-template-columns:2fr 2fr 1fr;gap:12px;margin-bottom:12px;">
+        <!-- Linha 1: Cliente · Endereço · Status -->
+        <div style="display:grid;grid-template-columns:2fr 2fr 1fr;gap:12px;margin-bottom:14px;">
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Cliente *</label>
+            <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">CLIENTE *</label>
             <input class="form-input" value="${orc.cliente||order.cliente||''}" oninput="orcamentoAtual.cliente=this.value" style="font-weight:600;">
           </div>
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Endereço da Obra</label>
+            <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">ENDEREÇO DA OBRA</label>
             <input class="form-input" value="${orc.enderecoObra||order.endereco||''}" oninput="orcamentoAtual.enderecoObra=this.value" placeholder="${order.endereco||''}">
           </div>
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Status</label>
+            <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">STATUS</label>
             <select class="form-select" onchange="orcamentoAtual.status=this.value">
               ${['À Revisar','Em aberto','Aprovado','Fechado','Cancelado'].map(s=>`<option ${orc.status===s?'selected':''}>${s}</option>`).join('')}
             </select>
           </div>
         </div>
 
-        <!-- Linha 2: Distância, Idas, Trânsito, Origem + Nome, Data -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1.5fr 1.5fr 1fr;gap:12px;align-items:start;margin-bottom:12px;">
+        <!-- Linha 2: Distância · Idas · Trânsito · Origem · Data -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1.6fr 1.6fr 1.2fr;gap:12px;margin-bottom:14px;align-items:start;">
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Distância (km) *</label>
+            <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">DISTÂNCIA (km) *</label>
             <input class="form-input" type="number" value="${orc.distancia||order.distancia||0}"
-              oninput="orcamentoAtual.distancia=parseFloat(this.value)||0;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))">
+              oninput="orcamentoAtual.distancia=parseFloat(this.value)||0;recalcularTelaOrc('${order.id}')">
           </div>
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Idas ↺ <span style="font-size:10px;color:#999;">(ida+volta cada)</span></label>
+            <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">IDAS ↺ <span style="font-size:9px;color:#999;font-weight:400;">(ida+volta)</span></label>
             <input class="form-input" type="number" min="1" value="${orc.idas||1}"
-              oninput="orcamentoAtual.idas=parseInt(this.value)||1;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))">
+              oninput="orcamentoAtual.idas=parseInt(this.value)||1;recalcularTelaOrc('${order.id}')">
           </div>
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Trânsito *</label>
-            <div style="display:flex;flex-direction:column;gap:3px;margin-top:2px;">
+            <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:6px;">TRÂNSITO *</label>
+            <div style="display:flex;gap:14px;align-items:center;padding-top:3px;">
               ${['lento','intermediario','rapido'].map((t,i)=>`
-              <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;">
                 <input type="radio" name="orc-transito" value="${t}" ${(orc.transito||'rapido')===t?'checked':''}
-                  onchange="orcamentoAtual.transito=this.value;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))"
-                  style="accent-color:#006382;">
-                ${['Lento','Intermediário','Rápido'][i]}
+                  onchange="orcamentoAtual.transito=this.value;recalcularTelaOrc('${order.id}')"
+                  style="accent-color:#006382;cursor:pointer;">
+                ${['Lento','Interm.','Rápido'][i]}
               </label>`).join('')}
             </div>
           </div>
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Origem</label>
+            <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">ORIGEM</label>
             <select class="form-select" id="orc-origem-sel" onchange="orcamentoAtual.origem=this.value;toggleOrigemOrc()">
               <option value="">Selecione...</option>
               ${Object.entries(ORIGEM_LABELS).map(([k,v])=>`<option value="${k}" ${(orc.origem||order.origem||'')===k?'selected':''}>${v}</option>`).join('')}
             </select>
           </div>
-          <div id="orc-origemNome-wrap" style="${['arquiteto','construtora','indicacao'].includes(orc.origem||order.origem||'')?'':'display:none;'}">
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;" id="orc-origemNome-label">
-              ${orc.origem==='arquiteto'?'Nome do Arquiteto':orc.origem==='construtora'?'Nome da Construtora':'Nome / Referência'}
-            </label>
-            <input class="form-input" id="orc-origemNome-input"
-              value="${orc.origemNome||order.origemNome||''}"
-              placeholder="Nome completo..."
-              oninput="orcamentoAtual.origemNome=normalizarNome(this.value)">
-          </div>
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Data Prevista para Execução</label>
+            <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">DATA PREVISTA</label>
             <input class="form-input" type="date" value="${orc.dataPrevista||''}" oninput="orcamentoAtual.dataPrevista=this.value">
           </div>
         </div>
 
-        <!-- Linha 3: Profissional do Projeto, Vendedor Responsável -->
+        <!-- Linha 3 (condicional): Nome do Arquiteto/Construtora/Referência -->
+        <div id="orc-origemNome-wrap" style="${['arquiteto','construtora','indicacao'].includes(orc.origem||order.origem||'')?'':'display:none;'}margin-bottom:14px;">
+          <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;" id="orc-origemNome-label">
+            ${(orc.origem||order.origem||'')==='arquiteto'?'NOME DO ARQUITETO':(orc.origem||order.origem||'')==='construtora'?'NOME DA CONSTRUTORA':'NOME / REFERÊNCIA'}
+          </label>
+          <input class="form-input" id="orc-origemNome-input" style="max-width:400px;"
+            value="${orc.origemNome||order.origemNome||''}"
+            placeholder="Nome completo..."
+            oninput="orcamentoAtual.origemNome=normalizarNome(this.value)">
+        </div>
+
+        <!-- Linha 4: Profissional · Responsável -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Profissional do Projeto <span style="font-size:10px;color:#999;">(arquiteto, designer...)</span></label>
+            <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">PROFISSIONAL DO PROJETO <span style="font-size:9px;color:#999;font-weight:400;">(arquiteto, designer...)</span></label>
             <input class="form-input" value="${orc.profissional||order.origemNome||''}"
               placeholder="Nome do profissional..."
               oninput="orcamentoAtual.profissional=normalizarNome(this.value)">
           </div>
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Responsável pela Negociação</label>
+            <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">RESPONSÁVEL PELA NEGOCIAÇÃO</label>
             <input class="form-input" value="${orc.vendedor||order.vendedor||''}"
               placeholder="Nome do vendedor..."
               oninput="orcamentoAtual.vendedor=normalizarNome(this.value)">
@@ -3411,20 +3413,20 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
         <div id="pecas-lista-${idx}">
           ${(item.pecas||[{nome:'',medidas:'',qtd:'1'}]).map((peca,pi) => `
           <div style="display:grid;grid-template-columns:2fr 1.2fr 0.6fr auto;gap:6px;margin-bottom:6px;align-items:center;">
-            <input class="form-input orc-tab-input" style="padding:6px 10px;" placeholder="Nome da peça" value="${peca.nome||''}"
+            <input class="form-input" style="padding:6px 10px;" placeholder="Nome da peça" value="${peca.nome||''}"
               oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].nome=this.value"
-              onkeydown="_pecaEnterTab(event,this,${idx},'${orderId}')">
-            <input class="form-input orc-tab-input" style="padding:6px 10px;font-family:monospace;" placeholder="1,20x0,60" value="${peca.medidas||''}"
+              onkeydown="pKD(event,this,${idx},'${orderId}')">
+            <input class="form-input" style="padding:6px 10px;font-family:monospace;" placeholder="1,20x0,60" value="${peca.medidas||''}"
               oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].medidas=this.value"
-              onblur="recalcularTelaOrc('${orderId}')"
-              onkeydown="_pecaEnterTab(event,this,${idx},'${orderId}')">
-            <input class="form-input orc-tab-input" style="padding:6px 10px;text-align:center;" type="number" min="1" placeholder="Qtd" value="${peca.qtd||1}"
+              onchange="recalcularTelaOrc('${orderId}')"
+              onkeydown="pKD(event,this,${idx},'${orderId}')">
+            <input class="form-input" style="padding:6px 10px;text-align:center;" type="number" min="1" value="${peca.qtd||1}"
               oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].qtd=this.value"
-              onblur="recalcularTelaOrc('${orderId}')"
-              onkeydown="_pecaEnterTab(event,this,${idx},'${orderId}')">
+              onchange="recalcularTelaOrc('${orderId}')"
+              onkeydown="pKD(event,this,${idx},'${orderId}')">
             <div style="display:flex;gap:4px;">
-              <button onclick="adicionarPecaItem(${idx},'${orderId}')" style="background:#006382;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;" title="Nova linha">+</button>
-              <button onclick="removerLinhaItem(this,'${orderId}',${idx})" style="background:#dc3545;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;" title="Remover linha">✕</button>
+              <button onclick="adicionarPecaItem(${idx},'${orderId}')" style="background:#006382;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;" title="Nova linha (+Enter)">+</button>
+              <button onclick="removerLinhaItem(this,${idx},'${orderId}')" style="background:#dc3545;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;" title="Apagar linha">✕</button>
             </div>
           </div>`).join('')}
         </div>
@@ -3630,111 +3632,97 @@ function calcAreaTotalItem(item) {
   }, 0);
 }
 
-// ─── PEÇA A PEÇA ──────────────────────────────────────────────────────────
-
-function adicionarPecaItem(idx, orderId) {
-  if (!orcamentoAtual.itens[idx].pecas) orcamentoAtual.itens[idx].pecas = [];
-  const pi = orcamentoAtual.itens[idx].pecas.length;
-  orcamentoAtual.itens[idx].pecas.push({nome:'', medidas:'', qtd:'1'});
-
-  const lista = document.getElementById('pecas-lista-' + idx);
-  if (!lista) { recalcularTelaOrc(orderId); return; }
-
-  // Cria nova linha diretamente no DOM sem re-renderizar tudo
-  const row = document.createElement('div');
-  row.style.cssText = 'display:grid;grid-template-columns:2fr 1.2fr 0.6fr auto;gap:6px;margin-bottom:6px;align-items:center;';
-
-  const mkInput = (placeholder, style, type) => {
-    const inp = document.createElement('input');
-    inp.className = 'form-input orc-tab-input';
-    inp.style.cssText = style;
-    inp.placeholder = placeholder;
-    if (type) inp.type = type;
-    return inp;
-  };
-
-  const inNome = mkInput('Nome da peça', 'padding:6px 10px;');
-  inNome.oninput = function(){ orcamentoAtual.itens[idx].pecas[pi].nome = this.value; };
-  inNome.onkeydown = function(e){ _pecaEnterTab(e, this, idx, orderId); };
-
-  const inMed = mkInput('1,20x0,60', 'padding:6px 10px;font-family:monospace;');
-  inMed.oninput = function(){ orcamentoAtual.itens[idx].pecas[pi].medidas = this.value; };
-  inMed.onblur = function(){ recalcularTelaOrc(orderId); };
-  inMed.onkeydown = function(e){ _pecaEnterTab(e, this, idx, orderId); };
-
-  const inQtd = mkInput('Qtd', 'padding:6px 10px;text-align:center;', 'number');
-  inQtd.min = '1'; inQtd.value = '1';
-  inQtd.oninput = function(){ orcamentoAtual.itens[idx].pecas[pi].qtd = this.value; };
-  inQtd.onblur = function(){ recalcularTelaOrc(orderId); };
-  inQtd.onkeydown = function(e){ _pecaEnterTab(e, this, idx, orderId); };
-
-  const btns = document.createElement('div');
-  btns.style.cssText = 'display:flex;gap:4px;';
-
-  const bAdd = document.createElement('button');
-  bAdd.style.cssText = 'background:#006382;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;';
-  bAdd.title = 'Nova linha'; bAdd.textContent = '+';
-  bAdd.onclick = function(){ adicionarPecaItem(idx, orderId); };
-
-  const bRem = document.createElement('button');
-  bRem.style.cssText = 'background:#dc3545;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;';
-  bRem.title = 'Remover linha'; bRem.textContent = '✕';
-  bRem.onclick = function(){ removerLinhaItem(this, orderId, idx); };
-
-  btns.appendChild(bAdd); btns.appendChild(bRem);
-  row.appendChild(inNome); row.appendChild(inMed); row.appendChild(inQtd); row.appendChild(btns);
-  lista.appendChild(row);
-
-  setTimeout(() => inNome.focus(), 30);
-}
-
-// Handler Enter/Tab nas peças
-function _pecaEnterTab(e, el, idx, orderId) {
+// Handler de teclado das peças (nome curto para caber no atributo HTML)
+function pKD(e, el, idx, orderId) {
   if (e.key === 'Enter') {
     e.preventDefault();
-    recalcularTelaOrc(orderId);
     adicionarPecaItem(idx, orderId);
-    return;
-  }
-  if (e.key === 'Tab') {
+  } else if (e.key === 'Tab') {
     e.preventDefault();
-    const lista = document.getElementById('pecas-lista-' + idx);
+    var lista = document.getElementById('pecas-lista-' + idx);
     if (!lista) return;
-    const all = lista.querySelectorAll('.orc-tab-input');
-    const i = Array.from(all).indexOf(el);
+    var all = lista.querySelectorAll('input');
+    var i = Array.from(all).indexOf(el);
     if (e.shiftKey) {
-      if (i > 0) { all[i-1].focus(); }
+      if (i > 0) all[i-1].focus();
     } else {
-      if (i >= 0 && all[i+1]) { all[i+1].focus(); }
-      else { recalcularTelaOrc(orderId); adicionarPecaItem(idx, orderId); }
+      if (i >= 0 && i < all.length - 1) all[i+1].focus();
+      else adicionarPecaItem(idx, orderId);
     }
   }
 }
 
-// Remove linha de peça pelo botão ✕ — sobe 2 níveis (button → btns-div → row)
-function removerLinhaItem(btn, orderId, idx) {
-  const lista = document.getElementById('pecas-lista-' + idx);
+// Adiciona linha de peça diretamente no DOM
+function adicionarPecaItem(idx, orderId) {
+  if (!orcamentoAtual.itens[idx]) return;
+  if (!orcamentoAtual.itens[idx].pecas) orcamentoAtual.itens[idx].pecas = [];
+  var pi = orcamentoAtual.itens[idx].pecas.length;
+  orcamentoAtual.itens[idx].pecas.push({nome:'', medidas:'', qtd:'1'});
+
+  var lista = document.getElementById('pecas-lista-' + idx);
   if (!lista) return;
-  const rows = lista.children;
-  if (rows.length <= 1) return; // não remover última linha
 
-  // Encontrar o índice da linha pelo DOM
-  const row = btn.parentNode && btn.parentNode.parentNode;
-  if (!row || !lista.contains(row)) return;
-  const pi = Array.from(rows).indexOf(row);
-  if (pi < 0) return;
+  var row = document.createElement('div');
+  row.style.cssText = 'display:grid;grid-template-columns:2fr 1.2fr 0.6fr auto;gap:6px;margin-bottom:6px;align-items:center;';
 
-  // Remove do array
-  if (orcamentoAtual.itens[idx] && orcamentoAtual.itens[idx].pecas) {
-    orcamentoAtual.itens[idx].pecas.splice(pi, 1);
+  function inp(style, type, placeholder, val) {
+    var el = document.createElement('input');
+    el.className = 'form-input';
+    el.style.cssText = style;
+    if (type) el.type = type;
+    if (placeholder) el.placeholder = placeholder;
+    if (val !== undefined) el.value = val;
+    return el;
   }
+
+  var iNome = inp('padding:6px 10px;', null, 'Nome da peça', '');
+  iNome.oninput = (function(i){ return function(){ orcamentoAtual.itens[idx].pecas[i].nome = this.value; }; })(pi);
+  iNome.onkeydown = (function(i){ return function(e){ pKD(e, this, idx, orderId); }; })(pi);
+
+  var iMed = inp('padding:6px 10px;font-family:monospace;', null, '1,20x0,60', '');
+  iMed.oninput = (function(i){ return function(){ orcamentoAtual.itens[idx].pecas[i].medidas = this.value; }; })(pi);
+  iMed.onchange = function(){ recalcularTelaOrc(orderId); };
+  iMed.onkeydown = (function(i){ return function(e){ pKD(e, this, idx, orderId); }; })(pi);
+
+  var iQtd = inp('padding:6px 10px;text-align:center;', 'number', '', '1');
+  iQtd.min = '1';
+  iQtd.oninput = (function(i){ return function(){ orcamentoAtual.itens[idx].pecas[i].qtd = this.value; }; })(pi);
+  iQtd.onchange = function(){ recalcularTelaOrc(orderId); };
+  iQtd.onkeydown = (function(i){ return function(e){ pKD(e, this, idx, orderId); }; })(pi);
+
+  var btns = document.createElement('div');
+  btns.style.cssText = 'display:flex;gap:4px;';
+
+  var bAdd = document.createElement('button');
+  bAdd.style.cssText = 'background:#006382;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;';
+  bAdd.title = 'Nova linha (+Enter)'; bAdd.textContent = '+';
+  bAdd.onclick = function(){ adicionarPecaItem(idx, orderId); };
+
+  var bRem = document.createElement('button');
+  bRem.style.cssText = 'background:#dc3545;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;';
+  bRem.title = 'Apagar linha'; bRem.textContent = '✕';
+  bRem.onclick = function(){ removerLinhaItem(this, idx, orderId); };
+
+  btns.appendChild(bAdd); btns.appendChild(bRem);
+  row.appendChild(iNome); row.appendChild(iMed); row.appendChild(iQtd); row.appendChild(btns);
+  lista.appendChild(row);
+  setTimeout(function(){ iNome.focus(); }, 20);
+}
+
+// Remove linha pelo botão ✕
+function removerLinhaItem(btn, idx, orderId) {
+  var lista = document.getElementById('pecas-lista-' + idx);
+  if (!lista || lista.children.length <= 1) return;
+  var row = btn.parentNode.parentNode; // btn → div-btns → div-row
+  var rows = Array.from(lista.children);
+  var pi = rows.indexOf(row);
+  if (pi < 0) return;
+  orcamentoAtual.itens[idx].pecas.splice(pi, 1);
   row.remove();
   recalcularTelaOrc(orderId);
 }
 
-// Compatibilidade com chamadas antigas via template HTML
 function removerPecaItem(idx, pi, orderId) {
-  if (!orcamentoAtual.itens[idx] || !orcamentoAtual.itens[idx].pecas) return;
   if (orcamentoAtual.itens[idx].pecas.length <= 1) return;
   orcamentoAtual.itens[idx].pecas.splice(pi, 1);
   recalcularTelaOrc(orderId);

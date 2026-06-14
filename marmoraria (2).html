@@ -2181,29 +2181,30 @@ const CONFIG_ORC_DEFAULT = {
   horasProdMes: 176, // horas produtivas/mês
   qtdFuncionarios: 5,
   // Operações (hr/m² ou hr/m ou hr/un)
-  serra: 0.8,
-  corte45: 0.2,
-  montagem45: 1.2,
-  corteDPolimento: 2,
-  areaBipolida: 2,
-  sistemaFlush: 3,
-  sistemaFlath: 3,
-  recortesSemPolimento: 0.5,
-  rebaixoItaliano: 8,
-  rebaixoAmericano: 2,
-  polimentoAutomatico: 0.15,
-  polimentoManual: 0.2,
-  cubEsculpida: 3,
-  meioBoelado: 0.5,
-  meioBoeladoDuplo: 1,
-  chanfrado45: 1,
-  meiaCana: 1,
-  boeladoDuplo: 2,
-  chanfradoDuplo: 2,
-  meiaCanaDuplo: 2,
-  colagemTopo: 0.25,
-  chanfroAlongado: 2,
-  waterJet: 20,
+  serra: 0.8,              // hr/m²
+  corte45: 0.2,            // hr/m
+  montagem45: 1.2,         // hr/m
+  corteDPolimento: 2,      // hr/un
+  areaBipolida: 2,         // hr/m²
+  sistemaFlush: 3,         // hr/un
+  sistemaFlath: 3,         // hr/un
+  recortesSemPolimento: 0.5, // hr/un
+  rebaixoItaliano: 8,      // hr/m²
+  rebaixoAmericano: 2,     // hr/m²
+  polimentoAutomatico: 0.15, // hr/m
+  polimentoManual: 0.2,    // hr/m
+  cubEsculpida: 3,         // hr/m
+  meioBoelado: 0.5,        // hr/m
+  meioBoeladoDuplo: 1,     // hr/m
+  chanfrado45: 1,          // hr/m
+  meiaCana: 1,             // hr/m
+  boeladoDuplo: 2,         // hr/m
+  chanfradoDuplo: 2,       // hr/m
+  meiaCanaDuplo: 2,        // hr/m
+  colagemTopo: 0.25,       // hr/m
+  chanfroAlongado: 2,      // hr/m
+  waterJet: 20,            // R$/m
+  acabamento45cubaSaia: 3, // hr/m
   // Instalação
   horasInstalacaoM2: 1.5,
   pessoasInstalacao: 2,
@@ -2304,19 +2305,48 @@ function calcularItem(item, pedra, cfg) {
 
   // Tempos de produção (em horas)
   const tSerra = areaBase * cfg.serra * dif;
-  const tMontagem45 = item.tempoMontagem45 || 0;
-  const tBipolimento = item.areaBipolida ? item.areaBipolida * cfg.areaBipolida * dif : 0;
-  const tPolimentoManual = item.compPolimentoManual ? item.compPolimentoManual * cfg.polimentoManual * dif : 0;
-  const tPolimentoAuto = item.compPolimentoAuto ? item.compPolimentoAuto * cfg.polimentoAutomatico * dif : 0;
+  const tCorte45 = (item.compCorte45||0) * cfg.corte45 * dif;
+  const tMontagem45 = (item.compMontagem45||0) * cfg.montagem45 * dif;
+  const tBipolimento = (item.areaBipolida||0) * cfg.areaBipolida * dif;
+  const tPolimentoManual = (item.compPolimentoManual||0) * cfg.polimentoManual * dif;
+  const tPolimentoAuto = (item.compPolimentoAuto||0) * cfg.polimentoAutomatico * dif;
+  const tCubEsculpida = (item.compCubEsculpida||0) * cfg.cubEsculpida * dif;
+  const tMeioBoelado = (item.compMeioBoelado||0) * cfg.meioBoelado * dif;
+  const tMeioBoeladoDuplo = (item.compMeioBoeladoDuplo||0) * cfg.meioBoeladoDuplo * dif;
+  const tChanfrado45 = (item.compChanfrado45||0) * cfg.chanfrado45 * dif;
+  const tMeiaCana = (item.compMeiaCana||0) * cfg.meiaCana * dif;
+  const tMeiaCanaD = (item.compMeiaCanaDuplo||0) * cfg.meiaCanaDuplo * dif;
+  const tBoeladoDuplo = (item.compBoeladoDuplo||0) * cfg.boeladoDuplo * dif;
+  const tChanfradoDuplo = (item.compChanfradoDuplo||0) * cfg.chanfradoDuplo * dif;
+  const tChanfroAlongado = (item.compChanfroAlongado||0) * cfg.chanfroAlongado * dif;
+  const tColagemTopo = (item.compColagemTopo||0) * cfg.colagemTopo * dif;
+  const tRebaixoItaliano = (item.areaRebaixoItaliano||0) * cfg.rebaixoItaliano * dif;
+  const tRebaixoAmericano = (item.areaRebaixoAmericano||0) * cfg.rebaixoAmericano * dif;
+  const tFlush = (item.qtdFlush||0) * cfg.sistemaFlush * dif;
+  const tFlath = (item.qtdFlath||0) * cfg.sistemaFlath * dif;
+  const tRecortes = (item.qtdRecortes||0) * cfg.recortesSemPolimento * dif;
+  const tCubas = (item.qtdCubas||0) * cfg.corteDPolimento * dif;
   const tHorasAdicionais = item.horasAdicionais || 0;
 
-  const tempoProdTotal = tSerra + tMontagem45 + tBipolimento + tPolimentoManual + tPolimentoAuto + tHorasAdicionais;
+  const tempoProdTotal = tSerra + tCorte45 + tMontagem45 + tBipolimento + tPolimentoManual +
+    tPolimentoAuto + tCubEsculpida + tMeioBoelado + tMeioBoeladoDuplo + tChanfrado45 +
+    tMeiaCana + tMeiaCanaD + tBoeladoDuplo + tChanfradoDuplo + tChanfroAlongado +
+    tColagemTopo + tRebaixoItaliano + tRebaixoAmericano + tFlush + tFlath + tRecortes +
+    tCubas + tHorasAdicionais;
+
+  // Custo Water Jet
+  const custoWaterJet = (item.compWaterJet||0) * cfg.waterJet;
 
   // Custo produção
   const custoSerra = tSerra * custoHoraEmpresa;
-  const custoMontagem = tMontagem45 * custoHoraEmpresa;
+  const custoMontagem = (tCorte45 + tMontagem45) * custoHoraEmpresa;
   const custoBipolimento = tBipolimento * custoHoraEmpresa;
   const custoPolimento = (tPolimentoManual + tPolimentoAuto) * custoHoraEmpresa;
+  const custoAcabamentos = (tCubEsculpida + tMeioBoelado + tMeioBoeladoDuplo + tChanfrado45 +
+    tMeiaCana + tMeiaCanaD + tBoeladoDuplo + tChanfradoDuplo + tChanfroAlongado +
+    tColagemTopo) * custoHoraEmpresa;
+  const custoEspeciais = (tRebaixoItaliano + tRebaixoAmericano) * custoHoraEmpresa;
+  const custoFuros = (tFlush + tFlath + tRecortes + tCubas) * custoHoraEmpresa;
   const custoHorasAdic = tHorasAdicionais * custoHoraEmpresa;
 
   // Custo instalação/transporte
@@ -2337,6 +2367,7 @@ function calcularItem(item, pedra, cfg) {
 
   // Soma de custos operacionais (sem insumos)
   const custosOp = custoSerra + custoMontagem + custoBipolimento + custoPolimento +
+                   custoAcabamentos + custoEspeciais + custoFuros + custoWaterJet +
                    custoHorasAdic + custoDeslocamento + custoCombustivel + custoInstalacao + custoMaterial;
 
   // Insumos = % sobre todos os outros custos
@@ -2352,6 +2383,7 @@ function calcularItem(item, pedra, cfg) {
   return {
     areaBase, areaComQuebra, custoMaterial,
     custoSerra, custoMontagem, custoBipolimento, custoPolimento,
+    custoAcabamentos, custoEspeciais, custoFuros, custoWaterJet,
     custoHorasAdic, custoDeslocamento, custoCombustivel, custoInstalacao,
     custoInsumos, custoTotal, lucroLiquido, precoFinal,
     margem: pedra.margem, tempoProdTotal
@@ -2509,6 +2541,21 @@ function abrirConfigOrcamento() {
           <div class="form-group"><label class="form-label">Polimento Automático (hr/m)</label><input class="form-input" id="cfg-polimentoAutomatico" value="${cfg.polimentoAutomatico}"></div>
           <div class="form-group"><label class="form-label">Meio Boleado (hr/m)</label><input class="form-input" id="cfg-meioBoelado" value="${cfg.meioBoelado}"></div>
           <div class="form-group"><label class="form-label">Meio Boleado Duplo (hr/m)</label><input class="form-input" id="cfg-meioBoeladoDuplo" value="${cfg.meioBoeladoDuplo}"></div>
+          <div class="form-group"><label class="form-label">Chanfrado 45° (hr/m)</label><input class="form-input" id="cfg-chanfrado45" value="${cfg.chanfrado45}"></div>
+          <div class="form-group"><label class="form-label">Chanfrado Duplo (hr/m)</label><input class="form-input" id="cfg-chanfradoDuplo" value="${cfg.chanfradoDuplo}"></div>
+          <div class="form-group"><label class="form-label">Meia Cana (hr/m)</label><input class="form-input" id="cfg-meiaCana" value="${cfg.meiaCana}"></div>
+          <div class="form-group"><label class="form-label">Meia Cana Duplo (hr/m)</label><input class="form-input" id="cfg-meiaCanaDuplo" value="${cfg.meiaCanaDuplo}"></div>
+          <div class="form-group"><label class="form-label">Boleado Duplo (hr/m)</label><input class="form-input" id="cfg-boeladoDuplo" value="${cfg.boeladoDuplo}"></div>
+          <div class="form-group"><label class="form-label">Chanfro Alongado (hr/m)</label><input class="form-input" id="cfg-chanfroAlongado" value="${cfg.chanfroAlongado}"></div>
+          <div class="form-group"><label class="form-label">Cuba Esculpida (hr/m)</label><input class="form-input" id="cfg-cubEsculpida" value="${cfg.cubEsculpida}"></div>
+          <div class="form-group"><label class="form-label">Colagem de Topo (hr/m)</label><input class="form-input" id="cfg-colagemTopo" value="${cfg.colagemTopo}"></div>
+          <div class="form-group"><label class="form-label">Rebaixo Italiano (hr/m²)</label><input class="form-input" id="cfg-rebaixoItaliano" value="${cfg.rebaixoItaliano}"></div>
+          <div class="form-group"><label class="form-label">Rebaixo Americano (hr/m²)</label><input class="form-input" id="cfg-rebaixoAmericano" value="${cfg.rebaixoAmericano}"></div>
+          <div class="form-group"><label class="form-label">Sistema Flush (hr/un)</label><input class="form-input" id="cfg-sistemaFlush" value="${cfg.sistemaFlush}"></div>
+          <div class="form-group"><label class="form-label">Sistema Flath (hr/un)</label><input class="form-input" id="cfg-sistemaFlath" value="${cfg.sistemaFlath}"></div>
+          <div class="form-group"><label class="form-label">Recortes sem Polimento (hr/un)</label><input class="form-input" id="cfg-recortesSemPolimento" value="${cfg.recortesSemPolimento}"></div>
+          <div class="form-group"><label class="form-label">Corte+Polimento Cuba (hr/un)</label><input class="form-input" id="cfg-corteDPolimento" value="${cfg.corteDPolimento}"></div>
+          <div class="form-group"><label class="form-label">Water Jet (R$/m)</label><input class="form-input" id="cfg-waterJet" value="${cfg.waterJet}"></div>
         </div>
       </div>
 
@@ -2539,7 +2586,10 @@ function salvarConfig() {
   const campos = ['custoEstrutura','horasProdMes','qtdFuncionarios','custoInsumo','inadimplencia',
     'comissaoVendedor','valorMaquinas','anosDepreciacao','valorResidual','serra','corte45',
     'montagem45','areaBipolida','polimentoManual','polimentoAutomatico','meioBoelado',
-    'meioBoeladoDuplo','consumoCombustivel','custoCombustivel','horasInstalacaoM2',
+    'meioBoeladoDuplo','chanfrado45','chanfradoDuplo','meiaCana','meiaCanaDuplo','boeladoDuplo',
+    'chanfroAlongado','cubEsculpida','colagemTopo','rebaixoItaliano','rebaixoAmericano',
+    'sistemaFlush','sistemaFlath','recortesSemPolimento','corteDPolimento','waterJet',
+    'consumoCombustivel','custoCombustivel','horasInstalacaoM2',
     'pessoasInstalacao','horasEntregaM2','pessoasEntrega'];
   campos.forEach(c => {
     const el = document.getElementById('cfg-' + c);
@@ -2805,19 +2855,88 @@ function renderItemOrcamento(item, idx, pedras, cfg) {
       </div>
       <div class="form-group"><label class="form-label">Bipolimento (m²)</label>
         <input class="form-input" type="number" step="0.1" value="${item.areaBipolida||0}" oninput="orcamentoAtual.itens[${idx}].areaBipolida=parseFloat(this.value)||0;recalcularOrcamento()"></div>
-      <div class="form-group"><label class="form-label">Horas Adicionais</label>
+      <div class="form-group"><label class="form-label">Horas Adicionais (hr)</label>
         <input class="form-input" type="number" step="0.25" value="${item.horasAdicionais||0}" oninput="orcamentoAtual.itens[${idx}].horasAdicionais=parseFloat(this.value)||0;recalcularOrcamento()"></div>
     </div>
+
+    <!-- Acabamentos lineares -->
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--cream-dark);">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:10px;">📏 Acabamentos (metros lineares)</div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Corte 45° / Meia Esquadria (m)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.compCorte45||0}" oninput="orcamentoAtual.itens[${idx}].compCorte45=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Montagem 45° (m)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.compMontagem45||0}" oninput="orcamentoAtual.itens[${idx}].compMontagem45=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Polimento Manual (m)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.compPolimentoManual||0}" oninput="orcamentoAtual.itens[${idx}].compPolimentoManual=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Polimento Automático (m)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.compPolimentoAuto||0}" oninput="orcamentoAtual.itens[${idx}].compPolimentoAuto=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Meio Boleado (m)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.compMeioBoelado||0}" oninput="orcamentoAtual.itens[${idx}].compMeioBoelado=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Meio Boleado Duplo (m)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.compMeioBoeladoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compMeioBoeladoDuplo=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Chanfrado 45° (m)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.compChanfrado45||0}" oninput="orcamentoAtual.itens[${idx}].compChanfrado45=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Chanfrado Duplo (m)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.compChanfradoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compChanfradoDuplo=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Meia Cana (m)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.compMeiaCana||0}" oninput="orcamentoAtual.itens[${idx}].compMeiaCana=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Meia Cana Duplo (m)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.compMeiaCanaDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compMeiaCanaDuplo=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Boleado Duplo (m)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.compBoeladoDuplo||0}" oninput="orcamentoAtual.itens[${idx}].compBoeladoDuplo=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Chanfro Alongado (m)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.compChanfroAlongado||0}" oninput="orcamentoAtual.itens[${idx}].compChanfroAlongado=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Acabamento Cuba Esculpida (m)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.compCubEsculpida||0}" oninput="orcamentoAtual.itens[${idx}].compCubEsculpida=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Colagem de Topo (m)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.compColagemTopo||0}" oninput="orcamentoAtual.itens[${idx}].compColagemTopo=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Water Jet (m)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.compWaterJet||0}" oninput="orcamentoAtual.itens[${idx}].compWaterJet=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+      </div>
+    </div>
+
+    <!-- Serviços especiais -->
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--cream-dark);">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:10px;">🔧 Serviços Especiais</div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Rebaixo Italiano Usinado (m²)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.areaRebaixoItaliano||0}" oninput="orcamentoAtual.itens[${idx}].areaRebaixoItaliano=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Rebaixo Americano Colado (m²)</label>
+          <input class="form-input" type="number" step="0.1" value="${item.areaRebaixoAmericano||0}" oninput="orcamentoAtual.itens[${idx}].areaRebaixoAmericano=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Sistema Flush (un)</label>
+          <input class="form-input" type="number" step="1" value="${item.qtdFlush||0}" oninput="orcamentoAtual.itens[${idx}].qtdFlush=parseInt(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Sistema Flath (un)</label>
+          <input class="form-input" type="number" step="1" value="${item.qtdFlath||0}" oninput="orcamentoAtual.itens[${idx}].qtdFlath=parseInt(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Recortes/Furos sem Polimento (un)</label>
+          <input class="form-input" type="number" step="1" value="${item.qtdRecortes||0}" oninput="orcamentoAtual.itens[${idx}].qtdRecortes=parseInt(this.value)||0;recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Furos de Cuba com Polimento (un)</label>
+          <input class="form-input" type="number" step="1" value="${item.qtdCubas||0}" oninput="orcamentoAtual.itens[${idx}].qtdCubas=parseInt(this.value)||0;recalcularOrcamento()"></div>
+      </div>
+    </div>
     ${calc ? `
-    <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--cream-dark);display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;">
-      <div style="font-size:11px;color:var(--stone-light);">Área: <strong>${calc.areaBase.toFixed(2)} m²</strong></div>
-      <div style="font-size:11px;color:var(--stone-light);">c/ Quebra: <strong>${calc.areaComQuebra.toFixed(2)} m²</strong></div>
-      <div style="font-size:11px;color:var(--stone-light);">Material: <strong>${fmt(calc.custoMaterial)}</strong></div>
-      <div style="font-size:11px;color:var(--stone-light);">Produção: <strong>${fmt(calc.custoSerra+calc.custoMontagem+calc.custoBipolimento+calc.custoPolimento)}</strong></div>
-      <div style="font-size:11px;color:var(--stone-light);">Instalação: <strong>${fmt(calc.custoInstalacao)}</strong></div>
-      <div style="font-size:11px;color:var(--stone-light);">Insumos (${cfg.custoInsumo}%): <strong>${fmt(calc.custoInsumos)}</strong></div>
-      <div style="font-size:11px;color:var(--stone-light);">Custo Total: <strong>${fmt(calc.custoTotal)}</strong></div>
-      <div style="font-size:11px;color:var(--stone-light);">Lucro (${calc.margem}%): <strong style="color:var(--green);">${fmt(calc.lucroLiquido)}</strong></div>
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--cream-dark);">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:10px;">
+        <div style="font-size:11px;color:var(--stone-light);">Área base: <strong>${calc.areaBase.toFixed(2)} m²</strong></div>
+        <div style="font-size:11px;color:var(--stone-light);">c/ Quebra: <strong>${calc.areaComQuebra.toFixed(2)} m²</strong></div>
+        <div style="font-size:11px;color:var(--stone-light);">Material: <strong>${fmt(calc.custoMaterial)}</strong></div>
+        <div style="font-size:11px;color:var(--stone-light);">Serra: <strong>${fmt(calc.custoSerra)}</strong></div>
+        <div style="font-size:11px;color:var(--stone-light);">Corte/Montagem: <strong>${fmt(calc.custoMontagem)}</strong></div>
+        <div style="font-size:11px;color:var(--stone-light);">Bipolimento: <strong>${fmt(calc.custoBipolimento)}</strong></div>
+        <div style="font-size:11px;color:var(--stone-light);">Polimento: <strong>${fmt(calc.custoPolimento)}</strong></div>
+        <div style="font-size:11px;color:var(--stone-light);">Acabamentos: <strong>${fmt(calc.custoAcabamentos)}</strong></div>
+        <div style="font-size:11px;color:var(--stone-light);">Esp./Furos: <strong>${fmt(calc.custoEspeciais+calc.custoFuros)}</strong></div>
+        <div style="font-size:11px;color:var(--stone-light);">Water Jet: <strong>${fmt(calc.custoWaterJet)}</strong></div>
+        <div style="font-size:11px;color:var(--stone-light);">Instalação: <strong>${fmt(calc.custoInstalacao)}</strong></div>
+        <div style="font-size:11px;color:var(--stone-light);">Transporte: <strong>${fmt(calc.custoDeslocamento+calc.custoCombustivel)}</strong></div>
+        <div style="font-size:11px;color:var(--stone-light);">Insumos (${cfg.custoInsumo}%): <strong>${fmt(calc.custoInsumos)}</strong></div>
+        <div style="font-size:11px;color:var(--stone-light);">H. Adicionais: <strong>${fmt(calc.custoHorasAdic)}</strong></div>
+      </div>
+      <div style="display:flex;gap:16px;padding-top:10px;border-top:1px dashed var(--cream-dark);">
+        <div style="font-size:12px;color:var(--stone-light);">Custo Total: <strong style="color:var(--stone);">${fmt(calc.custoTotal)}</strong></div>
+        <div style="font-size:12px;color:var(--stone-light);">Lucro (${calc.margem}%): <strong style="color:var(--green);">${fmt(calc.lucroLiquido)}</strong></div>
+        <div style="font-size:13px;font-weight:700;color:var(--gold);margin-left:auto;">Preço Final: ${fmt(calc.precoFinal)}</div>
+      </div>
     </div>` : ''}
   </div>`;
 }

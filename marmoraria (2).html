@@ -3094,15 +3094,14 @@ function renderTelaOrcamentoPedido(order) {
         </div>
       </div>
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-        ${totalGeral > 0 ? `
-        <div style="text-align:right;">
+        <div style="text-align:right;${totalGeral>0?'':'display:none;'}" id="header-total-wrap">
           <div style="font-size:11px;opacity:0.7;">PREÇO FINAL</div>
-          <div style="font-size:22px;font-weight:700;color:#FFD700;">${fmt(totalGeral)}</div>
+          <div id="header-total" style="font-size:22px;font-weight:700;color:#FFD700;">${fmt(totalGeral)}</div>
         </div>
-        <div style="background:${margemCor};padding:6px 14px;border-radius:8px;text-align:center;">
+        <div id="header-margem" style="background:${margemCor};padding:6px 14px;border-radius:8px;text-align:center;${totalGeral>0?'':'display:none;'}">
           <div style="font-size:10px;opacity:0.8;">MARGEM</div>
           <div style="font-size:16px;font-weight:700;">${margem.toFixed(1)}%</div>
-        </div>` : ''}
+        </div>
         <button onclick="imprimirOrcamento()" style="background:#2C2C2C;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">🖨️ Salvar e Imprimir</button>
         <button onclick="salvarOrcamentoPedido()" style="background:var(--gold);color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">💾 Salvar</button>
         ${totalGeral > 0 ? `<button onclick="salvarEFecharPedido()" style="background:#4A7C59;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">✅ Salvar e Fechar Pedido</button>` : ''}
@@ -3201,8 +3200,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid var(--cream-dark);">
       <div style="font-size:16px;font-weight:700;color:var(--stone);">📐 Peça ${idx+1}: ${item.nome||'Sem nome'}</div>
       <div style="display:flex;gap:8px;align-items:center;">
-        ${calc ? `<span style="background:${margemCor};color:white;padding:4px 12px;border-radius:20px;font-size:12px;">Margem: ${calc.margem}%</span>
-        <span style="background:var(--gold);color:white;padding:6px 16px;border-radius:20px;font-size:15px;font-weight:700;">${fmt(calc.precoFinal)}</span>` : ''}
+        <span id="preco-item-${idx}" style="background:var(--gold);color:white;padding:6px 16px;border-radius:20px;font-size:15px;font-weight:700;${calc?'':'display:none;'}">${calc?fmt(calc.precoFinal):''}</span>
         ${idx > 0 ? `<button onclick="removerItemTelaOrc(${idx},'${orderId}')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 12px;border-radius:8px;cursor:pointer;">🗑</button>` : ''}
       </div>
     </div>
@@ -3228,7 +3226,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
     <div style="background:var(--cream);border-radius:10px;padding:16px;margin-bottom:16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);">📐 Peças (nome × medidas × quantidade)</div>
-        <div style="font-size:12px;color:var(--stone-light);">Área Total: <strong style="color:var(--stone);">${(item.pecas||[]).reduce((s,p)=>{const m=parseMedidas(p.medidas);return s+(m.l*m.c*(parseInt(p.qtd)||1));},0).toFixed(2)} m²</strong></div>
+        <div style="font-size:12px;color:var(--stone-light);">Área Total: <strong id="area-total-${idx}" style="color:var(--stone);">${(item.pecas||[]).reduce((s,p)=>{const m=parseMedidas(p.medidas);return s+(m.l*m.c*(parseInt(p.qtd)||1));},0).toFixed(2)} m²</strong></div>
       </div>
       <div id="pecas-lista-${idx}">
         ${(item.pecas||[{nome:'',medidas:'',qtd:'1'}]).map((peca,pi)=>`
@@ -3288,28 +3286,11 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
     </div>
 
     <!-- Detalhamento do cálculo -->
-    ${calc ? `
-    <div style="background:#F0F7F4;border-radius:10px;padding:16px;border-left:3px solid #4A7C59;">
+    <div id="det-item-${idx}" style="background:#F0F7F4;border-radius:10px;padding:16px;border-left:3px solid #4A7C59;${calc?'':'display:none;'}">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#4A7C59;margin-bottom:12px;">📊 Detalhamento do Cálculo</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">
-        <div style="font-size:12px;color:var(--stone-light);">Área base: <strong>${calc.areaBase.toFixed(2)} m²</strong></div>
-        <div style="font-size:12px;color:var(--stone-light);">Com quebra (${pedra?.quebra||0}%): <strong>${calc.areaComQuebra.toFixed(2)} m²</strong></div>
-        <div style="font-size:12px;color:var(--stone-light);">Material: <strong>${fmt(calc.custoMaterial)}</strong></div>
-        <div style="font-size:12px;color:var(--stone-light);">Serra: <strong>${fmt(calc.custoSerra)}</strong></div>
-        <div style="font-size:12px;color:var(--stone-light);">Corte/Montagem: <strong>${fmt(calc.custoMontagem)}</strong></div>
-        <div style="font-size:12px;color:var(--stone-light);">Bipolimento: <strong>${fmt(calc.custoBipolimento)}</strong></div>
-        <div style="font-size:12px;color:var(--stone-light);">Polimento: <strong>${fmt(calc.custoPolimento)}</strong></div>
-        <div style="font-size:12px;color:var(--stone-light);">Acabamentos: <strong>${fmt(calc.custoAcabamentos)}</strong></div>
-        <div style="font-size:12px;color:var(--stone-light);">Esp./Furos: <strong>${fmt(calc.custoEspeciais+calc.custoFuros)}</strong></div>
-        <div style="font-size:12px;color:var(--stone-light);">Water Jet: <strong>${fmt(calc.custoWaterJet)}</strong></div>
-        <div style="font-size:12px;color:var(--stone-light);">Transporte: <strong>${fmt(calc.custoDeslocamento+calc.custoCombustivel)}</strong></div>
-        <div style="font-size:12px;color:var(--stone-light);">Instalação: <strong>${fmt(calc.custoInstalacao)}</strong></div>
-        <div style="font-size:12px;color:var(--stone-light);">Insumos (${cfg.custoInsumo}%): <strong>${fmt(calc.custoInsumos)}</strong></div>
-        <div style="font-size:12px;color:var(--stone-light);">H. Adicionais: <strong>${fmt(calc.custoHorasAdic)}</strong></div>
-        <div style="font-size:13px;font-weight:700;color:var(--stone);">Custo Total: <strong>${fmt(calc.custoTotal)}</strong></div>
-        <div style="font-size:13px;font-weight:700;color:#4A7C59;">Lucro (${calc.margem}%): <strong>${fmt(calc.lucroLiquido)}</strong></div>
-      </div>
-    </div>` : '<div style="background:var(--cream);border-radius:10px;padding:14px;text-align:center;color:var(--stone-light);font-size:13px;">Selecione uma pedra e informe as dimensões para calcular o preço.</div>'}
+      ${calc ? renderDetalhamento(calc, cfg, pedra) : ''}
+    </div>
+    ${!calc ? '<div style="background:var(--cream);border-radius:10px;padding:14px;text-align:center;color:var(--stone-light);font-size:13px;">Selecione uma pedra e informe as dimensões para calcular o preço.</div>' : ''}
   </div>`;
 }
 
@@ -3318,12 +3299,78 @@ function recalcularTelaOrc(orderId) {
   if (!order) return;
   const pedras = getPedrasCadastradas();
   const cfg = {...getConfigOrc(), transito: orcamentoAtual.transito};
-  orcamentoAtual.itens.forEach(item => {
+
+  orcamentoAtual.itens.forEach((item, idx) => {
     const pedra = pedras.find(p => p.id === item.pedraId);
     item.distancia = orcamentoAtual.distancia;
-    item.calc = (pedra && item.largura && item.comprimento) ? calcularItem(item, pedra, cfg) : null;
+    const areaTotal = calcAreaTotalItem(item);
+    item.calc = (pedra && areaTotal > 0) ? calcularItem(item, pedra, cfg) : null;
+
+    // Atualiza área total sem re-renderizar
+    const elArea = document.getElementById('area-total-' + idx);
+    if (elArea) elArea.textContent = areaTotal.toFixed(2) + ' m²';
+
+    // Atualiza preço do item sem re-renderizar
+    const elPreco = document.getElementById('preco-item-' + idx);
+    if (elPreco) {
+      elPreco.textContent = item.calc ? fmt(item.calc.precoFinal) : '';
+      elPreco.style.display = item.calc ? '' : 'none';
+    }
+
+    // Atualiza detalhamento
+    const elDet = document.getElementById('det-item-' + idx);
+    if (elDet && item.calc) {
+      elDet.innerHTML = renderDetalhamento(item.calc, cfg, pedra);
+    }
   });
-  renderTelaOrcamentoPedido(order);
+
+  // Atualiza resumo geral no header
+  atualizarResumoHeader();
+}
+
+function atualizarResumoHeader() {
+  const totalGeral = orcamentoAtual.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
+  const custoTotal = orcamentoAtual.itens.reduce((s,it) => s + (it.calc?.custoTotal||0), 0);
+  const lucroTotal = orcamentoAtual.itens.reduce((s,it) => s + (it.calc?.lucroLiquido||0), 0);
+  const margem = totalGeral > 0 ? (lucroTotal/totalGeral*100) : 0;
+  const margemCor = margem >= 30 ? '#4A7C59' : margem >= 20 ? '#B8760A' : '#B85A4A';
+
+  const elTotal = document.getElementById('header-total');
+  const elMargem = document.getElementById('header-margem');
+  if (elTotal) elTotal.textContent = fmt(totalGeral);
+  if (elMargem) { elMargem.textContent = margem.toFixed(1) + '%'; elMargem.style.background = margemCor; }
+
+  const campoValor = document.getElementById('torc-valor');
+  if (campoValor && totalGeral > 0) {
+    campoValor.value = totalGeral.toFixed(2).replace('.',',');
+    orcamentoAtual.valorFinal = campoValor.value;
+  }
+}
+
+function renderDetalhamento(calc, cfg, pedra) {
+  if (!calc) return '';
+  return `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">
+      <div style="font-size:12px;color:var(--stone-light);">Área base: <strong>${calc.areaBase.toFixed(2)} m²</strong></div>
+      <div style="font-size:12px;color:var(--stone-light);">Com quebra (${pedra?.quebra||0}%): <strong>${calc.areaComQuebra.toFixed(2)} m²</strong></div>
+      <div style="font-size:12px;color:var(--stone-light);">Material: <strong>${fmt(calc.custoMaterial)}</strong></div>
+      <div style="font-size:12px;color:var(--stone-light);">Serra: <strong>${fmt(calc.custoSerra)}</strong></div>
+      <div style="font-size:12px;color:var(--stone-light);">Corte/Montagem: <strong>${fmt(calc.custoMontagem)}</strong></div>
+      <div style="font-size:12px;color:var(--stone-light);">Bipolimento: <strong>${fmt(calc.custoBipolimento)}</strong></div>
+      <div style="font-size:12px;color:var(--stone-light);">Polimento: <strong>${fmt(calc.custoPolimento)}</strong></div>
+      <div style="font-size:12px;color:var(--stone-light);">Acabamentos: <strong>${fmt(calc.custoAcabamentos)}</strong></div>
+      <div style="font-size:12px;color:var(--stone-light);">Esp./Furos: <strong>${fmt(calc.custoEspeciais+calc.custoFuros)}</strong></div>
+      <div style="font-size:12px;color:var(--stone-light);">Water Jet: <strong>${fmt(calc.custoWaterJet)}</strong></div>
+      <div style="font-size:12px;color:var(--stone-light);">Transporte: <strong>${fmt(calc.custoDeslocamento+calc.custoCombustivel)}</strong></div>
+      <div style="font-size:12px;color:var(--stone-light);">Instalação: <strong>${fmt(calc.custoInstalacao)}</strong></div>
+      <div style="font-size:12px;color:var(--stone-light);">Insumos (${cfg.custoInsumo}%): <strong>${fmt(calc.custoInsumos)}</strong></div>
+      <div style="font-size:12px;color:var(--stone-light);">H. Adicionais: <strong>${fmt(calc.custoHorasAdic)}</strong></div>
+    </div>
+    <div style="display:flex;gap:16px;padding-top:10px;border-top:1px dashed var(--cream-dark);margin-top:8px;">
+      <div style="font-size:12px;color:var(--stone-light);">Custo Total: <strong style="color:var(--stone);">${fmt(calc.custoTotal)}</strong></div>
+      <div style="font-size:12px;color:var(--stone-light);">Lucro (${calc.margem}%): <strong style="color:var(--green);">${fmt(calc.lucroLiquido)}</strong></div>
+      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-left:auto;">Preço Final: ${fmt(calc.precoFinal)}</div>
+    </div>`;
 }
 
 function adicionarItemTelaOrc(orderId) {

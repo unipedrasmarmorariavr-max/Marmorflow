@@ -3214,15 +3214,13 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
           ${pedras.map(p=>`<option value="${p.id}" ${item.pedraId===p.id?'selected':''}>${p.nome} — R$ ${p.custoM2.toFixed(2).replace('.',',')}/m²</option>`).join('')}
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Tipo de Entrega</label>
+      <div class="form-group span2"><label class="form-label">Tipo de Entrega</label>
         <select class="form-select" onchange="orcamentoAtual.itens[${idx}].tipoEntrega=this.value;recalcularTelaOrc('${orderId}')">
           <option value="instalacao" ${item.tipoEntrega==='instalacao'?'selected':''}>Com Instalação</option>
           <option value="entrega" ${item.tipoEntrega==='entrega'?'selected':''}>Só Entrega</option>
           <option value="retirada" ${item.tipoEntrega==='retirada'?'selected':''}>Retirada na empresa</option>
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Horas Adicionais</label>
-        <input class="form-input" type="number" step="0.25" value="${item.horasAdicionais||0}" oninput="orcamentoAtual.itens[${idx}].horasAdicionais=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
     </div>
 
     <!-- Peça a Peça -->
@@ -3274,6 +3272,8 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
     <div style="background:var(--cream);border-radius:10px;padding:16px;margin-bottom:16px;">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:12px;">🔧 Serviços Especiais</div>
       <div class="form-grid">
+        <div class="form-group"><label class="form-label">Bipolimento (m²)</label><input class="form-input" type="number" step="0.1" value="${item.areaBipolida||0}" oninput="orcamentoAtual.itens[${idx}].areaBipolida=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
+        <div class="form-group"><label class="form-label">Horas Adicionais (hr)</label><input class="form-input" type="number" step="0.25" value="${item.horasAdicionais||0}" oninput="orcamentoAtual.itens[${idx}].horasAdicionais=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
         <div class="form-group"><label class="form-label">Rebaixo Italiano Usinado (m²)</label><input class="form-input" type="number" step="0.1" value="${item.areaRebaixoItaliano||0}" oninput="orcamentoAtual.itens[${idx}].areaRebaixoItaliano=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
         <div class="form-group"><label class="form-label">Rebaixo Americano Colado (m²)</label><input class="form-input" type="number" step="0.1" value="${item.areaRebaixoAmericano||0}" oninput="orcamentoAtual.itens[${idx}].areaRebaixoAmericano=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"></div>
         <div class="form-group"><label class="form-label">Sistema Flush (un)</label><input class="form-input" type="number" value="${item.qtdFlush||0}" oninput="orcamentoAtual.itens[${idx}].qtdFlush=parseInt(this.value)||0;recalcularTelaOrc('${orderId}')"></div>

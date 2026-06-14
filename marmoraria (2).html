@@ -3234,12 +3234,15 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
         ${(item.pecas||[{nome:'',medidas:'',qtd:'1'}]).map((peca,pi)=>`
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
           <input class="form-input" style="flex:2;" placeholder="Nome (ex: bancada)" value="${peca.nome||''}"
-            oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].nome=this.value">
+            oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].nome=this.value"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarPecaItem(${idx},'${orderId}');}">
           <input class="form-input" style="flex:1;font-family:monospace;" placeholder="1,20x0,60" value="${peca.medidas||''}"
-            oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].medidas=this.value;recalcularTelaOrc('${orderId}')"
+            oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].medidas=this.value"
+            onblur="recalcularTelaOrc('${orderId}')"
             onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarPecaItem(${idx},'${orderId}');}">
           <input class="form-input" style="width:70px;text-align:center;" type="number" min="1" placeholder="Qtd" value="${peca.qtd||1}"
-            oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].qtd=this.value;recalcularTelaOrc('${orderId}')"
+            oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].qtd=this.value"
+            onblur="recalcularTelaOrc('${orderId}')"
             onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarPecaItem(${idx},'${orderId}');}">
           ${(item.pecas||[]).length > 1 ? `<button onclick="removerPecaItem(${idx},${pi},'${orderId}')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">✕</button>` : ''}
         </div>`).join('')}

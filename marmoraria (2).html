@@ -3153,40 +3153,40 @@ function renderTelaOrcamentoPedido(order) {
       <div style="background:white;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
 
         <!-- Linha 1: Cliente, Endereço, Status -->
-        <div style="display:grid;grid-template-columns:2fr 2fr 1fr;gap:12px;margin-bottom:12px;">
+        <div style="display:grid;grid-template-columns:2fr 2fr 1fr;gap:12px;margin-bottom:10px;align-items:end;">
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Cliente *</label>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">Cliente *</label>
             <input class="form-input" value="${orc.cliente||order.cliente||''}" oninput="orcamentoAtual.cliente=this.value" style="font-weight:600;">
           </div>
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Endereço da Obra</label>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">Endereço da Obra</label>
             <input class="form-input" value="${orc.enderecoObra||order.endereco||''}" oninput="orcamentoAtual.enderecoObra=this.value" placeholder="${order.endereco||''}">
           </div>
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Status</label>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">Status</label>
             <select class="form-select" onchange="orcamentoAtual.status=this.value">
               ${['À Revisar','Em aberto','Aprovado','Fechado','Cancelado'].map(s=>`<option ${orc.status===s?'selected':''}>${s}</option>`).join('')}
             </select>
           </div>
         </div>
 
-        <!-- Linha 2: Distância, Idas, Trânsito, Origem + Nome, Data -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1.5fr 1.5fr 1fr;gap:12px;align-items:start;margin-bottom:12px;">
+        <!-- Linha 2: Distância, Idas, Trânsito, Origem, Data -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1.5fr 1fr;gap:12px;align-items:start;margin-bottom:10px;">
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Distância (km) *</label>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">Distância (km) *</label>
             <input class="form-input" type="number" value="${orc.distancia||order.distancia||0}"
               oninput="orcamentoAtual.distancia=parseFloat(this.value)||0;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))">
           </div>
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Idas ↺ <span style="font-size:10px;color:#999;">(ida+volta cada)</span></label>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">Idas ↺ <span style="font-size:10px;color:#999;font-weight:400;">(ida+volta cada)</span></label>
             <input class="form-input" type="number" min="1" value="${orc.idas||1}"
               oninput="orcamentoAtual.idas=parseInt(this.value)||1;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))">
           </div>
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Trânsito *</label>
-            <div style="display:flex;flex-direction:column;gap:3px;margin-top:2px;">
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">Trânsito *</label>
+            <div style="display:flex;flex-direction:column;gap:4px;">
               ${['lento','intermediario','rapido'].map((t,i)=>`
-              <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;color:#333;">
                 <input type="radio" name="orc-transito" value="${t}" ${(orc.transito||'rapido')===t?'checked':''}
                   onchange="orcamentoAtual.transito=this.value;renderTelaOrcamentoPedido(orders.find(o=>o.id==='${order.id}'))"
                   style="accent-color:#006382;">
@@ -3195,37 +3195,39 @@ function renderTelaOrcamentoPedido(order) {
             </div>
           </div>
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Origem</label>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">Origem</label>
             <select class="form-select" id="orc-origem-sel" onchange="orcamentoAtual.origem=this.value;toggleOrigemOrc()">
               <option value="">Selecione...</option>
               ${Object.entries(ORIGEM_LABELS).map(([k,v])=>`<option value="${k}" ${(orc.origem||order.origem||'')===k?'selected':''}>${v}</option>`).join('')}
             </select>
           </div>
-          <div id="orc-origemNome-wrap" style="${['arquiteto','construtora','indicacao'].includes(orc.origem||order.origem||'')?'':'display:none;'}">
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;" id="orc-origemNome-label">
-              ${orc.origem==='arquiteto'?'Nome do Arquiteto':orc.origem==='construtora'?'Nome da Construtora':'Nome / Referência'}
-            </label>
-            <input class="form-input" id="orc-origemNome-input"
-              value="${orc.origemNome||order.origemNome||''}"
-              placeholder="Nome completo..."
-              oninput="orcamentoAtual.origemNome=normalizarNome(this.value)">
-          </div>
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Data Prevista para Execução</label>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">Data Prevista Execução</label>
             <input class="form-input" type="date" value="${orc.dataPrevista||''}" oninput="orcamentoAtual.dataPrevista=this.value">
           </div>
         </div>
 
-        <!-- Linha 3: Profissional do Projeto, Vendedor Responsável -->
+        <!-- Linha 3 condicional: Nome do parceiro (arquiteto/construtora/indicação) -->
+        <div id="orc-origemNome-wrap" style="${['arquiteto','construtora','indicacao'].includes(orc.origem||order.origem||'')?'':'display:none;'}margin-bottom:10px;">
+          <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;" id="orc-origemNome-label">
+            ${orc.origem==='arquiteto'?'Nome do Arquiteto':orc.origem==='construtora'?'Nome da Construtora':'Nome / Referência'}
+          </label>
+          <input class="form-input" id="orc-origemNome-input"
+            value="${orc.origemNome||order.origemNome||''}"
+            placeholder="Nome completo..."
+            oninput="orcamentoAtual.origemNome=normalizarNome(this.value)">
+        </div>
+
+        <!-- Linha 4: Profissional do Projeto + Responsável pela Negociação -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Profissional do Projeto <span style="font-size:10px;color:#999;">(arquiteto, designer...)</span></label>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">Profissional do Projeto <span style="font-size:10px;color:#999;font-weight:400;">(arquiteto, designer...)</span></label>
             <input class="form-input" value="${orc.profissional||order.origemNome||''}"
               placeholder="Nome do profissional..."
               oninput="orcamentoAtual.profissional=normalizarNome(this.value)">
           </div>
           <div>
-            <label style="font-size:11px;color:#666;display:block;margin-bottom:4px;">Responsável pela Negociação</label>
+            <label style="font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">Responsável pela Negociação</label>
             <input class="form-input" value="${orc.vendedor||order.vendedor||''}"
               placeholder="Nome do vendedor..."
               oninput="orcamentoAtual.vendedor=normalizarNome(this.value)">
@@ -3413,17 +3415,17 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
           <div style="display:grid;grid-template-columns:2fr 1.2fr 0.6fr auto;gap:6px;margin-bottom:6px;align-items:center;">
             <input class="form-input orc-tab-input" style="padding:6px 10px;" placeholder="Nome da peça" value="${peca.nome||''}"
               oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].nome=this.value"
-              onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarPecaItem(${idx},'${orderId}');}else if(event.key==='Tab'){event.preventDefault();const all=document.querySelectorAll('.orc-tab-input');const i=Array.from(all).indexOf(this);if(i>=0&&all[i+(event.shiftKey?-1:1)])all[i+(event.shiftKey?-1:1)].focus();}">
+              onkeydown="(function(e,el){if(e.key==='Tab'&&!e.shiftKey){e.preventDefault();var a=document.querySelectorAll('#pecas-lista-${idx} .orc-tab-input');var i=Array.from(a).indexOf(el);if(i>=0&&a[i+1])a[i+1].focus();}else if(e.key==='Tab'&&e.shiftKey){e.preventDefault();var a=document.querySelectorAll('#pecas-lista-${idx} .orc-tab-input');var i=Array.from(a).indexOf(el);if(i>0)a[i-1].focus();}})(event,this)">
             <input class="form-input orc-tab-input" style="padding:6px 10px;font-family:monospace;" placeholder="1,20x0,60" value="${peca.medidas||''}"
               oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].medidas=this.value"
               onblur="recalcularTelaOrc('${orderId}')"
-              onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarPecaItem(${idx},'${orderId}');}else if(event.key==='Tab'){event.preventDefault();const all=document.querySelectorAll('.orc-tab-input');const i=Array.from(all).indexOf(this);if(i>=0&&all[i+(event.shiftKey?-1:1)])all[i+(event.shiftKey?-1:1)].focus();}">
+              onkeydown="(function(e,el){if(e.key==='Tab'&&!e.shiftKey){e.preventDefault();var a=document.querySelectorAll('#pecas-lista-${idx} .orc-tab-input');var i=Array.from(a).indexOf(el);if(i>=0&&a[i+1])a[i+1].focus();}else if(e.key==='Tab'&&e.shiftKey){e.preventDefault();var a=document.querySelectorAll('#pecas-lista-${idx} .orc-tab-input');var i=Array.from(a).indexOf(el);if(i>0)a[i-1].focus();}})(event,this)">
             <input class="form-input orc-tab-input" style="padding:6px 10px;text-align:center;" type="number" min="1" placeholder="Qtd" value="${peca.qtd||1}"
               oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].qtd=this.value"
               onblur="recalcularTelaOrc('${orderId}')"
-              onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarPecaItem(${idx},'${orderId}');}else if(event.key==='Tab'){event.preventDefault();const all=document.querySelectorAll('.orc-tab-input');const i=Array.from(all).indexOf(this);if(i>=0&&all[i+(event.shiftKey?-1:1)])all[i+(event.shiftKey?-1:1)].focus();}">
+              onkeydown="(function(e,el){if(e.key==='Enter'){e.preventDefault();recalcularTelaOrc('${orderId}');adicionarPecaItem(${idx},'${orderId}');}else if(e.key==='Tab'&&!e.shiftKey){e.preventDefault();var a=document.querySelectorAll('#pecas-lista-${idx} .orc-tab-input');var i=Array.from(a).indexOf(el);if(i>=0&&a[i+1]){a[i+1].focus();}else{recalcularTelaOrc('${orderId}');adicionarPecaItem(${idx},'${orderId}');}}else if(e.key==='Tab'&&e.shiftKey){e.preventDefault();var a=document.querySelectorAll('#pecas-lista-${idx} .orc-tab-input');var i=Array.from(a).indexOf(el);if(i>0)a[i-1].focus();}})(event,this)">
             <div style="display:flex;gap:4px;">
-              <button onclick="adicionarPecaItem(${idx},'${orderId}')" style="background:#006382;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;">+</button>
+              <button onclick="adicionarPecaItem(${idx},'${orderId}')" title="Adicionar linha (ou Enter/Tab no Qtd)" style="background:#006382;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;">+</button>
               ${(item.pecas||[]).length>1?`<button onclick="removerPecaItem(${idx},${pi},'${orderId}')" style="background:#dc3545;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;">✕</button>`:''}
             </div>
           </div>`).join('')}

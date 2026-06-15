@@ -4957,6 +4957,21 @@ function toggleOrigemOrc() {
 </script>
 
 <!-- MODAL CONFIRMAR DATA DE INSTALAÇÃO -->
+<!-- MODAL PRODUTO/CHAPA -->
+<div class="modal-overlay" id="modal-produto" style="align-items:flex-start;padding:20px;overflow-y:auto;">
+  <div class="modal" style="max-width:600px;width:100%;">
+    <div class="modal-header">
+      <div class="modal-title" id="titulo-modal-produto">Adicionar Nova Chapa</div>
+      <button class="modal-close" onclick="closeModal('modal-produto')">✕</button>
+    </div>
+    <div class="modal-body" id="body-modal-produto"></div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('modal-produto')">Cancelar</button>
+      <button class="btn-primary" onclick="salvarProduto()">💾 Salvar Chapa</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-confirmar-data">
   <div class="modal" style="max-width:480px;">
     <div class="modal-header">

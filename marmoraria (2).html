@@ -3112,12 +3112,14 @@ function abrirTelaOrcamentoPedido(id) {
       id: 'ORC-' + id,
       pedidoId: id,
       cliente: order.cliente || '',
-      distancia: 0,
-      transito: 'rapido',
+      distancia: parseFloat(order.distancia) || 0,
+      idas: parseInt(order.idas) || 1,
+      transito: order.transito || 'rapido',
       status: 'Em aberto',
       criadoEm: new Date().toISOString(),
       itens: [{
         nome: order.peca || '',
+        ambiente: order.ambiente || '',
         pedraId: '',
         largura: 0,
         comprimento: 0,
@@ -3125,16 +3127,21 @@ function abrirTelaOrcamentoPedido(id) {
         pecas: [{nome: order.peca||'', medidas:'', qtd:'1'}],
         tipoEntrega: order.tipoentrega === 'entrega_instalacao' ? 'instalacao' :
                      order.tipoentrega === 'so_entrega' ? 'entrega' : 'retirada',
-        areaBipolida: 0, horasAdicionais: 0,
-        compCorte45:0, compMontagem45:0, compPolimentoManual:0, compPolimentoAuto:0,
+        areaBipolida: 0, horasAdicionais: '00:00',
+        compCorte45:0, compMontagem45:0, compCorte45Interno:0,
+        compPolimentoManual:0, compPolimentoAuto:0,
         compMeioBoelado:0, compMeioBoeladoDuplo:0, compChanfrado45:0, compChanfradoDuplo:0,
         compMeiaCana:0, compMeiaCanaDuplo:0, compBoeladoDuplo:0, compChanfroAlongado:0,
         compCubEsculpida:0, compColagemTopo:0, compWaterJet:0,
         areaRebaixoItaliano:0, areaRebaixoAmericano:0,
         qtdFlush:0, qtdFlath:0, qtdRecortes:0, qtdCubas:0,
-        calc: null
+        custoAcessorios:0, custoInsumoInstal:0, custoArgamassa:0, custoAdicionais:0, custoCantoneira:0,
+        apoioMovel: false, calc: null
       }]
     };
+  } else {
+    // Atualiza distância do pedido caso tenha mudado
+    if (!orc.distancia && order.distancia) orc.distancia = parseFloat(order.distancia)||0;
   }
   orcamentoAtual = JSON.parse(JSON.stringify(orc));
 

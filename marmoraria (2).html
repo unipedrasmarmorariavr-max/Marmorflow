@@ -4464,6 +4464,154 @@ function imprimirOrcamento() {
   win.document.close();
 }
 // ─── SIMULADOR DE PREÇO ──────────────────────────────────────────────────────
+function abrirDescontoGeral(custoTotal, totalGeral, margem, lucroTotal, llh) {
+  // Abre modal com simulador completo igual ao Marmoprice
+  const tpp = orcamentoAtual?.itens?.reduce((s,it) => s+(it.calc?.tempoProdInterno||0), 0) || 1;
+
+  document.getElementById('body-desconto-geral').innerHTML = `
+    <div style="padding:4px 0 16px;">
+      <!-- RESUMO ATUAL -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;">
+        ${[
+          ['Custo Total', fmt(custoTotal), '#333'],
+          ['Valor de Venda Atual', fmt(totalGeral), '#006382'],
+          ['Lucro Líquido Atual', fmt(lucroTotal), lucroTotal>=0?'#2E7D32':'#dc3545'],
+          ['LLH Atual', fmt(llh)+'/h', '#8B6914'],
+        ].map(([l,v,c]) => `
+        <div style="background:#f8f8f8;border-radius:8px;padding:12px;text-align:center;">
+          <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">${l}</div>
+          <div style="font-size:16px;font-weight:700;color:${c};">${v}</div>
+        </div>`).join('')}
+      </div>
+
+      <!-- MODO -->
+      <div style="display:flex;gap:10px;margin-bottom:16px;">
+        <label style="flex:1;display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 16px;border-radius:8px;border:2px solid #006382;background:#e8f5f8;font-size:13px;font-weight:600;">
+          <input type="radio" name="dg-modo" value="total" checked onchange="calcDescontoGeral(${custoTotal},${tpp})" style="accent-color:#006382;width:16px;height:16px;"> Pelo Total (concorrente)
+        </label>
+        <label style="flex:1;display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 16px;border-radius:8px;border:2px solid #ddd;font-size:13px;font-weight:600;">
+          <input type="radio" name="dg-modo" value="margem" onchange="calcDescontoGeral(${custoTotal},${tpp})" style="accent-color:#006382;width:16px;height:16px;"> Pela Margem (%)
+        </label>
+      </div>
+
+      <!-- CAMPOS -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;display:block;margin-bottom:6px;" id="dg-label-valor">VALOR DO CONCORRENTE (R$)</label>
+          <input class="form-input" id="dg-valor" type="number" step="0.01" placeholder="0,00"
+            style="font-size:18px;font-weight:700;border:2px solid #006382;padding:12px;"
+            oninput="calcDescontoGeral(${custoTotal},${tpp})">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;display:block;margin-bottom:6px;" id="dg-label-margem">MARGEM RESULTANTE (%)</label>
+          <input class="form-input" id="dg-margem" type="number" step="0.001" placeholder="0,000"
+            style="font-size:18px;font-weight:700;padding:12px;"
+            oninput="calcDescontoGeral(${custoTotal},${tpp})">
+        </div>
+      </div>
+
+      <!-- RESULTADO -->
+      <div id="dg-resultado" style="display:none;border-radius:10px;padding:16px;border-left:5px solid #ccc;background:#f9f9f9;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:12px;color:#333;" id="dg-titulo"></div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px;">
+          <div style="text-align:center;">
+            <div style="font-size:10px;color:#888;text-transform:uppercase;margin-bottom:4px;">Meu Custo</div>
+            <div style="font-size:16px;font-weight:700;" id="dg-r-custo"></div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:10px;color:#888;text-transform:uppercase;margin-bottom:4px;">Valor Cobrado</div>
+            <div style="font-size:16px;font-weight:700;color:#006382;" id="dg-r-valor"></div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:10px;color:#888;text-transform:uppercase;margin-bottom:4px;">Lucro / Prejuízo</div>
+            <div style="font-size:18px;font-weight:900;" id="dg-r-lucro"></div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:10px;color:#888;text-transform:uppercase;margin-bottom:4px;">Margem Real</div>
+            <div style="font-size:18px;font-weight:900;" id="dg-r-margem"></div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+          <div style="text-align:center;background:white;border-radius:8px;padding:10px;">
+            <div style="font-size:10px;color:#888;text-transform:uppercase;margin-bottom:4px;">LLH (Lucro/Hora)</div>
+            <div style="font-size:16px;font-weight:700;color:#8B6914;" id="dg-r-llh"></div>
+          </div>
+          <div style="text-align:center;background:white;border-radius:8px;padding:10px;">
+            <div style="font-size:10px;color:#888;text-transform:uppercase;margin-bottom:4px;">Desconto s/ Preço Atual</div>
+            <div style="font-size:16px;font-weight:700;color:#dc3545;" id="dg-r-desconto"></div>
+          </div>
+        </div>
+        <div style="margin-top:8px;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;text-align:center;" id="dg-r-conclusao"></div>
+      </div>
+    </div>`;
+
+  openModal('modal-desconto-geral');
+  // Guarda o total atual para uso externo
+  window._dgTotalAtual = totalGeral;
+}
+
+function calcDescontoGeral(custoTotal, tpp) {
+  const modo = document.querySelector('input[name="dg-modo"]:checked')?.value || 'total';
+  const elValor = document.getElementById('dg-valor');
+  const elMargem = document.getElementById('dg-margem');
+  const elResultado = document.getElementById('dg-resultado');
+  const totalAtual = window._dgTotalAtual || custoTotal / 0.7;
+
+  let valorCobrado, margemCalc;
+
+  if (modo === 'total') {
+    document.getElementById('dg-label-valor').textContent = 'VALOR DO CONCORRENTE (R$)';
+    document.getElementById('dg-label-margem').textContent = 'MARGEM RESULTANTE (%)';
+    valorCobrado = parseFloat(elValor.value) || 0;
+    if (!valorCobrado) { elResultado.style.display='none'; return; }
+    margemCalc = custoTotal > 0 ? ((valorCobrado - custoTotal) / valorCobrado * 100) : 0;
+    elMargem.value = margemCalc.toFixed(3);
+  } else {
+    document.getElementById('dg-label-valor').textContent = 'VALOR RESULTANTE (R$)';
+    document.getElementById('dg-label-margem').textContent = 'MARGEM DESEJADA (%)';
+    margemCalc = parseFloat(elMargem.value) || 0;
+    if (!margemCalc && margemCalc !== 0) { elResultado.style.display='none'; return; }
+    valorCobrado = margemCalc < 100 ? custoTotal / (1 - margemCalc/100) : 0;
+    elValor.value = valorCobrado.toFixed(2);
+  }
+
+  if (!valorCobrado) { elResultado.style.display='none'; return; }
+
+  const lucro = valorCobrado - custoTotal;
+  const llhCalc = tpp > 0 ? lucro / tpp : 0;
+  const descPct = totalAtual > 0 ? ((totalAtual - valorCobrado) / totalAtual * 100) : 0;
+
+  // Define cor e status
+  let cor, status, bg;
+  if (margemCalc < 0) {
+    cor='#dc3545'; status='⛔ PREJUÍZO — abaixo do custo!'; bg='#fff5f5';
+  } else if (margemCalc < 15) {
+    cor='#FF6B35'; status='⚠️ Margem muito baixa — cuidado!'; bg='#fff8f5';
+  } else if (margemCalc < 25) {
+    cor='#F59E0B'; status='⚡ Margem abaixo da meta de 30%'; bg='#fffbf0';
+  } else if (margemCalc < 30) {
+    cor='#8B6914'; status='📊 Margem aceitável — um pouco abaixo do ideal'; bg='#fffbf0';
+  } else {
+    cor='#2E7D32'; status='✅ Margem boa — vale fechar!'; bg='#f0fff4';
+  }
+
+  elResultado.style.display = 'block';
+  elResultado.style.borderLeftColor = cor;
+  elResultado.style.background = bg;
+  document.getElementById('dg-titulo').textContent = modo==='total' ? `Análise: cobrir o concorrente com ${fmt(valorCobrado)}` : `Análise: vender com ${margemCalc.toFixed(1)}% de margem`;
+  document.getElementById('dg-r-custo').textContent = fmt(custoTotal);
+  document.getElementById('dg-r-valor').textContent = fmt(valorCobrado);
+  document.getElementById('dg-r-lucro').style.color = lucro >= 0 ? '#2E7D32' : '#dc3545';
+  document.getElementById('dg-r-lucro').textContent = (lucro>=0?'+':'')+fmt(lucro);
+  document.getElementById('dg-r-margem').style.color = cor;
+  document.getElementById('dg-r-margem').textContent = margemCalc.toFixed(2)+'%';
+  document.getElementById('dg-r-llh').textContent = fmt(llhCalc)+'/h';
+  document.getElementById('dg-r-desconto').textContent = descPct > 0 ? '-'+descPct.toFixed(1)+'%' : (descPct < 0 ? '+'+Math.abs(descPct).toFixed(1)+'%' : '0%');
+  document.getElementById('dg-r-conclusao').style.background = bg;
+  document.getElementById('dg-r-conclusao').style.color = cor;
+  document.getElementById('dg-r-conclusao').textContent = status;
+}
+
 function simularPreco(custoTotal) {
   const modo = (document.querySelector('input[name="sim-modo"]:checked')||{}).value || 'total';
   const elValor = document.getElementById('sim-valor');
@@ -4981,6 +5129,20 @@ function toggleOrigemOrc() {
 </script>
 
 <!-- MODAL CONFIRMAR DATA DE INSTALAÇÃO -->
+<!-- MODAL DESCONTO GERAL / SIMULADOR -->
+<div class="modal-overlay" id="modal-desconto-geral" style="align-items:flex-start;padding:20px;overflow-y:auto;">
+  <div class="modal" style="max-width:680px;width:100%;">
+    <div class="modal-header" style="background:#1a2332;color:white;border-radius:12px 12px 0 0;padding:16px 20px;">
+      <div style="font-size:16px;font-weight:700;">🧮 Desconto Geral — Simulador de Preço</div>
+      <button class="modal-close" onclick="closeModal('modal-desconto-geral')" style="color:white;opacity:0.7;">✕</button>
+    </div>
+    <div class="modal-body" id="body-desconto-geral" style="padding:20px;"></div>
+    <div class="modal-footer" style="justify-content:flex-end;">
+      <button class="btn-secondary" onclick="closeModal('modal-desconto-geral')">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL PRODUTO/CHAPA -->
 <div class="modal-overlay" id="modal-produto" style="align-items:flex-start;padding:20px;overflow-y:auto;">
   <div class="modal" style="max-width:600px;width:100%;">

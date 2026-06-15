@@ -1159,6 +1159,8 @@ function entrar() {
   currentUser = perfil;
   selectedProfile = perfil;
   perfilAtual = perfil;
+  // Carrega pedras padrão do Marmoprice se ainda não existirem
+  inicializarPedrasPadrao();
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   document.getElementById('app').style.flexDirection = 'column';
@@ -2292,13 +2294,114 @@ function resolverPedra(pedras, item) {
 
 // Grupos de dificuldade
 const GRUPOS_DIFICULDADE = [
-  { id: 1, nome: 'Grupo 1 — Granitos',               dif: 1.0, margem: 30, quebra: 11.11 },
-  { id: 2, nome: 'Grupo 2 — Mármores',               dif: 1.3, margem: 30, quebra: 15    },
-  { id: 3, nome: 'Grupo 3 — Quartzitos',             dif: 2.0, margem: 40, quebra: 20    },
-  { id: 4, nome: 'Grupo 4 — Quartzitos Quebradiços', dif: 2.5, margem: 40, quebra: 25    },
-  { id: 5, nome: 'Grupo 5 — Ultracompactos',         dif: 2.3, margem: 40, quebra: 15    },
-  { id: 6, nome: 'Grupo 6 — Quartzos',               dif: 1.0, margem: 40, quebra: 11.11 },
+  { id: 1233, nome: 'Grupo 1 — Granitos e Quartzos',    dif: 1.0, margem: 30, quebra: 10 },
+  { id: 1234, nome: 'Grupo 2 — Mármores',               dif: 1.3, margem: 30, quebra: 15 },
+  { id: 1232, nome: 'Grupo 3 — Quartzitos',             dif: 2.0, margem: 40, quebra: 20 },
+  { id: 1230, nome: 'Grupo 4 — Quartzitos Quebradiços', dif: 2.5, margem: 40, quebra: 25 },
+  { id: 1231, nome: 'Grupo 5 — Ultracompactos',         dif: 2.3, margem: 40, quebra: 15 },
 ];
+
+// Pedras pré-cadastradas do Marmoprice (87 chapas importadas)
+const PEDRAS_PADRAO_MARMOPRICE = [
+  { id: 'MP-85619', nome: 'ARENITO MARROM ABSOLUTO', custoM2: 240, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-93724', nome: 'BLACK TAURUS GUIDONI', custoM2: 510, quebra: 15, margem: 40, grupoId: 1233 },
+  { id: 'MP-93725', nome: 'BRANCO ROMANO GUIDONI', custoM2: 220, quebra: 15, margem: 40, grupoId: 1233 },
+  { id: 'MP-110726', nome: 'CALACATA MILANO GUIDONI', custoM2: 420, quebra: 10, margem: 40, grupoId: 1233 },
+  { id: 'MP-93719', nome: 'CALÁCATA LAZARO GUIDONI', custoM2: 550, quebra: 15, margem: 40, grupoId: 1233 },
+  { id: 'MP-97449', nome: 'CALÁCATTA MILANO GUIDONI', custoM2: 555, quebra: 15, margem: 40, grupoId: 1233 },
+  { id: 'MP-97450', nome: 'CALÁCATTA MISTY GUIDONI', custoM2: 555, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-93720', nome: 'CELESTIAL BLUE GUIDONI', custoM2: 1250, quebra: 15, margem: 40, grupoId: 1233 },
+  { id: 'MP-85709', nome: 'CINZA CORUMBÁ BIPOLIDO', custoM2: 175, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-93716', nome: 'CONCRET GUIDONI', custoM2: 390, quebra: 15, margem: 40, grupoId: 1233 },
+  { id: 'MP-93723', nome: 'ESMERALD GUIDONI', custoM2: 630, quebra: 15, margem: 40, grupoId: 1233 },
+  { id: 'MP-150125', nome: 'FERRARA BLACK GUIDONI', custoM2: 500, quebra: 10, margem: 40, grupoId: 1233 },
+  { id: 'MP-108993', nome: 'GRANITO AMARELO ORNAMENTAL BIPOLIDO', custoM2: 185, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-108995', nome: 'GRANITO AMARELO ORNAMENTAL EFEITO COURO', custoM2: 215, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-85731', nome: 'GRANITO AMARELO ORNAMENTAL FLAMEADO', custoM2: 235, quebra: 30, margem: 10, grupoId: 1233 },
+  { id: 'MP-108994', nome: 'GRANITO AMARELO ORNAMENTAL LEVIGADO', custoM2: 185, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85642', nome: 'GRANITO AMARELO ORNAMENTAL POLIDO', custoM2: 135, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-109000', nome: 'GRANITO AMARELO OURO BRASIL BIPOLIDO', custoM2: 195, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-109003', nome: 'GRANITO AMARELO OURO BRASIL FLAMEADO', custoM2: 245, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-86313', nome: 'GRANITO AMARELO OURO BRASIL POLIDO', custoM2: 145, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85757', nome: 'GRANITO ANDORINHA BIPOLIDO', custoM2: 145, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85645', nome: 'GRANITO BRANCO DALLAS', custoM2: 115, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85656', nome: 'GRANITO BRANCO DALLAS BIPOLIDO', custoM2: 165, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85737', nome: 'GRANITO BRANCO DALLAS EFEITO COURO', custoM2: 195, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-85640', nome: 'GRANITO BRANCO DALLAS FLAMEADO', custoM2: 215, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-109025', nome: 'GRANITO BRANCO DALLAS LEVIGADO', custoM2: 165, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-85702', nome: 'GRANITO BRANCO ITAÚNAS BIPOLIDO', custoM2: 235, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-85664', nome: 'GRANITO BRANCO ITAÚNAS ESCOVADO', custoM2: 270, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-86316', nome: 'GRANITO BRANCO ITAÚNAS LEVIGADO', custoM2: 235, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85648', nome: 'GRANITO BRANCO ITAÚNAS POLIDO', custoM2: 190, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85717', nome: 'GRANITO BRANCO SIENA', custoM2: 240, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-109011', nome: 'GRANITO BRANCO SIENA BIPOLIDO', custoM2: 290, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-109014', nome: 'GRANITO BRANCO SIENA EFEITO COURO', custoM2: 320, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-109012', nome: 'GRANITO BRANCO SIENA FLAMEADO', custoM2: 340, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85705', nome: 'GRANITO CINZA ANDORINHA EFEITO COURO', custoM2: 175, quebra: 10, margem: 25, grupoId: 1233 },
+  { id: 'MP-108984', nome: 'GRANITO CINZA ANDORINHA LEVIGADO', custoM2: 145, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85638', nome: 'GRANITO CINZA ANDORINHA POLIDO', custoM2: 95, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-108986', nome: 'GRANITO CINZA CASTELO BIPOLIDO', custoM2: 145, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85658', nome: 'GRANITO CINZA CASTELO EFEITO COURO', custoM2: 175, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-108989', nome: 'GRANITO CINZA CASTELO FLAMEADO', custoM2: 195, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85735', nome: 'GRANITO CINZA CASTELO LEVIGADO', custoM2: 145, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85680', nome: 'GRANITO CINZA CASTELO POLIDO', custoM2: 95, quebra: 10, margem: 20, grupoId: 1233 },
+  { id: 'MP-108991', nome: 'GRANITO CINZA CORUMBÁ EFEITO COURO', custoM2: 205, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-85701', nome: 'GRANITO CINZA CORUMBÁ FLAMEADO', custoM2: 225, quebra: 15, margem: 35, grupoId: 1233 },
+  { id: 'MP-108990', nome: 'GRANITO CINZA CORUMBÁ LEVIGADO', custoM2: 175, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-85636', nome: 'GRANITO CINZA CORUMBÁ POLIDO', custoM2: 125, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85635', nome: 'GRANITO CINZA OCRE', custoM2: 95, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85634', nome: 'GRANITO CINZA OCRE BIPOLIDO', custoM2: 145, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85771', nome: 'GRANITO CINZA OCRE EFEITO COURO', custoM2: 175, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85740', nome: 'GRANITO CINZA OCRE FLAMEADO', custoM2: 195, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85770', nome: 'GRANITO CINZA OCRE LEVIGADO', custoM2: 145, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-89976', nome: 'GRANITO ITAÚNAS FLAMEADO', custoM2: 285, quebra: 20, margem: 30, grupoId: 1233 },
+  { id: 'MP-109002', nome: 'GRANITO OURO BRASIL EFEITO COURO', custoM2: 225, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85575', nome: 'GRANITO PRETO ABSOLUTO', custoM2: 550, quebra: 15, margem: 30, grupoId: 1232 },
+  { id: 'MP-85714', nome: 'GRANITO PRETO ABSOLUTO ESCOVADO', custoM2: 620, quebra: 20, margem: 30, grupoId: 1233 },
+  { id: 'MP-85715', nome: 'GRANITO PRETO SEMI ABSOLUTO', custoM2: 420, quebra: 15, margem: 25, grupoId: 1233 },
+  { id: 'MP-85732', nome: 'GRANITO PRETO SÃO GABRIEL BIPOLIDO', custoM2: 230, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-85663', nome: 'GRANITO PRETO SÃO GABRIEL ESCOVADO', custoM2: 260, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-109026', nome: 'GRANITO PRETO SÃO GABRIEL FLAMEADO', custoM2: 380, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85649', nome: 'GRANITO PRETO SÃO GABRIEL POLIDO', custoM2: 180, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85775', nome: 'GRANITO VERDE PÉROLA/UBATUBA ESCOVADO', custoM2: 160, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85768', nome: 'GRANITO VERDE PÉROLA/UBATUBA LEVIGADO', custoM2: 160, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-130321', nome: 'GRANITO VERDE UBATUBA', custoM2: 110, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-85659', nome: 'GRANITO VERDE UBATUBA BIPOLIDO', custoM2: 160, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-85671', nome: 'GRANITO VERDE UBATUBA COURO', custoM2: 160, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-85727', nome: 'GRANITO VERDE UBATUBA FLAMEADO', custoM2: 210, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-108983', nome: 'GRANTINO CINZA ANDORINHA FLAMEADO', custoM2: 195, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-109013', nome: 'GRANTIO BRANCO SIENA LEVIGADO', custoM2: 290, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-93715', nome: 'LIGTH SHADOW GUIDONI', custoM2: 390, quebra: 15, margem: 40, grupoId: 1233 },
+  { id: 'MP-126786', nome: 'MARROM ABSOLUTO', custoM2: 320, quebra: 20, margem: 40, grupoId: 1233 },
+  { id: 'MP-93717', nome: 'NOCCIOLA GUIDONI', custoM2: 390, quebra: 15, margem: 40, grupoId: 1233 },
+  { id: 'MP-85774', nome: 'PRETO SÃO GABRIEL COMERCIAL', custoM2: 180, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-85736', nome: 'PRETO SÃO GABRIEL MARTELADO', custoM2: 300, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85647', nome: 'PRIME BEGE FANTASY', custoM2: 300, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85654', nome: 'PRIME BRANCO CALACATTA', custoM2: 400, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-85690', nome: 'PRIME BRANCO PIGHES', custoM2: 400, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-85696', nome: 'PRIME CALACATTA GOLD', custoM2: 400, quebra: 25, margem: 30, grupoId: 1233 },
+  { id: 'MP-85653', nome: 'PRIME SUPER BRANCO', custoM2: 200, quebra: 15, margem: 30, grupoId: 1233 },
+  { id: 'MP-85627', nome: 'QUARTZO BEGE ABSOLUTO', custoM2: 540, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-93712', nome: 'QUARTZO BRANCO GUIDONI', custoM2: 390, quebra: 15, margem: 40, grupoId: 1233 },
+  { id: 'MP-85633', nome: 'QUARTZO MARROM ABSOLUTO', custoM2: 600, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85761', nome: 'QUARTZO PRETO ABSOLUTO', custoM2: 560, quebra: 20, margem: 30, grupoId: 1233 },
+  { id: 'MP-122141', nome: 'QUARTZO PRETO ABSOLUTO GUIDONI', custoM2: 390, quebra: 15, margem: 40, grupoId: 1233 },
+  { id: 'MP-97452', nome: 'QUARTZO ROYAL GUIDONI', custoM2: 390, quebra: 15, margem: 40, grupoId: 1233 },
+  { id: 'MP-110725', nome: 'QUARTZO SUGGAR GUIDONI', custoM2: 360, quebra: 10, margem: 40, grupoId: 1233 },
+  { id: 'MP-85760', nome: 'SÃO GABRIEL LEVIGADO', custoM2: 400, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-85762', nome: 'SÃO GABRIEL ROCKWAVE', custoM2: 390, quebra: 15, margem: 20, grupoId: 1233 },
+];
+
+// Inicializa pedras padrão no localStorage se ainda não existirem
+function inicializarPedrasPadrao() {
+  const existentes = getPedrasCadastradas();
+  const idsPadrao = PEDRAS_PADRAO_MARMOPRICE.map(p => p.id);
+  const temPadrao = existentes.some(p => idsPadrao.includes(p.id));
+  if (!temPadrao) {
+    const todas = [...PEDRAS_PADRAO_MARMOPRICE, ...existentes.filter(p => !idsPadrao.includes(p.id))];
+    salvarPedras(todas);
+  }
+}
 
 // Orçamentos salvos
 let orcamentos = [];
@@ -2342,8 +2445,6 @@ function calcularItem(item, pedra, cfg) {
   const { custoHoraEmpresa, custoHoraHomem } = calcularCustoHora();
 
   // ── ÁREA ─────────────────────────────────────────────────────────────────
-  // Marmoprice: arredonda cada peça p/ 2 casas antes de somar (produção)
-  //             usa área exata para instalação/deslocamento
   let areaBase = 0, areaBaseExata = 0;
   if (item.pecas && item.pecas.length > 0 && item.pecas.some(p => (p.medidas||'').trim())) {
     item.pecas.forEach(p => {
@@ -2354,20 +2455,20 @@ function calcularItem(item, pedra, cfg) {
       areaBase += Math.round(exata * 100) / 100;
     });
   } else {
-    areaBase = (parseFloat(item.largura)||0) * (parseFloat(item.comprimento)||0) * (parseInt(item.quantidade)||1);
+    areaBase = (parseFloat(item.largura)||0)*(parseFloat(item.comprimento)||0)*(parseInt(item.quantidade)||1);
     areaBaseExata = areaBase;
   }
 
   // ── MATÉRIA PRIMA ─────────────────────────────────────────────────────────
-  // Marmoprice: quebra = 1/9 = 11.111% (FIXO, independe do cadastro)
+  // CONFIRMADO: usa percentual_perda do cadastro (campo quebra)
   const custoM2 = parseFloat(item.custoM2Override) || pedra.custoM2 || 0;
-  const quebraFrac = 1/9; // 11.111% — confirmado pela engenharia reversa
-  const areaComQuebra = areaBase * (1 + quebraFrac);
+  const quebraPct = parseFloat(item.quebraOverride ?? pedra.quebra ?? 10);
+  const areaComQuebra = areaBase * (1 + quebraPct / 100);
   const m2Extra = parseFloat(item.m2ChapaNaoComercial)||0;
   const custoMaterial = (areaComQuebra + m2Extra) * custoM2;
 
   // ── COMPRIMENTOS ─────────────────────────────────────────────────────────
-  // "Comprimento de Acabamento 45° Saia" → alimenta TANTO corte45 QUANTO montagem45
+  // "Comprimento de Acabamento 45° Saia" → CORTE e MONTAGEM (compSaia)
   const compSaia      = parseFloat(item.compCorte45)||0;
   const compMont45Sep = parseFloat(item.compMontagem45)||0;
 
@@ -2376,27 +2477,27 @@ function calcularItem(item, pedra, cfg) {
   const tCorte45          = compSaia   * (cfg.corte45||0.2)             * dif;
   const tCorte45Interno   = (parseFloat(item.compCorte45Interno)||0) * (cfg.corte45||0.2) * dif;
   const tMontagem45       = (compSaia + compMont45Sep) * (cfg.montagem45||1.2) * dif;
-  const tBipolimento      = (parseFloat(item.areaBipolida)||0)         * (cfg.areaBipolada||2)          * dif;
-  const tPolimentoManual  = (parseFloat(item.compPolimentoManual)||0)  * (cfg.polimentoManual||0.2)     * dif;
+  const tBipolimento      = (parseFloat(item.areaBipolida)||0)         * (cfg.areaBipolada||2)           * dif;
+  const tPolimentoManual  = (parseFloat(item.compPolimentoManual)||0)  * (cfg.polimentoManual||0.2)      * dif;
   const tPolimentoAuto    = (parseFloat(item.compPolimentoAuto)||0)    * (cfg.polimentoAutomatico||0.15) * dif;
-  const tCubEsculpida     = (parseFloat(item.compCubEsculpida)||0)     * (cfg.cubEsculpida||3)          * dif;
-  const tMeioBoelado      = (parseFloat(item.compMeioBoelado)||0)      * (cfg.meioBoelado||0.5)         * dif;
-  const tMeioBoeladoDuplo = (parseFloat(item.compMeioBoeladoDuplo)||0) * (cfg.meioBoeladoDuplo||1)      * dif;
-  const tChanfrado45      = (parseFloat(item.compChanfrado45)||0)      * (cfg.chanfrado45||1)            * dif;
-  const tMeiaCana         = (parseFloat(item.compMeiaCana)||0)         * (cfg.meiaCana||1)              * dif;
-  const tMeiaCanaD        = (parseFloat(item.compMeiaCanaDuplo)||0)    * (cfg.meiaCanaDuplo||2)         * dif;
-  const tBoeladoDuplo     = (parseFloat(item.compBoeladoDuplo)||0)     * (cfg.boeladoDuplo||2)          * dif;
-  const tChanfradoDuplo   = (parseFloat(item.compChanfradoDuplo)||0)   * (cfg.chanfradoDuplo||2)        * dif;
-  const tChanfroAlongado  = (parseFloat(item.compChanfroAlongado)||0)  * (cfg.chanfroAlongado||2)       * dif;
-  const tColagemTopo      = (parseFloat(item.compColagemTopo)||0)      * (cfg.colagemTopo||0.25)        * dif;
-  const tRebaixoItaliano  = (parseFloat(item.areaRebaixoItaliano)||0)  * (cfg.rebaixoItaliano||8)       * dif;
-  const tRebaixoAmericano = (parseFloat(item.areaRebaixoAmericano)||0) * (cfg.rebaixoAmericano||2)      * dif;
-  const tFlush            = (parseInt(item.qtdFlush)||0)               * (cfg.sistemaFlush||3)          * dif;
-  const tFlath            = (parseInt(item.qtdFlath)||0)               * (cfg.sistemaFlath||3)          * dif;
+  const tCubEsculpida     = (parseFloat(item.compCubEsculpida)||0)     * (cfg.cubEsculpida||0.25)        * dif;
+  const tMeioBoelado      = (parseFloat(item.compMeioBoelado)||0)      * (cfg.meioBoelado||0.5)          * dif;
+  const tMeioBoeladoDuplo = (parseFloat(item.compMeioBoeladoDuplo)||0) * (cfg.meioBoeladoDuplo||1)       * dif;
+  const tChanfrado45      = (parseFloat(item.compChanfrado45)||0)      * (cfg.chanfrado45||1)             * dif;
+  const tMeiaCana         = (parseFloat(item.compMeiaCana)||0)         * (cfg.meiaCana||1)               * dif;
+  const tMeiaCanaD        = (parseFloat(item.compMeiaCanaDuplo)||0)    * (cfg.meiaCanaDuplo||2)          * dif;
+  const tBoeladoDuplo     = (parseFloat(item.compBoeladoDuplo)||0)     * (cfg.boeladoDuplo||2)           * dif;
+  const tChanfradoDuplo   = (parseFloat(item.compChanfradoDuplo)||0)   * (cfg.chanfradoDuplo||2)         * dif;
+  const tChanfroAlongado  = (parseFloat(item.compChanfroAlongado)||0)  * (cfg.chanfroAlongado||2)        * dif;
+  const tColagemTopo      = (parseFloat(item.compColagemTopo)||0)      * (cfg.colagemTopo||0.25)         * dif;
+  const tRebaixoItaliano  = (parseFloat(item.areaRebaixoItaliano)||0)  * (cfg.rebaixoItaliano||8)        * dif;
+  const tRebaixoAmericano = (parseFloat(item.areaRebaixoAmericano)||0) * (cfg.rebaixoAmericano||2)       * dif;
+  const tFlush            = (parseInt(item.qtdFlush)||0)               * (cfg.sistemaFlush||3)           * dif;
+  const tFlath            = (parseInt(item.qtdFlath)||0)               * (cfg.sistemaFlath||3)           * dif;
   const tRecortes         = (parseInt(item.qtdRecortes)||0)            * (cfg.recortesSemPolimento||0.5) * dif;
-  const tCubas            = (parseInt(item.qtdCubas)||0)               * (cfg.corteDPolimento||2)       * dif;
+  const tCubas            = (parseInt(item.qtdCubas)||0)               * (cfg.corteDPolimento||2)        * dif;
 
-  // Horas adicionais — aceita "HH:MM" ou decimal
+  // Horas adicionais
   let tHorasAdicionais = 0;
   const ha = String(item.horasAdicionais||'');
   if (ha.includes(':')) { const p=ha.split(':'); tHorasAdicionais=(parseInt(p[0])||0)+(parseInt(p[1])||0)/60; }
@@ -2408,28 +2509,27 @@ function calcularItem(item, pedra, cfg) {
     tColagemTopo+tRebaixoItaliano+tRebaixoAmericano+tFlush+tFlath+tRecortes+tCubas+tHorasAdicionais;
 
   // ── INSTALAÇÃO/DESLOCAMENTO ───────────────────────────────────────────────
-  // Marmoprice: instalação = tempo digitado * nPessoas * custoHora
-  //             deslocamento = (dist*2*1min*idas/60) * nPessoas * custoHora
+  // CONFIRMADO pelo Marmoprice: NÃO multiplica por nPessoas!
+  // custo_instalacao = tempo * custoHora (apenas)
+  // custo_deslocamento = (dist*2*1min*idas/60) * custoHora (apenas)
   const distancia = parseFloat(item.distancia)||0;
   const idas = parseInt(item.idas)||1;
   const minKm = cfg.transito==='lento'?(cfg.minKmLento||3):cfg.transito==='intermediario'?(cfg.minKmIntermediario||2):(cfg.minKmRapido||1);
   const nPessoas = parseInt(item.nPessoasInstal)||(cfg.pessoasInstalacao||2);
 
-  // Tempo de deslocamento (ida e volta)
   const tempoDeslocamento = (distancia * 2 * minKm * idas) / 60;
 
-  // Tempo de instalação — usa o digitado pelo usuário (igual Marmoprice)
-  // Se não digitado, calcula automaticamente como estimativa
+  // Tempo de instalação — digitado pelo usuário OU calculado automaticamente
   let tempoInstalEntrega = 0;
   const tim = String(item.tempoInstalManual||'').trim();
   if (tim && tim !== '0' && tim !== '00:00' && tim !== '') {
     if (tim.includes(':')) { const p=tim.split(':'); tempoInstalEntrega=(parseInt(p[0])||0)+(parseInt(p[1])||0)/60; }
     else { tempoInstalEntrega = parseFloat(tim)||0; }
   } else if (item.tipoEntrega==='instalacao') {
-    // Estimativa: área * fator * nPessoas (configurável)
-    tempoInstalEntrega = areaBaseExata * (cfg.horasInstalacaoM2||1.5) * nPessoas;
+    // Estimativa automática baseada na área
+    tempoInstalEntrega = areaBaseExata * (cfg.horasInstalacaoM2||1.5);
   } else if (item.tipoEntrega==='entrega') {
-    tempoInstalEntrega = areaBaseExata * (cfg.horasEntregaM2||0.33) * (cfg.pessoasEntrega||1);
+    tempoInstalEntrega = areaBaseExata * (cfg.horasEntregaM2||0.33);
   }
 
   const tempoDescargaInstalTotal = tempoDeslocamento + tempoInstalEntrega;
@@ -2449,36 +2549,35 @@ function calcularItem(item, pedra, cfg) {
   const custoFuros           = (tFlush+tFlath+tRecortes+tCubas)*custoHoraEmpresa;
   const custoWaterJet        = (parseFloat(item.compWaterJet)||0)*(cfg.waterJet||20);
   const custoHorasAdic       = tHorasAdicionais*custoHoraEmpresa;
-  // Instalação: tempo * nPessoas * custoHora (Marmoprice confirmado)
-  const custoInstalacao      = tempoInstalEntrega * nPessoas * custoHoraEmpresa;
-  // Deslocamento: tempo * nPessoas * custoHora
-  const custoDeslocamento    = tempoDeslocamento * nPessoas * custoHoraEmpresa;
-  const custoCombustivel     = (distancia*2*idas/(cfg.consumoCombustivel||8))*(cfg.custoCombustivel||7);
 
-  // Custos manuais
+  // CONFIRMADO: instalação e deslocamento = tempo * custoHora (SEM multiplicar nPessoas)
+  const custoInstalacao   = tempoInstalEntrega * custoHoraEmpresa;
+  const custoDeslocamento = tempoDeslocamento  * custoHoraEmpresa;
+  const custoCombustivel  = (distancia*2*idas/(cfg.consumoCombustivel||8))*(cfg.custoCombustivel||7);
+
   const custoAcessorios   = parseFloat(item.custoAcessorios)||0;
   const custoArgamassa    = parseFloat(item.custoArgamassa)||0;
   const custoAdicionais   = parseFloat(item.custoAdicionais)||0;
   const custoCantoneira   = parseFloat(item.custoCantoneira)||0;
   const custoInsumoInstal = parseFloat(item.custoInsumoInstal)||0;
 
-  // ── TOTAL E PREÇO FINAL ───────────────────────────────────────────────────
+  // ── TOTAL ─────────────────────────────────────────────────────────────────
   const custosOp = custoMaterial+custoInstalacao+custoDeslocamento+custoCombustivel+
     custoSerra+custoCorte45+custoCorte45Interno+custoMontagem45+
     custoPolimento+custoBipolimento+custoAcabamentos+custoEspeciais+
     custoFuros+custoWaterJet+custoHorasAdic+
     custoAcessorios+custoArgamassa+custoAdicionais+custoCantoneira+custoInsumoInstal;
 
-  // Insumos = 5% sobre PREÇO DE VENDA (confirmado Marmoprice)
-  const margemFrac = (parseFloat(item.margemOverride)||pedra.margem||30)/100;
-  const precoOps   = custosOp / (1 - margemFrac);
+  // CONFIRMADO: insumos = 5% sobre preço de venda dos custos operacionais
+  const margemFrac   = (parseFloat(item.margemOverride??pedra.margem??30))/100;
+  const precoOps     = custosOp / (1 - margemFrac);
   const custoInsumos = precoOps * ((cfg.custoInsumo||5) / 100);
   const custoTotal   = custosOp + custoInsumos;
   const precoFinal   = custoTotal / (1 - margemFrac);
   const lucroLiquido = precoFinal - custoTotal;
 
   return {
-    areaBase, areaBaseExata, areaComQuebra, custoMaterial, custoM2,
+    areaBase, areaBaseExata, areaComQuebra, custoMaterial, custoM2, quebraPct,
     custoSerra, custoCorte45, custoCorte45Interno, custoMontagem45,
     custoMontagem: custoCorte45+custoMontagem45,
     custoBipolimento, custoPolimento, custoPolimentoManual, custoPolimentoAuto,
@@ -2489,6 +2588,7 @@ function calcularItem(item, pedra, cfg) {
     margem: margemFrac*100,
     tempoProdInterno, tempoProdTotal: tempoProdInterno,
     tempoDescargaInstalTotal, tempoDeslocamento, tempoInstalEntrega,
+    nPessoas,
     tSerra, tCorte45, tCorte45Interno, tMontagem45, tBipolimento,
     tPolimentoManual, tPolimentoAuto, tCubas, tRecortes, tFlush, tFlath,
     tRebaixoItaliano, tRebaixoAmericano, tColagemTopo, tMeioBoelado,
@@ -3810,10 +3910,10 @@ function recalcularTelaOrc(orderId) {
     // Atualiza tempo instalação (se não editado manualmente)
     const elTI = document.getElementById('campo-tempo-instal-' + idx);
     if (elTI && (!item.tempoInstalManual || item.tempoInstalManual==='' || item.tempoInstalManual==='0' || item.tempoInstalManual==='00:00')) {
-      const nP = parseInt(item.nPessoasInstal)||cfg.pessoasInstalacao||2;
+      // Confirmado Marmoprice: instalação = tempo * custoHora (sem multiplicar nPessoas)
       let tI = 0;
-      if (item.tipoEntrega==='instalacao') tI = areaBaseExataLocal*(cfg.horasInstalacaoM2||1.5)*nP;
-      else if (item.tipoEntrega==='entrega') tI = areaBaseExataLocal*(cfg.horasEntregaM2||0.33)*(cfg.pessoasEntrega||1);
+      if (item.tipoEntrega==='instalacao') tI = areaBaseExataLocal*(cfg.horasInstalacaoM2||1.5);
+      else if (item.tipoEntrega==='entrega') tI = areaBaseExataLocal*(cfg.horasEntregaM2||0.33);
       elTI.value = fmtH(tI);
     }
 
@@ -4471,73 +4571,35 @@ function renderProdutos() {
   const el = document.getElementById('produtos-content');
   if (!el) return;
   const pedras = getPedrasCadastradas();
+  const grupos = GRUPOS_DIFICULDADE;
 
   el.innerHTML = `
   <div style="padding:24px;max-width:1100px;margin:0 auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
-      <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);">🪨 Produtos</div>
-      <button onclick="abrirFormProduto()" style="background:var(--gold);color:white;border:none;padding:10px 22px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">+ Cadastrar Produto</button>
+      <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);">🪨 Produtos / Chapas <span style="font-size:14px;color:#888;font-family:sans-serif;font-weight:400;">(${pedras.length} chapas)</span></div>
+      <button onclick="abrirFormProduto()" style="background:var(--gold);color:white;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">+ Adicionar Nova Chapa</button>
     </div>
-
-    <!-- Tabela de produtos -->
-    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
-      <div style="display:grid;grid-template-columns:40px 80px 2fr 1fr 1fr 1fr 2fr 120px;padding:12px 16px;background:var(--stone);color:white;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;gap:8px;align-items:center;">
-        <div></div>
-        <div>Foto</div>
-        <div>Nome</div>
-        <div>Custo (m²)</div>
-        <div>Quebra (%)</div>
-        <div>Margem (%)</div>
-        <div>Grupo</div>
-        <div>Ações</div>
+    <div style="background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);overflow:hidden;">
+      <div style="display:grid;grid-template-columns:2.5fr 1fr 1fr 1fr 2fr 100px;gap:8px;padding:10px 16px;background:var(--stone);color:white;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">
+        <div>Nome</div><div>Custo/m²</div><div>Quebra</div><div>Margem</div><div>Grupo</div><div>Ações</div>
       </div>
-      ${pedras.length === 0 ? `
-      <div style="text-align:center;padding:60px;color:var(--stone-light);">
-        <div style="font-size:48px;margin-bottom:16px;">🪨</div>
-        <div style="font-size:16px;font-weight:600;">Nenhum produto cadastrado</div>
-        <div style="font-size:13px;margin-top:8px;">Cadastre as chapas que você trabalha</div>
-      </div>` :
-      pedras.map((p, i) => {
-        const grupo = GRUPOS_DIFICULDADE.find(g => g.id === p.grupoId);
-        return `
-        <div style="display:grid;grid-template-columns:40px 80px 2fr 1fr 1fr 1fr 2fr 120px;padding:14px 16px;border-bottom:1px solid var(--cream-dark);gap:8px;align-items:center;${i%2===0?'background:white;':'background:#fafaf8;'}">
-          <div style="font-size:13px;color:var(--stone-light);">${i+1}</div>
-          <div>
-            ${p.foto ? `<img src="${p.foto}" style="width:60px;height:45px;object-fit:cover;border-radius:6px;">` :
-            `<div style="width:60px;height:45px;background:var(--cream-dark);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:18px;">🪨</div>`}
-          </div>
-          <div>
-            <div style="font-size:14px;font-weight:600;color:var(--stone);">${p.nome}</div>
-            ${p.fornecedor ? `<div style="font-size:11px;color:var(--stone-light);">${p.fornecedor}</div>` : ''}
-          </div>
-          <div style="font-size:14px;font-weight:600;color:var(--stone);">R$ ${(p.custoM2||0).toFixed(2).replace('.',',')}</div>
-          <div style="font-size:14px;color:var(--stone);">${p.quebra||10}%</div>
-          <div style="font-size:14px;color:var(--stone);">${p.margem||30}%</div>
-          <div>
-            <div style="font-size:12px;color:var(--stone);">${grupo?.nome||'—'}</div>
-            <div style="font-size:11px;color:var(--stone-light);">Dif. ${grupo?.dif||1}</div>
-          </div>
-          <div style="display:flex;gap:6px;">
-            <button onclick="abrirFormProduto('${p.id}')" style="background:var(--cream);border:1.5px solid var(--cream-dark);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--stone);">✏️</button>
-            <button onclick="deletarProduto('${p.id}')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">🗑</button>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
-  </div>
-
-  <!-- Modal Produto -->
-  <div class="modal-overlay" id="modal-produto" style="align-items:flex-start;padding:20px;overflow-y:auto;">
-    <div class="modal" style="max-width:680px;margin:0 auto;">
-      <div class="modal-header">
-        <div class="modal-title" id="titulo-modal-produto">Cadastrar Produto</div>
-        <button class="modal-close" onclick="closeModal('modal-produto')">✕</button>
-      </div>
-      <div class="modal-body" id="body-modal-produto"></div>
-      <div class="modal-footer">
-        <button class="btn-secondary" onclick="closeModal('modal-produto')">Cancelar</button>
-        <button class="btn-primary" onclick="salvarProduto()" style="width:auto;padding:10px 28px;">💾 Salvar</button>
-      </div>
+      ${pedras.length === 0
+        ? `<div style="padding:40px;text-align:center;color:#999;font-size:14px;">Nenhuma chapa cadastrada. Faça login para carregar as chapas automaticamente.</div>`
+        : pedras.map(p => {
+            const grupo = grupos.find(g => g.id === p.grupoId);
+            return `<div style="display:grid;grid-template-columns:2.5fr 1fr 1fr 1fr 2fr 100px;gap:8px;padding:11px 16px;border-bottom:1px solid #f0f0f0;align-items:center;font-size:13px;">
+              <div style="font-weight:600;color:#222;">${p.nome}</div>
+              <div style="font-weight:700;color:#006382;">R$ ${(p.custoM2||0).toFixed(2).replace('.',',')}</div>
+              <div>${p.quebra??10}%</div>
+              <div>${p.margem||30}%</div>
+              <div style="font-size:11px;color:#666;">${grupo?.nome||'—'}</div>
+              <div style="display:flex;gap:6px;">
+                <button onclick="abrirFormProduto('${p.id}')" style="background:#006382;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;">✏️</button>
+                <button onclick="deletarProduto('${p.id}')" style="background:#dc3545;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;">🗑</button>
+              </div>
+            </div>`;
+          }).join('')
+      }
     </div>
   </div>`;
 }
@@ -4545,94 +4607,81 @@ function renderProdutos() {
 function abrirFormProduto(id) {
   const pedras = getPedrasCadastradas();
   const p = id ? pedras.find(x => x.id === id) : null;
-  document.getElementById('titulo-modal-produto').textContent = p ? 'Editar Produto' : 'Cadastrar Produto';
+  const isPadrao = id && PEDRAS_PADRAO_MARMOPRICE.some(x => x.id === id);
 
+  document.getElementById('titulo-modal-produto').textContent = p ? 'Editar Chapa' : 'Adicionar Nova Chapa';
   document.getElementById('body-modal-produto').innerHTML = `
-    <input type="hidden" id="prod-edit-id" value="${id||''}">
-    <div style="margin-bottom:12px;">
-      <div style="display:flex;gap:12px;margin-bottom:4px;">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
-          <input type="radio" name="prod-tipo" value="materia-prima" ${!p||p.tipo==='materia-prima'?'checked':''} style="accent-color:var(--gold);"> Matéria-prima
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
-          <input type="radio" name="prod-tipo" value="insumo" ${p?.tipo==='insumo'?'checked':''} style="accent-color:var(--gold);"> Insumo
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
-          <input type="radio" name="prod-tipo" value="acessorio" ${p?.tipo==='acessorio'?'checked':''} style="accent-color:var(--gold);"> Acessório
-        </label>
-      </div>
-    </div>
-    <div class="form-grid">
-      <div class="form-group span2">
-        <label class="form-label">Nome Comercial *</label>
-        <input class="form-input" id="prod-nome" value="${p?.nome||''}" placeholder="Ex: Granito Preto São Gabriel Polido">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group" style="grid-column:1/-1;">
+        <label class="form-label">Nome da Chapa *</label>
+        <input class="form-input" id="prod-nome" value="${p?.nome||''}" placeholder="Ex: GRANITO PRETO SÃO GABRIEL">
       </div>
       <div class="form-group">
-        <label class="form-label">Custo da Matéria-Prima (m²) + Frete *</label>
+        <label class="form-label">Custo por m² (R$) *</label>
         <input class="form-input" id="prod-custo" type="number" step="0.01" value="${p?.custoM2||''}" placeholder="0,00" oninput="calcPreviewProduto()">
       </div>
       <div class="form-group">
-        <label class="form-label">Margem de Lucro (%) *</label>
-        <input class="form-input" id="prod-margem" type="number" step="0.1" value="${p?.margem||30}" oninput="calcPreviewProduto();this.dataset.editado='sim'">
+        <label class="form-label">Quebra (%)</label>
+        <input class="form-input" id="prod-quebra" type="number" step="0.1" value="${p?.quebra??10}" oninput="calcPreviewProduto()">
       </div>
       <div class="form-group">
-        <label class="form-label">Margem de Quebra (%)</label>
-        <input class="form-input" id="prod-quebra" type="number" step="0.1" value="${p?.quebra||10}" oninput="calcPreviewProduto()">
+        <label class="form-label">Margem de Lucro (%)</label>
+        <input class="form-input" id="prod-margem" type="number" step="0.1" value="${p?.margem||30}" oninput="calcPreviewProduto()">
       </div>
       <div class="form-group">
-        <label class="form-label">Tipo de Rocha *</label>
+        <label class="form-label">Grupo / Tipo de Rocha</label>
         <select class="form-select" id="prod-grupo" onchange="ajustarMargemPorGrupo(this.value);calcPreviewProduto()">
-          ${GRUPOS_DIFICULDADE.map(g => `<option value="${g.id}" ${(p?.grupoId||1)===g.id?'selected':''}>${g.nome}</option>`).join('')}
+          ${GRUPOS_DIFICULDADE.map(g => `<option value="${g.id}" ${(p?.grupoId||GRUPOS_DIFICULDADE[0].id)===g.id?'selected':''}>${g.nome} (dif: ${g.dif})</option>`).join('')}
         </select>
       </div>
-      <div class="form-group span2">
-        <label class="form-label">SKU / Código</label>
-        <input class="form-input" id="prod-sku" value="${p?.sku||''}">
-      </div>
-      <div class="form-group span2">
+      <div class="form-group">
         <label class="form-label">Fornecedor</label>
         <input class="form-input" id="prod-fornecedor" value="${p?.fornecedor||''}">
       </div>
     </div>
-    <!-- PREVIEW CALCULADO -->
+    <input type="hidden" id="prod-edit-id" value="${id||''}">
+
+    <!-- PREVIEW DE PREÇO -->
     <div id="prod-preview" style="margin-top:16px;background:#1a2332;color:white;border-radius:10px;padding:16px;display:none;">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;opacity:0.7;margin-bottom:12px;">📊 Preview de Preço (sem custos de produção)</div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;opacity:0.7;margin-bottom:12px;">📊 Preview de Preço por m² (estimativa sem custos de produção)</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
-        <div><div style="font-size:10px;opacity:0.6;">Custo c/ Quebra</div><div id="prev-custo-quebra" style="font-size:16px;font-weight:700;">—</div></div>
-        <div><div style="font-size:10px;opacity:0.6;">Margem</div><div id="prev-margem" style="font-size:16px;font-weight:700;color:#FFD700;">—</div></div>
-        <div><div style="font-size:10px;opacity:0.6;">Preço de Venda (m²)</div><div id="prev-preco" style="font-size:18px;font-weight:900;color:#FFD700;">—</div></div>
-        <div><div style="font-size:10px;opacity:0.6;">Lucro por m²</div><div id="prev-lucro" style="font-size:16px;font-weight:700;color:#A8D5A2;">—</div></div>
+        <div><div style="font-size:10px;opacity:0.6;">Custo c/ Quebra</div><div id="prev-custo-quebra" style="font-size:15px;font-weight:700;">—</div></div>
+        <div><div style="font-size:10px;opacity:0.6;">Margem</div><div id="prev-margem" style="font-size:15px;font-weight:700;color:#FFD700;">—</div></div>
+        <div><div style="font-size:10px;opacity:0.6;">Preço de Venda/m²</div><div id="prev-preco" style="font-size:18px;font-weight:900;color:#FFD700;">—</div></div>
+        <div><div style="font-size:10px;opacity:0.6;">Lucro por m²</div><div id="prev-lucro" style="font-size:15px;font-weight:700;color:#A8D5A2;">—</div></div>
       </div>
-      <div style="margin-top:10px;font-size:11px;opacity:0.5;">⚠️ Valor estimado — o preço real no orçamento inclui custos de produção, instalação e transporte.</div>
     </div>`;
 
+  // Dispara o preview se já tem custo
+  if (p?.custoM2) setTimeout(calcPreviewProduto, 50);
   openModal('modal-produto');
 }
 
 function salvarProduto() {
-  const nome = document.getElementById('prod-nome').value.trim();
-  const custo = parseFloat(document.getElementById('prod-custo').value.replace(',','.')) || 0;
-  const margem = parseFloat(document.getElementById('prod-margem').value) || 30;
-  const quebra = parseFloat(document.getElementById('prod-quebra').value) || 10;
-  const grupoId = parseInt(document.getElementById('prod-grupo').value) || 1;
-  const sku = document.getElementById('prod-sku')?.value || '';
-  const fornecedor = document.getElementById('prod-fornecedor')?.value || '';
-  const tipo = (document.querySelector('input[name="prod-tipo"]:checked')||{}).value || 'materia-prima';
-  const editId = document.getElementById('prod-edit-id').value;
+  const nome = (document.getElementById('prod-nome')?.value||'').trim().toUpperCase();
+  const custo = parseFloat((document.getElementById('prod-custo')?.value||'0').replace(',','.'));
+  const quebra = parseFloat(document.getElementById('prod-quebra')?.value)||10;
+  const margem = parseFloat(document.getElementById('prod-margem')?.value)||30;
+  const grupoId = parseInt(document.getElementById('prod-grupo')?.value)||GRUPOS_DIFICULDADE[0].id;
+  const fornecedor = document.getElementById('prod-fornecedor')?.value||'';
+  const editId = document.getElementById('prod-edit-id')?.value||'';
 
-  if (!nome) { showNotif('Preencha o nome do produto!', 'error'); return; }
-  if (!custo || custo <= 0) { showNotif('Informe o custo/m² maior que zero!', 'error'); return; }
+  if (!nome) { showNotif('Preencha o nome da chapa!', 'error'); return; }
+  if (!custo || custo <= 0) { showNotif('Informe o custo por m² (maior que zero)!', 'error'); return; }
 
-  let pedras = getPedrasCadastradas();
+  const pedras = getPedrasCadastradas();
   if (editId) {
-    pedras = pedras.map(p => p.id === editId ? {...p, nome, custoM2: custo, margem, quebra, grupoId, sku, fornecedor, tipo} : p);
+    const idx = pedras.findIndex(p => p.id === editId);
+    if (idx >= 0) {
+      pedras[idx] = { ...pedras[idx], nome, custoM2: custo, quebra, margem, grupoId, fornecedor };
+    }
   } else {
-    pedras.push({ id: 'p' + Date.now(), nome, custoM2: custo, margem, quebra, grupoId, sku, fornecedor, tipo });
+    pedras.unshift({ id: 'CUSTOM-' + Date.now(), nome, custoM2: custo, quebra, margem, grupoId, fornecedor });
   }
   salvarPedras(pedras);
   closeModal('modal-produto');
   renderProdutos();
-  showNotif('Produto salvo! ✓', 'success');
+  showNotif(editId ? 'Chapa atualizada! ✓' : 'Chapa adicionada! ✓', 'success');
 }
 
 function calcPreviewProduto() {
@@ -4653,112 +4702,15 @@ function calcPreviewProduto() {
 }
 
 function deletarProduto(id) {
-  if (!confirm('Excluir este produto?')) return;
+  const isPadrao = PEDRAS_PADRAO_MARMOPRICE.some(p => p.id === id);
+  const msg = isPadrao
+    ? 'Esta é uma chapa padrão do Marmoprice. Tem certeza que quer excluir? Ela pode ser restaurada fazendo logout e login novamente.'
+    : 'Excluir esta chapa?';
+  if (!confirm(msg)) return;
   salvarPedras(getPedrasCadastradas().filter(p => p.id !== id));
   renderProdutos();
+  showNotif('Chapa excluída', 'error');
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// ABA CONFIGURAÇÕES — Grupo de Gastos + Tempos de Produção
-// ═══════════════════════════════════════════════════════════════════════════
-
-// Gastos padrão (igual Marmoprice)
-const GASTOS_DEFAULT = {
-  producao: {
-    nome: 'PRODUÇÃO',
-    subgrupos: [
-      {
-        nome: 'CUSTOS FIXOS',
-        itens: [
-          { nome: 'ALUGUEL', valor: 4200.00 },
-          { nome: 'FOLHA DE PAGAMENTO', valor: 13552.00 },
-          { nome: '13º SALÁRIO', valor: 1129.30 },
-          { nome: 'FÉRIAS', valor: 376.44 },
-          { nome: '(FGTS)', valor: 1084.13 },
-          { nome: 'INSS (GPS)', valor: 0 },
-          { nome: 'SINDICATO (CONTRIBUIÇÃO)', valor: 0 },
-          { nome: 'SEGURANÇA PRIVADA', valor: 0 },
-          { nome: 'ASSISTENCIA SAUDE', valor: 0 },
-          { nome: 'LIMPEZA ENTULHO', valor: 250.00 },
-          { nome: 'SEGURO DE VIDA', valor: 0 },
-          { nome: 'SEGURO DE VEÍCULOS', valor: 0 },
-        ]
-      },
-      {
-        nome: 'CUSTOS VARIÁVEIS',
-        itens: [
-          { nome: 'ALIMENTAÇÃO (VALE, CESTA E...)', valor: 1920.00 },
-          { nome: 'ENERGIA ELÉTRICA', valor: 552.69 },
-          { nome: 'ÁGUA', valor: 91.08 },
-          { nome: 'COMBUSTÍVEL', valor: 1569.00 },
-          { nome: 'COMISSÕES DA PRODUÇÃO', valor: 0 },
-          { nome: 'EMBALAGENS', valor: 0 },
-          { nome: 'MANUTENÇÃO DE MÁQUINA', valor: 250.00 },
-          { nome: 'FERRAMENTAS DE TRABALHO', valor: 70.92 },
-          { nome: 'MANUTENÇÃO, REVISÕES, IP...', valor: 70.00 },
-        ]
-      },
-      {
-        nome: 'INVESTIMENTOS',
-        itens: [
-          { nome: 'ESTRUTURA', valor: 0 },
-          { nome: 'FERRAMENTAS', valor: 0 },
-          { nome: 'MÁQUINAS', valor: 0 },
-          { nome: 'SEGURANÇA', valor: 0 },
-          { nome: 'VEÍCULOS', valor: 0 },
-        ]
-      }
-    ]
-  },
-  comercial: {
-    nome: 'COMERCIAL E ADM',
-    subgrupos: [
-      {
-        nome: 'DESPESAS FIXAS',
-        itens: [
-          { nome: 'FOLHA DE PAGAMENTO', valor: 5142.26 },
-          { nome: '13º SALÁRIO', valor: 428.52 },
-          { nome: 'FÉRIAS', valor: 142.84 },
-          { nome: 'FGTS SOBRE FOLHA DE PAGAMENTO', valor: 444.33 },
-          { nome: 'CONTABILIDADE', valor: 1400.00 },
-          { nome: 'IPTU', valor: 316.17 },
-          { nome: 'PROLABORE SÓCIOS', valor: 3000.00 },
-          { nome: 'SOFTWARE (MARMOPRICE)', valor: 784.00 },
-          { nome: 'CELULAR', valor: 409.41 },
-          { nome: 'INTERNET', valor: 293.39 },
-          { nome: 'FAXINEIRA', valor: 0 },
-        ]
-      },
-      {
-        nome: 'DESPESAS VARIÁVEIS',
-        itens: [
-          { nome: 'DOAÇÕES E BRINDES', valor: 0 },
-          { nome: 'MATERIAL DE ESCRITÓRIO', valor: 20.00 },
-          { nome: 'PRODUTOS DE HIGIENE E LIM...', valor: 100.00 },
-          { nome: 'MARKETING', valor: 4000.00 },
-          { nome: 'SIMPLES NACIONAL', valor: 7000.00 },
-          { nome: 'DESPESAS FINANCEIRAS (BAN...)', valor: 120.00 },
-          { nome: 'UNIFORMES', valor: 75.00 },
-          { nome: 'EPI', valor: 100.00 },
-          { nome: 'VIAGENS E REPRESENTAÇÕES', valor: 60.00 },
-          { nome: 'RESCISÕES', valor: 0 },
-          { nome: 'DIVIDA', valor: 6105.62 },
-        ]
-      },
-      {
-        nome: 'INVESTIMENTOS',
-        itens: [
-          { nome: 'ESTRUTURA', valor: 0 },
-          { nome: 'FERRAMENTAS DIGITAIS', valor: 0 },
-          { nome: 'MOSTRAS DE ARQ', valor: 0 },
-          { nome: 'SEGURANÇA', valor: 0 },
-          { nome: 'TECNOLOGIA', valor: 0 },
-          { nome: 'VEÍCULOS', valor: 0 },
-        ]
-      }
-    ]
-  }
-};
 
 function getGastos() {
   try {

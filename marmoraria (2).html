@@ -2336,65 +2336,67 @@ function calcularCustoHora() {
 }
 
 function calcularItem(item, pedra, cfg) {
-  if (!pedra || !item) return null;
-  const grupo = GRUPOS_DIFICULDADE.find(g => g.id === pedra.grupoId) || GRUPOS_DIFICULDADE[0];
-  const dif = grupo.dif;
+  if (!pedra) return null;
+  const grupo = GRUPOS_DIFICULDADE.find(g => g.id === (pedra.grupoId||1)) || GRUPOS_DIFICULDADE[0];
+  const dif = grupo.dif || 1;
   const { custoHoraEmpresa, custoHoraHomem } = calcularCustoHora();
 
-  // ÁREA: arredonda peça a peça para produção; sem arredondar para instalação (igual Marmoprice)
+  // ── ÁREA ─────────────────────────────────────────────────────────────────
+  // Marmoprice: arredonda cada peça p/ 2 casas antes de somar (produção)
+  //             usa área exata para instalação/deslocamento
   let areaBase = 0, areaBaseExata = 0;
-  if (item.pecas && item.pecas.length > 0 && item.pecas.some(p => p.medidas)) {
+  if (item.pecas && item.pecas.length > 0 && item.pecas.some(p => (p.medidas||'').trim())) {
     item.pecas.forEach(p => {
-      const raw = (p.medidas||'').toLowerCase().replace(/,/g,'.').replace(/\s/g,'');
-      const parts = raw.split('x');
-      const l = parseFloat(parts[0])||0;
-      const c = parseFloat(parts[1])||0;
+      const m = parseMedidas(p.medidas);
       const qtd = parseInt(p.qtd)||1;
-      const exata = l * c * qtd;
+      const exata = m.l * m.c * qtd;
       areaBaseExata += exata;
       areaBase += Math.round(exata * 100) / 100;
     });
   } else {
-    areaBase = (item.largura||0) * (item.comprimento||0) * (item.quantidade||1);
+    areaBase = (parseFloat(item.largura)||0) * (parseFloat(item.comprimento)||0) * (parseInt(item.quantidade)||1);
     areaBaseExata = areaBase;
   }
 
-  const quebraUsar = parseFloat(item.quebraOverride) || pedra.quebra || 11.11;
-  const margemUsar = parseFloat(item.margemOverride) || pedra.margem || 30;
-  const areaComQuebra = areaBase * (1 + quebraUsar / 100);
-  const m2Extra = parseFloat(item.m2ChapaNaoComercial)||0;
+  // ── MATÉRIA PRIMA ─────────────────────────────────────────────────────────
+  // Marmoprice: quebra = 1/9 = 11.111% (FIXO, independe do cadastro)
   const custoM2 = parseFloat(item.custoM2Override) || pedra.custoM2 || 0;
+  const quebraFrac = 1/9; // 11.111% — confirmado pela engenharia reversa
+  const areaComQuebra = areaBase * (1 + quebraFrac);
+  const m2Extra = parseFloat(item.m2ChapaNaoComercial)||0;
   const custoMaterial = (areaComQuebra + m2Extra) * custoM2;
 
-  // "Comprimento de Acabamento 45° Saia" alimenta CORTE e MONTAGEM (igual Marmoprice)
+  // ── COMPRIMENTOS ─────────────────────────────────────────────────────────
+  // "Comprimento de Acabamento 45° Saia" → alimenta TANTO corte45 QUANTO montagem45
   const compSaia      = parseFloat(item.compCorte45)||0;
   const compMont45Sep = parseFloat(item.compMontagem45)||0;
-  const compMontagem45Total = compSaia + compMont45Sep;
 
-  // TEMPOS DE PRODUÇÃO INTERNA
-  const tSerra            = areaBase * (cfg.serra||0.8) * dif;
-  const tCorte45          = compSaia * (cfg.corte45||0.2) * dif;
+  // ── TEMPOS DE PRODUÇÃO INTERNA (hr) ──────────────────────────────────────
+  const tSerra            = areaBase   * (cfg.serra||0.8)               * dif;
+  const tCorte45          = compSaia   * (cfg.corte45||0.2)             * dif;
   const tCorte45Interno   = (parseFloat(item.compCorte45Interno)||0) * (cfg.corte45||0.2) * dif;
-  const tMontagem45       = compMontagem45Total * (cfg.montagem45||1.2) * dif;
-  const tBipolimento      = (parseFloat(item.areaBipolida)||0) * (cfg.areaBipolida||2) * dif;
-  const tPolimentoManual  = (parseFloat(item.compPolimentoManual)||0) * (cfg.polimentoManual||0.2) * dif;
-  const tPolimentoAuto    = (parseFloat(item.compPolimentoAuto)||0) * (cfg.polimentoAutomatico||0.15) * dif;
-  const tCubEsculpida     = (parseFloat(item.compCubEsculpida)||0) * (cfg.cubEsculpida||3) * dif;
-  const tMeioBoelado      = (parseFloat(item.compMeioBoelado)||0) * (cfg.meioBoelado||0.5) * dif;
-  const tMeioBoeladoDuplo = (parseFloat(item.compMeioBoeladoDuplo)||0) * (cfg.meioBoeladoDuplo||1) * dif;
-  const tChanfrado45      = (parseFloat(item.compChanfrado45)||0) * (cfg.chanfrado45||1) * dif;
-  const tMeiaCana         = (parseFloat(item.compMeiaCana)||0) * (cfg.meiaCana||1) * dif;
-  const tMeiaCanaD        = (parseFloat(item.compMeiaCanaDuplo)||0) * (cfg.meiaCanaDuplo||2) * dif;
-  const tBoeladoDuplo     = (parseFloat(item.compBoeladoDuplo)||0) * (cfg.boeladoDuplo||2) * dif;
-  const tChanfradoDuplo   = (parseFloat(item.compChanfradoDuplo)||0) * (cfg.chanfradoDuplo||2) * dif;
-  const tChanfroAlongado  = (parseFloat(item.compChanfroAlongado)||0) * (cfg.chanfroAlongado||2) * dif;
-  const tColagemTopo      = (parseFloat(item.compColagemTopo)||0) * (cfg.colagemTopo||0.25) * dif;
-  const tRebaixoItaliano  = (parseFloat(item.areaRebaixoItaliano)||0) * (cfg.rebaixoItaliano||8) * dif;
-  const tRebaixoAmericano = (parseFloat(item.areaRebaixoAmericano)||0) * (cfg.rebaixoAmericano||2) * dif;
-  const tFlush            = (parseInt(item.qtdFlush)||0) * (cfg.sistemaFlush||3) * dif;
-  const tFlath            = (parseInt(item.qtdFlath)||0) * (cfg.sistemaFlath||3) * dif;
-  const tRecortes         = (parseInt(item.qtdRecortes)||0) * (cfg.recortesSemPolimento||0.5) * dif;
-  const tCubas            = (parseInt(item.qtdCubas)||0) * (cfg.corteDPolimento||2) * dif;
+  const tMontagem45       = (compSaia + compMont45Sep) * (cfg.montagem45||1.2) * dif;
+  const tBipolimento      = (parseFloat(item.areaBipolida)||0)         * (cfg.areaBipolada||2)          * dif;
+  const tPolimentoManual  = (parseFloat(item.compPolimentoManual)||0)  * (cfg.polimentoManual||0.2)     * dif;
+  const tPolimentoAuto    = (parseFloat(item.compPolimentoAuto)||0)    * (cfg.polimentoAutomatico||0.15) * dif;
+  const tCubEsculpida     = (parseFloat(item.compCubEsculpida)||0)     * (cfg.cubEsculpida||3)          * dif;
+  const tMeioBoelado      = (parseFloat(item.compMeioBoelado)||0)      * (cfg.meioBoelado||0.5)         * dif;
+  const tMeioBoeladoDuplo = (parseFloat(item.compMeioBoeladoDuplo)||0) * (cfg.meioBoeladoDuplo||1)      * dif;
+  const tChanfrado45      = (parseFloat(item.compChanfrado45)||0)      * (cfg.chanfrado45||1)            * dif;
+  const tMeiaCana         = (parseFloat(item.compMeiaCana)||0)         * (cfg.meiaCana||1)              * dif;
+  const tMeiaCanaD        = (parseFloat(item.compMeiaCanaDuplo)||0)    * (cfg.meiaCanaDuplo||2)         * dif;
+  const tBoeladoDuplo     = (parseFloat(item.compBoeladoDuplo)||0)     * (cfg.boeladoDuplo||2)          * dif;
+  const tChanfradoDuplo   = (parseFloat(item.compChanfradoDuplo)||0)   * (cfg.chanfradoDuplo||2)        * dif;
+  const tChanfroAlongado  = (parseFloat(item.compChanfroAlongado)||0)  * (cfg.chanfroAlongado||2)       * dif;
+  const tColagemTopo      = (parseFloat(item.compColagemTopo)||0)      * (cfg.colagemTopo||0.25)        * dif;
+  const tRebaixoItaliano  = (parseFloat(item.areaRebaixoItaliano)||0)  * (cfg.rebaixoItaliano||8)       * dif;
+  const tRebaixoAmericano = (parseFloat(item.areaRebaixoAmericano)||0) * (cfg.rebaixoAmericano||2)      * dif;
+  const tFlush            = (parseInt(item.qtdFlush)||0)               * (cfg.sistemaFlush||3)          * dif;
+  const tFlath            = (parseInt(item.qtdFlath)||0)               * (cfg.sistemaFlath||3)          * dif;
+  const tRecortes         = (parseInt(item.qtdRecortes)||0)            * (cfg.recortesSemPolimento||0.5) * dif;
+  const tCubas            = (parseInt(item.qtdCubas)||0)               * (cfg.corteDPolimento||2)       * dif;
+
+  // Horas adicionais — aceita "HH:MM" ou decimal
   let tHorasAdicionais = 0;
   const ha = String(item.horasAdicionais||'');
   if (ha.includes(':')) { const p=ha.split(':'); tHorasAdicionais=(parseInt(p[0])||0)+(parseInt(p[1])||0)/60; }
@@ -2405,32 +2407,41 @@ function calcularItem(item, pedra, cfg) {
     tChanfrado45+tMeiaCana+tMeiaCanaD+tBoeladoDuplo+tChanfradoDuplo+tChanfroAlongado+
     tColagemTopo+tRebaixoItaliano+tRebaixoAmericano+tFlush+tFlath+tRecortes+tCubas+tHorasAdicionais;
 
-  // INSTALAÇÃO (usa areaBaseExata, igual Marmoprice)
+  // ── INSTALAÇÃO/DESLOCAMENTO ───────────────────────────────────────────────
+  // Marmoprice: instalação = tempo digitado * nPessoas * custoHora
+  //             deslocamento = (dist*2*1min*idas/60) * nPessoas * custoHora
   const distancia = parseFloat(item.distancia)||0;
   const idas = parseInt(item.idas)||1;
   const minKm = cfg.transito==='lento'?(cfg.minKmLento||3):cfg.transito==='intermediario'?(cfg.minKmIntermediario||2):(cfg.minKmRapido||1);
   const nPessoas = parseInt(item.nPessoasInstal)||(cfg.pessoasInstalacao||2);
+
+  // Tempo de deslocamento (ida e volta)
   const tempoDeslocamento = (distancia * 2 * minKm * idas) / 60;
+
+  // Tempo de instalação — usa o digitado pelo usuário (igual Marmoprice)
+  // Se não digitado, calcula automaticamente como estimativa
   let tempoInstalEntrega = 0;
-  const tim = String(item.tempoInstalManual||'');
-  if (tim && tim !== '0' && tim !== '') {
+  const tim = String(item.tempoInstalManual||'').trim();
+  if (tim && tim !== '0' && tim !== '00:00' && tim !== '') {
     if (tim.includes(':')) { const p=tim.split(':'); tempoInstalEntrega=(parseInt(p[0])||0)+(parseInt(p[1])||0)/60; }
     else { tempoInstalEntrega = parseFloat(tim)||0; }
   } else if (item.tipoEntrega==='instalacao') {
+    // Estimativa: área * fator * nPessoas (configurável)
     tempoInstalEntrega = areaBaseExata * (cfg.horasInstalacaoM2||1.5) * nPessoas;
   } else if (item.tipoEntrega==='entrega') {
     tempoInstalEntrega = areaBaseExata * (cfg.horasEntregaM2||0.33) * (cfg.pessoasEntrega||1);
   }
+
   const tempoDescargaInstalTotal = tempoDeslocamento + tempoInstalEntrega;
 
-  // CUSTOS
-  const custoSerra           = tSerra * custoHoraEmpresa;
-  const custoCorte45         = tCorte45 * custoHoraEmpresa;
-  const custoCorte45Interno  = tCorte45Interno * custoHoraEmpresa;
-  const custoMontagem45      = tMontagem45 * custoHoraEmpresa;
-  const custoBipolimento     = tBipolimento * custoHoraEmpresa;
+  // ── CUSTOS ───────────────────────────────────────────────────────────────
+  const custoSerra           = tSerra           * custoHoraEmpresa;
+  const custoCorte45         = tCorte45         * custoHoraEmpresa;
+  const custoCorte45Interno  = tCorte45Interno  * custoHoraEmpresa;
+  const custoMontagem45      = tMontagem45      * custoHoraEmpresa;
+  const custoBipolimento     = tBipolimento     * custoHoraEmpresa;
   const custoPolimentoManual = tPolimentoManual * custoHoraEmpresa;
-  const custoPolimentoAuto   = tPolimentoAuto * custoHoraEmpresa;
+  const custoPolimentoAuto   = tPolimentoAuto   * custoHoraEmpresa;
   const custoPolimento       = custoPolimentoManual + custoPolimentoAuto;
   const custoAcabamentos     = (tCubEsculpida+tMeioBoelado+tMeioBoeladoDuplo+tChanfrado45+
     tMeiaCana+tMeiaCanaD+tBoeladoDuplo+tChanfradoDuplo+tChanfroAlongado+tColagemTopo)*custoHoraEmpresa;
@@ -2438,37 +2449,44 @@ function calcularItem(item, pedra, cfg) {
   const custoFuros           = (tFlush+tFlath+tRecortes+tCubas)*custoHoraEmpresa;
   const custoWaterJet        = (parseFloat(item.compWaterJet)||0)*(cfg.waterJet||20);
   const custoHorasAdic       = tHorasAdicionais*custoHoraEmpresa;
-  const custoInstalacao      = tempoInstalEntrega*custoHoraEmpresa;
-  const custoDeslocamento    = tempoDeslocamento*custoHoraEmpresa*nPessoas;
+  // Instalação: tempo * nPessoas * custoHora (Marmoprice confirmado)
+  const custoInstalacao      = tempoInstalEntrega * nPessoas * custoHoraEmpresa;
+  // Deslocamento: tempo * nPessoas * custoHora
+  const custoDeslocamento    = tempoDeslocamento * nPessoas * custoHoraEmpresa;
   const custoCombustivel     = (distancia*2*idas/(cfg.consumoCombustivel||8))*(cfg.custoCombustivel||7);
-  const custoAcessorios      = parseFloat(item.custoAcessorios)||0;
-  const custoArgamassa       = parseFloat(item.custoArgamassa)||0;
-  const custoAdicionais      = parseFloat(item.custoAdicionais)||0;
-  const custoCantoneira      = parseFloat(item.custoCantoneira)||0;
-  const custoInsumoInstal    = parseFloat(item.custoInsumoInstal)||0;
 
+  // Custos manuais
+  const custoAcessorios   = parseFloat(item.custoAcessorios)||0;
+  const custoArgamassa    = parseFloat(item.custoArgamassa)||0;
+  const custoAdicionais   = parseFloat(item.custoAdicionais)||0;
+  const custoCantoneira   = parseFloat(item.custoCantoneira)||0;
+  const custoInsumoInstal = parseFloat(item.custoInsumoInstal)||0;
+
+  // ── TOTAL E PREÇO FINAL ───────────────────────────────────────────────────
   const custosOp = custoMaterial+custoInstalacao+custoDeslocamento+custoCombustivel+
     custoSerra+custoCorte45+custoCorte45Interno+custoMontagem45+
     custoPolimento+custoBipolimento+custoAcabamentos+custoEspeciais+
     custoFuros+custoWaterJet+custoHorasAdic+
     custoAcessorios+custoArgamassa+custoAdicionais+custoCantoneira+custoInsumoInstal;
 
-  const margem = margemUsar/100;
-  const precoOps = custosOp/(1-margem);
-  const custoInsumos = precoOps*((cfg.custoInsumo||5)/100);
-  const custoTotal = custosOp+custoInsumos;
-  const precoFinal = custoTotal/(1-margem);
-  const lucroLiquido = precoFinal-custoTotal;
+  // Insumos = 5% sobre PREÇO DE VENDA (confirmado Marmoprice)
+  const margemFrac = (parseFloat(item.margemOverride)||pedra.margem||30)/100;
+  const precoOps   = custosOp / (1 - margemFrac);
+  const custoInsumos = precoOps * ((cfg.custoInsumo||5) / 100);
+  const custoTotal   = custosOp + custoInsumos;
+  const precoFinal   = custoTotal / (1 - margemFrac);
+  const lucroLiquido = precoFinal - custoTotal;
 
   return {
-    areaBase, areaBaseExata, areaComQuebra, custoMaterial,
+    areaBase, areaBaseExata, areaComQuebra, custoMaterial, custoM2,
     custoSerra, custoCorte45, custoCorte45Interno, custoMontagem45,
     custoMontagem: custoCorte45+custoMontagem45,
     custoBipolimento, custoPolimento, custoPolimentoManual, custoPolimentoAuto,
     custoAcabamentos, custoEspeciais, custoFuros, custoWaterJet,
     custoHorasAdic, custoDeslocamento, custoCombustivel, custoInstalacao,
     custoAcessorios, custoArgamassa, custoAdicionais, custoCantoneira, custoInsumoInstal,
-    custoInsumos, custoTotal, lucroLiquido, precoFinal, margem: margemUsar,
+    custoInsumos, custoTotal, lucroLiquido, precoFinal,
+    margem: margemFrac*100,
     tempoProdInterno, tempoProdTotal: tempoProdInterno,
     tempoDescargaInstalTotal, tempoDeslocamento, tempoInstalEntrega,
     tSerra, tCorte45, tCorte45Interno, tMontagem45, tBipolimento,
@@ -3396,91 +3414,160 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
   const pedra = resolverPedra(pedras, item);
   const calc = item.calc;
   const areaTotal = calcAreaTotalItem(item);
+  const fmtH = v => { const h=Math.floor(v||0); const m=Math.round(((v||0)-h)*60); return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); };
+  const { custoHoraEmpresa, custoHoraHomem } = calcularCustoHora();
 
-  const custoHoraRef = calcularCustoHora().custoHoraEmpresa;
-  const custoTemposHTML = calc ? `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;">
-      <div style="border:1px solid #e0e0e0;border-radius:6px 0 0 6px;overflow:hidden;">
-        <div style="background:#2C2C2C;color:white;padding:8px 12px;font-size:11px;font-weight:700;">CUSTOS DO ORÇAMENTO</div>
-        ${[
-          ['Custo de Matéria Prima com Quebra', calc.custoMaterial],
-          ['Custo de Descarga/Instalação', calc.custoInstalacao],
-          ['Custo de Deslocamento', calc.custoDeslocamento],
-          ['Custo de Combustível', calc.custoCombustivel],
-          ['Custo Serra', calc.custoSerra],
-          ['Custo Corte/Montagem 45°', calc.custoMontagem||0],
-          ['Custo Polimento', calc.custoPolimento],
-          ['Custo Área Bipolimento', calc.custoBipolimento],
-          ['Custo Acabamentos', calc.custoAcabamentos],
-          ['Custo Esp./Furos', (calc.custoEspeciais||0)+(calc.custoFuros||0)],
-          ['Custo Water Jet', calc.custoWaterJet],
-          ['Custo Horas Adicionais', calc.custoHorasAdic],
-          ['Custo de Insumos (5% s/venda)', calc.custoInsumos],
-          ['Custo Total do Produto', calc.custoTotal],
-        ].map(([nome, val]) => `<div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #f0f0f0;font-size:12px;">
-          <span style="color:#555;">${nome}</span><span style="font-weight:600;">${fmt(val||0)}</span>
-        </div>`).join('')}
-        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#f9f9f9;font-size:12px;font-weight:700;">
-          <span>Lucro Líquido</span><span style="color:#2E7D32;">${fmt(calc.lucroLiquido)}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #e0e0e0;font-size:13px;font-weight:700;">
-          <span>Preço Final do Produto</span><span style="color:#006382;">${fmt(calc.precoFinal)}</span>
-        </div>
-      </div>
-      <div style="border:1px solid #e0e0e0;border-left:none;border-radius:0 6px 6px 0;overflow:hidden;">
-        <div style="background:#2C2C2C;color:white;padding:8px 12px;font-size:11px;font-weight:700;">TEMPO PRODUTIVO (hr)</div>
-        ${[
-          ['Tempo de Serra', custoHoraRef > 0 ? (calc.custoSerra / custoHoraRef) : 0],
-          ['Tempo Corte/Montagem 45°', custoHoraRef > 0 ? ((calc.custoMontagem||0) / custoHoraRef) : 0],
-          ['Tempo Polimento', custoHoraRef > 0 ? ((calc.custoPolimento||0) / custoHoraRef) : 0],
-          ['Tempo Bipolimento', custoHoraRef > 0 ? ((calc.custoBipolimento||0) / custoHoraRef) : 0],
-          ['Tempo Acabamentos', custoHoraRef > 0 ? ((calc.custoAcabamentos||0) / custoHoraRef) : 0],
-          ['Tempo Esp./Furos', custoHoraRef > 0 ? (((calc.custoEspeciais||0)+(calc.custoFuros||0)) / custoHoraRef) : 0],
-          ['Tempo Hrs Adicionais', calc.tempoProdTotal && custoHoraRef > 0 ? ((calc.custoHorasAdic||0) / custoHoraRef) : 0],
-          ['Tempo Total de Produção', calc.tempoProdTotal||0],
-        ].map(([nome, val]) => {
-          const h = Math.floor(val||0); const m = Math.round(((val||0)-h)*60);
-          const isTotal = nome.includes('Total');
-          return `<div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #f0f0f0;font-size:12px;${isTotal?'background:#f9f9f9;font-weight:700;':''}">\n            <span style="color:${isTotal?'#333':'#555'};">${nome}</span><span style="font-weight:600;">${h}h${m<10?'0':''}${m}min</span>\n          </div>`;
-        }).join('')}
-        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#e8f4f7;font-size:12px;font-weight:700;border-top:2px solid #006382;">
-          <span style="color:#006382;">LLH (Lucro/Hora)</span>
-          <span style="color:#006382;">${calc.tempoProdTotal>0?fmt(calc.lucroLiquido/calc.tempoProdTotal):fmt(0)}/h</span>
-        </div>
-      </div>
-    </div>` : '';
+  // ── CUSTOS E TEMPOS (idêntico ao Marmoprice) ──────────────────────────────
+  const ctHTML = calc ? `
+  <div style="display:grid;grid-template-columns:1fr 1fr;">
+    <!-- LADO ESQUERDO: CUSTOS -->
+    <div style="border:1px solid #e0e0e0;border-radius:6px 0 0 6px;overflow:hidden;">
+      <div style="background:#2C2C2C;color:white;padding:8px 14px;font-size:11px;font-weight:700;letter-spacing:.5px;">CUSTOS DO ORÇAMENTO</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr style="background:#f5f5f5;">
+          <th style="padding:5px 12px;text-align:left;font-weight:600;color:#555;border-bottom:1px solid #e0e0e0;">NOME</th>
+          <th style="padding:5px 12px;text-align:right;font-weight:600;color:#555;border-bottom:1px solid #e0e0e0;">VALOR</th>
+        </tr></thead>
+        <tbody>
+          ${[
+            ['Custo Estrutura', calc.custoEstrutura, false, true],
+            ['Custo Hora Empresa', custoHoraEmpresa, false, true],
+            ['Custo Hora Homem', custoHoraHomem, false, true],
+            [null],
+            ['Custo de Matéria Prima com Quebra', calc.custoMaterial],
+            ['Custo de Descarga/Instalação', calc.custoInstalacao],
+            ['Custo De Deslocamento (Descarga/Instalação)', calc.custoDeslocamento],
+            ['Custo De Combustível (Descarga/Instalação)', calc.custoCombustivel],
+            [null],
+            ['Custo Serra', calc.custoSerra],
+            ['Custo Corte 45', calc.custoCorte45],
+            ['Custo Montagem 45', calc.custoMontagem45],
+            ['Custo Comprimento Polimento Reto 2cm Manual (m)', calc.custoPolimentoManual],
+            ['Custo Polimento Automático', calc.custoPolimentoAuto],
+            ['Custo Área Bipolimento', calc.custoBipolimento],
+            ['Custo Corte 45 Interno', calc.custoCorte45Interno],
+            ['Custo Acabamento Colagem de topo (m)', (calc.tColagemTopo||0)*custoHoraEmpresa],
+            ['Custo Acabamento Meio Boleado', (calc.tMeioBoelado||0)*custoHoraEmpresa],
+            ['Custo Acabamento Meio Boleado Duplo', (calc.tMeioBoeladoDuplo||0)*custoHoraEmpresa],
+            ['Custo Acabamento Meia Cana (m)', (calc.tMeiaCana||0)*custoHoraEmpresa],
+            ['Custo Acabamento Meia Cana Duplo', (calc.tMeiaCanaD||0)*custoHoraEmpresa],
+            ['Custo Acabamento Chanfrado', (calc.tChanfrado45||0)*custoHoraEmpresa],
+            ['Custo Acabamento Chanfrado Duplo', (calc.tChanfradoDuplo||0)*custoHoraEmpresa],
+            ['Custo Chanfro Alongado', (calc.tChanfroAlongado||0)*custoHoraEmpresa],
+            ['Custo Rebaixo Americano Colado', (calc.tRebaixoAmericano||0)*custoHoraEmpresa],
+            ['Custo Rebaixo Italiano Usinado', (calc.tRebaixoItaliano||0)*custoHoraEmpresa],
+            ['Custo Furo de Cuba Polidos', (calc.tCubas||0)*custoHoraEmpresa],
+            ['Custo Sistema Flush', (calc.tFlush||0)*custoHoraEmpresa],
+            ['Custo Sistema Flath (un)', (calc.tFlath||0)*custoHoraEmpresa],
+            ['Custo de Insumo Water Jet', calc.custoWaterJet],
+            ['Custo Recortes Brutos', (calc.tRecortes||0)*custoHoraEmpresa],
+            ['Custos com Acessórios', calc.custoAcessorios],
+            ['Custos Adicionais (R$)', calc.custoAdicionais],
+            ['Custo com Cantoneira/Mão Francesa/Tubulão', calc.custoCantoneira],
+            ['Custo com Argamassa (R$)', calc.custoArgamassa],
+            ['Custo de Insumos', calc.custoInsumos],
+            ['Custo Horas Adicionais', calc.custoHorasAdic],
+            [null],
+            ['Custo Total do Produto', calc.custoTotal, true],
+            [null],
+            ['Lucro Líquido', calc.lucroLiquido, false, false, '#2E7D32'],
+            ['Comissão Vendedor', 0, false, false, '#999'],
+            ['Comissão Terceiros', 0, false, false, '#999'],
+            ['Comissão Interna', 0, false, false, '#999'],
+            ['Taxas Adicionais', 0, false, false, '#999'],
+            [null],
+            ['M² de compra de Chapa', 0],
+            ['Preço Final do Produto', calc.precoFinal, true, false, '#006382'],
+            ['Preço Final do Produto sem Matéria Prima', Math.max(0, calc.precoFinal - (calc.custoMaterial/(1-(calc.margem||30)/100)))],
+            ['Preço do Serviço (Mão de Obra)', calc.precoFinal * ((calc.custoTotal-(calc.custoMaterial||0))/(calc.custoTotal||1))],
+            ['VMMO/VMMV', calc.tempoProdInterno>0 ? calc.precoFinal/calc.tempoProdInterno : 0],
+            ['LL/H', calc.tempoProdInterno>0 ? calc.lucroLiquido/calc.tempoProdInterno : 0, false, false, '#006382', true],
+            ['Custo de Serviço por m²', calc.areaBase>0 ? (calc.custoTotal-(calc.custoMaterial||0))/calc.areaBase : 0],
+          ].map(([nome,val,negrito,cinza,cor,llh]) => {
+            if (!nome) return '<tr><td colspan="2" style="padding:4px;background:#f9f9f9;border-bottom:1px solid #eee;"></td></tr>';
+            const c = cor||'#333'; const fw = negrito?'700':'500';
+            const bg = negrito?'background:#f5f5f5;':'';
+            const valFmt = llh ? fmt(val||0)+'/h' : fmt(val||0);
+            return `<tr style="${bg}border-bottom:1px solid #f0f0f0;"><td style="padding:5px 12px;color:${cinza?'#aaa':c};font-weight:${fw};">${nome}</td><td style="padding:5px 12px;text-align:right;color:${c};font-weight:${negrito?'700':'600'};">${valFmt}</td></tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    <!-- LADO DIREITO: TEMPOS -->
+    <div style="border:1px solid #e0e0e0;border-left:none;border-radius:0 6px 6px 0;overflow:hidden;">
+      <div style="background:#2C2C2C;color:white;padding:8px 14px;font-size:11px;font-weight:700;letter-spacing:.5px;">(TEMPO PRODUTIVO + TEMPO IMPRODUTIVO)</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr style="background:#f5f5f5;">
+          <th style="padding:5px 12px;text-align:left;font-weight:600;color:#555;border-bottom:1px solid #e0e0e0;">NOME</th>
+          <th style="padding:5px 12px;text-align:right;font-weight:600;color:#555;border-bottom:1px solid #e0e0e0;">VALOR</th>
+        </tr></thead>
+        <tbody>
+          ${[
+            ['Tempo de Serra', calc.tSerra],
+            ['Tempo de Montagem em 45°', calc.tMontagem45],
+            ['Tempo de Corte em 45°', calc.tCorte45],
+            ['Tempo de Corte em 45° Interno', calc.tCorte45Interno],
+            ['Tempo Comprimento Polimento Reto 2cm Manual (m)', calc.tPolimentoManual],
+            ['Tempo Comprimento de Polimento Automático', calc.tPolimentoAuto],
+            ['Tempo Bipolimento', calc.tBipolimento],
+            ['Tempo de Recortes com Polimento', calc.tCubas],
+            ['Tempo de Recortes/Furos sem Polimento', calc.tRecortes],
+            ['Tempo de Sistema Flush', calc.tFlush],
+            ['Tempo de Sistema Flath (un)', calc.tFlath],
+            ['Tempo Rebaixo Italiano Usinado', calc.tRebaixoItaliano],
+            ['Tempo Rebaixo Americano Colado', calc.tRebaixoAmericano],
+            ['Tempo Acabamento Colagem de topo (m)', calc.tColagemTopo],
+            ['Tempo de Acabamento Meio Boleado', calc.tMeioBoelado],
+            ['Tempo de Deslocamento Descarga/Instalação', calc.tempoDeslocamento],
+            ['Tempo de Acabamento Meio Boleado Duplo', calc.tMeioBoeladoDuplo],
+            ['Tempo de Instalação/Entrega (hr)', calc.tempoInstalEntrega],
+            ['Tempo de Acabamento Chanfrado', calc.tChanfrado45],
+            ['Tempo de Acabamento Chanfrado Duplo', calc.tChanfradoDuplo],
+            ['Tempo de Chanfro Alongado', calc.tChanfroAlongado],
+            ['Tempo Acabamento Meia Cana (m)', calc.tMeiaCana],
+            ['Tempo de Acabamento Meia Cana Duplo', calc.tMeiaCanaD],
+            ['Tempo Horas Adicionais', calc.tHorasAdicionais],
+          ].map(([nome,val]) => `<tr style="border-bottom:1px solid #f0f0f0;"><td style="padding:5px 12px;color:#555;">${nome}</td><td style="padding:5px 12px;text-align:right;font-weight:600;">${fmtH(val||0)}</td></tr>`).join('')}
+          <tr style="background:#f5f5f5;"><td colspan="2" style="padding:2px;border-bottom:1px solid #eee;"></td></tr>
+          <tr style="background:#f5f5f5;font-weight:700;"><td style="padding:6px 12px;color:#333;">Tempo Total de Produção Interna</td><td style="padding:6px 12px;text-align:right;">${fmtH(calc.tempoProdInterno)}</td></tr>
+          <tr style="background:#e8f4f7;border-top:2px solid #006382;font-weight:700;"><td style="padding:6px 12px;color:#006382;">Tempo Total de Descarga/Instalação</td><td style="padding:6px 12px;text-align:right;color:#006382;">${fmtH(calc.tempoDescargaInstalTotal)}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>` : `<div style="padding:20px;text-align:center;color:#999;font-size:13px;">⚠️ Selecione o material e preencha as medidas para calcular.</div>`;
 
   return `
   <div style="background:white;border-radius:8px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08);overflow:hidden;">
     <!-- Cabeçalho do item -->
     <div style="background:#f8f8f8;border-bottom:1px solid #e0e0e0;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <div style="font-size:13px;font-weight:700;color:#333;min-width:80px;">ITEM ${idx+1}</div>
+      <div style="font-size:13px;font-weight:700;color:#333;min-width:60px;">ITEM ${idx+1}</div>
       <div style="flex:1;display:grid;grid-template-columns:1.5fr 1.5fr 1fr 2fr;gap:8px;align-items:center;">
         <div><label style="font-size:10px;color:#666;">Nome do Item *</label>
-          <input class="form-input" style="padding:6px 10px;" value="${item.nome||''}" placeholder="bancada, pia..." oninput="orcamentoAtual.itens[${idx}].nome=this.value"></div>
+          <input class="form-input" style="padding:6px 10px;" value="${item.nome||''}" placeholder="bancada, pia..."
+            oninput="orcamentoAtual.itens[${idx}].nome=this.value"></div>
         <div><label style="font-size:10px;color:#666;">Ambiente *</label>
-          <input class="form-input" style="padding:6px 10px;" value="${item.ambiente||''}" placeholder="cozinha, banheiro..." oninput="orcamentoAtual.itens[${idx}].ambiente=this.value"></div>
+          <input class="form-input" style="padding:6px 10px;" value="${item.ambiente||''}" placeholder="cozinha, banheiro..."
+            oninput="orcamentoAtual.itens[${idx}].ambiente=this.value"></div>
         <div><label style="font-size:10px;color:#666;">Tipo de entrega</label>
-          <select class="form-select" style="padding:6px 10px;" onchange="orcamentoAtual.itens[${idx}].tipoEntrega=this.value;recalcularTelaOrc('${orderId}')">
+          <select class="form-select" style="padding:6px 10px;"
+            onchange="orcamentoAtual.itens[${idx}].tipoEntrega=this.value;recalcularTelaOrc('${orderId}')">
             <option value="instalacao" ${item.tipoEntrega==='instalacao'?'selected':''}>Com instalação</option>
             <option value="entrega" ${item.tipoEntrega==='entrega'?'selected':''}>Somente entrega</option>
             <option value="retirada" ${item.tipoEntrega==='retirada'?'selected':''}>Retirada</option>
-          </select>
-        </div>
+          </select></div>
         <div><label style="font-size:10px;color:#666;">Observações</label>
-          <input class="form-input" style="padding:6px 10px;" value="${item.obsItem||''}" oninput="orcamentoAtual.itens[${idx}].obsItem=this.value"></div>
+          <input class="form-input" style="padding:6px 10px;" value="${item.obsItem||''}"
+            oninput="orcamentoAtual.itens[${idx}].obsItem=this.value"></div>
       </div>
-      ${idx > 0 ? `<button onclick="removerItemTelaOrc(${idx},'${orderId}')" style="background:#dc3545;border:none;color:white;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;">🗑 ITEM</button>` : ''}
+      ${calc ? `<div style="background:#006382;color:white;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:700;">${fmt(calc.precoFinal)}</div>` : ''}
+      ${idx>0?`<button onclick="removerItemTelaOrc(${idx},'${orderId}')" style="background:#dc3545;border:none;color:white;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;">🗑 ITEM</button>`:''}
     </div>
 
     <div style="padding:16px;">
+
       <!-- PEÇA A PEÇA -->
       <div style="margin-bottom:16px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="font-size:12px;font-weight:700;color:#333;">Peça a Peça</span>
-          <span style="font-size:11px;color:#006382;">✏️</span>
-          <span style="font-size:11px;color:#666;">«</span>
-        </div>
+        <div style="font-size:12px;font-weight:700;color:#333;margin-bottom:8px;">Peça a Peça ✏️ «</div>
         <div id="pecas-lista-${idx}">
           ${(item.pecas||[{nome:'',medidas:'',qtd:'1'}]).map((peca,pi) => `
           <div style="display:grid;grid-template-columns:2fr 1.2fr 0.6fr auto;gap:6px;margin-bottom:6px;align-items:center;">
@@ -3488,108 +3575,89 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
               oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].nome=this.value"
               onkeydown="pKD(event,this,${idx},'${orderId}')">
             <input class="form-input" style="padding:6px 10px;font-family:monospace;" placeholder="1,20x0,60" value="${peca.medidas||''}"
-              oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].medidas=this.value"
-              onchange="recalcularTelaOrc('${orderId}')"
+              oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].medidas=this.value;recalcularTelaOrc('${orderId}')"
               onkeydown="pKD(event,this,${idx},'${orderId}')">
             <input class="form-input" style="padding:6px 10px;text-align:center;" type="number" min="1" value="${peca.qtd||1}"
-              oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].qtd=this.value"
-              onchange="recalcularTelaOrc('${orderId}')"
+              oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].qtd=this.value;recalcularTelaOrc('${orderId}')"
               onkeydown="pKD(event,this,${idx},'${orderId}')">
             <div style="display:flex;gap:4px;">
-              <button onclick="adicionarPecaItem(${idx},'${orderId}')" style="background:#006382;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;" title="Nova linha (+Enter)">+</button>
-              <button onclick="removerLinhaItem(this,${idx},'${orderId}')" style="background:#dc3545;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;" title="Apagar linha">✕</button>
+              <button onclick="adicionarPecaItem(${idx},'${orderId}')" style="background:#006382;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:14px;" title="+">+</button>
+              <button onclick="removerPecaItem(this,${idx},'${orderId}')" style="background:#dc3545;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;" title="Apagar">🗑</button>
+              <button onclick="duplicarPecaItem(${idx},${pi},'${orderId}')" style="background:#6c757d;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;" title="Duplicar">⧉</button>
             </div>
           </div>`).join('')}
         </div>
-        <div style="font-size:12px;color:#333;margin-top:8px;">Área Total de Pedra (m²): <strong>${areaTotal.toFixed(2)}</strong></div>
+        <div style="font-size:12px;color:#333;margin-top:8px;">
+          Área Total de Pedra (m²) <span style="color:#999;font-size:11px;cursor:pointer;" title="Editar manualmente">✏️</span>
+          <strong id="area-total-${idx}">${areaTotal.toFixed(2)}</strong>
+        </div>
       </div>
 
-      <!-- CAMPOS DE ACABAMENTO (layout igual Marmoprice — grid 5 colunas) -->
+      <!-- CAMPOS ACABAMENTO — 5 colunas, igual Marmoprice -->
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">
         ${[
-          ['Compr. de Acab. 45° Saia (m)', 'compCorte45'],
-          ['Compr. Polimento Reto 2cm Manual (m)', 'compPolimentoManual'],
-          ['Compr. Polimento Automático (m)', 'compPolimentoAuto'],
+          ['Comprimento de Acabamento 45° Saia (m)', 'compCorte45'],
+          ['Comprimento Polimento Reto 2cm Manual (m)', 'compPolimentoManual'],
+          ['Comprimento Polimento Automático (m)', 'compPolimentoAuto'],
           ['Área de Bipolimento (m²)', 'areaBipolida'],
-          ['Compr. de Acab. 45° / Cuba Esculpida (m)', 'compCubEsculpida'],
-          ['M² de Compra de Chapa', 'm2ChapaNaoComercial'],
-          ['Acab. Colagem de Topo (m)', 'compColagemTopo'],
-          ['Acab. Meio Boleado (m)', 'compMeioBoelado'],
-          ['Acab. Meio Boleado Duplo (m)', 'compMeioBoeladoDuplo'],
-          ['Acab. Chanfrado 45° (m)', 'compChanfrado45'],
-          ['Acab. Chanfrado Duplo (m)', 'compChanfradoDuplo'],
-          ['Chanfro Alongado (m)', 'compChanfroAlongado'],
-          ['Acab. Meia Cana (m)', 'compMeiaCana'],
-          ['Acab. Meia Cana Duplo (m)', 'compMeiaCanaDuplo'],
-          ['Acab. Boleado Duplo (m)', 'compBoeladoDuplo'],
-        ].map(([label, field]) => `
-          <div>
-            <label style="font-size:10px;color:#666;display:block;margin-bottom:3px;">${label}</label>
-            <input class="form-input orc-tab-input" type="number" step="0.1" style="padding:6px 8px;font-size:13px;" value="${item[field]||0}"
-              onblur="orcamentoAtual.itens[${idx}].${field}=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"
-              onkeydown="if(event.key==='Tab'){event.preventDefault();const all=document.querySelectorAll('.orc-tab-input');const i=Array.from(all).indexOf(this);if(i>=0&&all[i+(event.shiftKey?-1:1)])all[i+(event.shiftKey?-1:1)].focus();}">
-          </div>`).join('')}
+          ['Comprimento de Acabamento 45° / Cuba Esculpida (m)', 'compCubEsculpida'],
+          ['M² de compra de Chapa', 'm2ChapaNaoComercial'],
+          ['Acabamento Colagem de Topo (m)', 'compColagemTopo'],
+          ['Acabamento Meio Boleado (m)', 'compMeioBoelado'],
+          ['Acabamento Meio Boleado Duplo (m)', 'compMeioBoeladoDuplo'],
+          ['Acabamento Chanfrado 45° (m)', 'compChanfrado45'],
+          ['Acabamento Chanfrado Duplo (m)', 'compChanfradoDuplo'],
+          ['Chanfro Alongado', 'compChanfroAlongado'],
+          ['Acabamento Meia Cana (m)', 'compMeiaCana'],
+          ['Acabamento Meia Cana Duplo', 'compMeiaCanaDuplo'],
+          ['Acabamento Boleado Duplo', 'compBoeladoDuplo'],
+          ['Rebaixo Italiano Usinado (m²)', 'areaRebaixoItaliano'],
+          ['Rebaixo Americano Colado (m²)', 'areaRebaixoAmericano'],
+          ['Tempo de Instalação/Entrega (hr)', 'tempoInstalManual'],
+          ['Nº de Pessoas para Descarga/Instalação', 'nPessoasInstal'],
+          ['Recortes com Polimento (Cubas)', 'qtdCubas'],
+          ['Furos (Recorte Bruto)', 'qtdRecortes'],
+          ['Sistema Flush (un)', 'qtdFlush'],
+          ['Sistema Flath (un)', 'qtdFlath'],
+          ['Comprimento Linear de Water Jet', 'compWaterJet'],
+          ['Horas Adicionais', 'horasAdicionais'],
+          ['Montagem em 45° (m)', 'compMontagem45'],
+          ['Corte 45° Interno (m)', 'compCorte45Interno'],
+        ].map(([label, field]) => {
+          const isAutoInstal = field === 'tempoInstalManual';
+          const isAutoPessoas = field === 'nPessoasInstal';
+          const isHoras = field === 'horasAdicionais';
+          const type = (isAutoInstal || isHoras) ? 'text' : 'number';
+          const autoStyle = (isAutoInstal || isAutoPessoas) ? 'background:#e8f4f7;color:#006382;font-weight:600;' : '';
+          const autoLabel = (isAutoInstal || isAutoPessoas) ? ' <span style="font-size:9px;color:#006382;">✏️ auto</span>' : '';
+          let currentVal = item[field] || 0;
+          if (isAutoInstal) {
+            if (item.tempoInstalManual && item.tempoInstalManual !== '0' && item.tempoInstalManual !== '') {
+              currentVal = item.tempoInstalManual;
+            } else if (calc) {
+              const h=Math.floor(calc.tempoInstalEntrega||0); const m=Math.round(((calc.tempoInstalEntrega||0)-h)*60);
+              currentVal = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+            } else { currentVal = '00:00'; }
+          }
+          if (isAutoPessoas) currentVal = item.nPessoasInstal || cfg.pessoasInstalacao || 2;
+          return `<div>
+            <label style="font-size:10px;color:#666;display:block;margin-bottom:3px;">${label}${autoLabel}</label>
+            <input id="${isAutoInstal?'campo-tempo-instal-'+idx:isAutoPessoas?'campo-pessoas-'+idx:''}"
+              class="form-input orc-tab-input" type="${type}" step="0.1"
+              style="padding:6px 8px;font-size:13px;${autoStyle}" value="${currentVal}"
+              onblur="(function(){
+                var v=this.value;
+                orcamentoAtual.itens[${idx}]['${field}']=${type==='number'?'parseFloat(v)||0':'v'};
+                recalcularTelaOrc('${orderId}');
+              }).call(this)">
+          </div>`;
+        }).join('')}
       </div>
 
-      <!-- CAMPOS ESPECIAIS (linha 2) -->
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px;">
-
-        <!-- Tempo Instalação/Entrega — calculado automaticamente, editável -->
-        <div>
-          <label style="font-size:10px;color:#666;display:block;margin-bottom:3px;">
-            Tempo Instalação/Entrega (hr)
-            <span style="font-size:9px;color:#006382;margin-left:4px;" title="Calculado automaticamente. Clique para editar manualmente.">✏️ auto</span>
-          </label>
-          <input id="campo-tempo-instal-${idx}" class="form-input orc-tab-input" type="text" placeholder="calculando..."
-            style="padding:6px 8px;font-size:13px;background:#e8f4f7;color:#006382;font-weight:600;"
-            value="${(()=>{
-              if(item.tempoInstalManual && item.tempoInstalManual !== '0' && item.tempoInstalManual !== '') return item.tempoInstalManual;
-              if(calc) { const h=Math.floor(calc.tempoInstalEntrega); const m=Math.round((calc.tempoInstalEntrega-h)*60); return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); }
-              return '00:00';
-            })()}"
-            onblur="
-              var v=this.value.trim();
-              if(v && v!=='00:00'){orcamentoAtual.itens[${idx}].tempoInstalManual=v;}
-              else{orcamentoAtual.itens[${idx}].tempoInstalManual='';}
-              recalcularTelaOrc('${orderId}')">
-        </div>
-
-        <!-- Nº Pessoas — calculado automaticamente, editável -->
-        <div>
-          <label style="font-size:10px;color:#666;display:block;margin-bottom:3px;">
-            Nº Pessoas Descarga/Instal.
-            <span style="font-size:9px;color:#006382;margin-left:4px;">✏️ auto</span>
-          </label>
-          <input id="campo-pessoas-${idx}" class="form-input orc-tab-input" type="number" min="1"
-            style="padding:6px 8px;font-size:13px;background:#e8f4f7;color:#006382;font-weight:600;"
-            value="${item.nPessoasInstal || getConfigOrc().pessoasInstalacao || 2}"
-            onblur="orcamentoAtual.itens[${idx}].nPessoasInstal=parseInt(this.value)||2;recalcularTelaOrc('${orderId}')">
-        </div>
-
-        ${[
-          ['Recortes com Polimento (Cubas)', 'qtdCubas', 'number'],
-          ['Furos (Recorte Bruto)', 'qtdRecortes', 'number'],
-          ['Sistema Flush (un)', 'qtdFlush', 'number'],
-          ['Sistema Flath (un)', 'qtdFlath', 'number'],
-          ['Montagem em 45° (m)', 'compMontagem45', 'number'],
-          ['Corte 45° Interno (m)', 'compCorte45Interno', 'number'],
-          ['Rebaixo Italiano Usinado (m²)', 'areaRebaixoItaliano', 'number'],
-          ['Rebaixo Americano Colado (m²)', 'areaRebaixoAmericano', 'number'],
-          ['Horas Adicionais (HH:MM)', 'horasAdicionais', 'text'],
-          ['Comp. Linear de Water Jet (m)', 'compWaterJet', 'number'],
-        ].map(([label, field, type]) => `
-          <div>
-            <label style="font-size:10px;color:#666;display:block;margin-bottom:3px;">${label}</label>
-            <input class="form-input orc-tab-input" type="${type}" step="0.1" style="padding:6px 8px;font-size:13px;" value="${item[field]||0}"
-              onblur="orcamentoAtual.itens[${idx}].${field}=${type==='number'?'parseFloat':'(v=>v)'}(this.value)||0;recalcularTelaOrc('${orderId}')"
-              onkeydown="if(event.key==='Tab'){event.preventDefault();const all=document.querySelectorAll('.orc-tab-input');const i=Array.from(all).indexOf(this);if(i>=0&&all[i+(event.shiftKey?-1:1)])all[i+(event.shiftKey?-1:1)].focus();}">
-          </div>`).join('')}
-      </div>
-
-      <!-- CUSTOS ADICIONAIS MANUAIS -->
-      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #e0e0e0;">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#006382;margin-bottom:10px;">💰 Custos Adicionais (R$)</div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px;">
+      <!-- CUSTOS ADICIONAIS -->
+      <div style="margin-bottom:16px;padding:12px;background:#fffbf0;border-radius:6px;border:1px solid #f0e0a0;">
+        <div style="font-size:11px;font-weight:700;color:#8B6914;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">💰 Custos Adicionais (R$)</div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
           ${[
             ['Custos de Acessórios (R$)', 'custoAcessorios'],
             ['Insumos de Instalação (R$)', 'custoInsumoInstal'],
@@ -3599,81 +3667,86 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
           ].map(([label, field]) => `
           <div>
             <label style="font-size:10px;color:#666;display:block;margin-bottom:3px;">${label}</label>
-            <input class="form-input orc-tab-input" type="number" step="0.01" style="padding:6px 8px;font-size:13px;" value="${item[field]||0}"
+            <input class="form-input" type="number" step="0.01" style="padding:6px 8px;font-size:13px;" value="${item[field]||0}"
               onblur="orcamentoAtual.itens[${idx}].${field}=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')">
           </div>`).join('')}
         </div>
-        <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#333;">
-            <input type="checkbox" ${item.apoioMovel?'checked':''} style="width:16px;height:16px;accent-color:#006382;"
-              onchange="orcamentoAtual.itens[${idx}].apoioMovel=this.checked;recalcularTelaOrc('${orderId}')">
-            Apoio para Móvel
-          </label>
-        </div>
-      </div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-top:10px;">
+          <input type="checkbox" ${item.apoioMovel?'checked':''} style="accent-color:#006382;"
+            onchange="orcamentoAtual.itens[${idx}].apoioMovel=this.checked;recalcularTelaOrc('${orderId}')">
+          Apoio para Móvel
+        </label>
       </div>
 
-      <!-- MATERIAIS (igual Marmoprice) -->
-      <div style="border-top:1px solid #e0e0e0;padding-top:16px;">
+      <!-- MATERIAIS -->
+      <div style="border-top:2px solid #e0e0e0;padding-top:16px;">
         <div style="font-size:13px;font-weight:700;color:#333;margin-bottom:10px;">Materiais</div>
-        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;align-items:end;margin-bottom:6px;">
-          <div style="font-size:10px;color:#666;">Nome *</div>
-          <div style="font-size:10px;color:#666;">Custo do Material (m²) *</div>
-          <div style="font-size:10px;color:#666;">Dif. de Trabalho *</div>
-          <div style="font-size:10px;color:#666;">Margem Lucro (%) *</div>
-          <div style="font-size:10px;color:#666;">Com. Vendedor (%)</div>
-          <div style="font-size:10px;color:#666;">Com. Terceiros (%)</div>
-          <div style="font-size:10px;color:#666;">Com. Interna (%)</div>
-          <div style="font-size:10px;color:#666;">Valor de Venda (R$)</div>
-          <div style="font-size:10px;color:#666;">LL/H</div>
+        <!-- Header colunas -->
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;margin-bottom:4px;">
+          ${['Nome *','Custo do Material (m²) *','Dif. de Trabalho *','Margem Lucro (%) *','Comissão Vendedor (%)','Comissão Terceiros (%)','Comissão Interna (%)','Valor de Venda (R$)','LL/H'].map(h=>`<div style="font-size:10px;color:#666;font-weight:600;">${h}</div>`).join('')}
         </div>
+        <!-- Linha de dados -->
         <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;align-items:center;">
+          <!-- Dropdown pedra -->
           <div>
-            <select class="form-select" style="padding:6px 8px;font-size:12px;" onchange="
-              orcamentoAtual.itens[${idx}].pedraId=this.value;
-              var p=getPedrasCadastradas().find(x=>x.id===this.value);
-              if(p){
-                orcamentoAtual.itens[${idx}].custoM2Override=p.custoM2;
-                orcamentoAtual.itens[${idx}].margemOverride=p.margem;
-                orcamentoAtual.itens[${idx}].quebraOverride=p.quebra;
-                var el=document.getElementById('mat-custo-${idx}');
-                if(el) el.value=p.custoM2;
-                var ed=document.getElementById('mat-dif-${idx}');
-                var g=GRUPOS_DIFICULDADE.find(x=>x.id===p.grupoId);
-                if(ed&&g) ed.value=g.dif.toFixed(1);
-                var em=document.getElementById('mat-margem-${idx}');
-                if(em) em.value=p.margem;
-              }
-              recalcularTelaOrc('${orderId}')">
+            <select class="form-select" style="padding:6px 8px;font-size:12px;"
+              onchange="
+                orcamentoAtual.itens[${idx}].pedraId=this.value;
+                var p=getPedrasCadastradas().find(x=>x.id===this.value);
+                if(p){
+                  orcamentoAtual.itens[${idx}].custoM2Override=p.custoM2;
+                  orcamentoAtual.itens[${idx}].margemOverride=p.margem;
+                  orcamentoAtual.itens[${idx}].quebraOverride=p.quebra;
+                  var ec=document.getElementById('mat-custo-${idx}');if(ec)ec.value=p.custoM2;
+                  var ed=document.getElementById('mat-dif-${idx}');var g=GRUPOS_DIFICULDADE.find(x=>x.id===p.grupoId);if(ed&&g)ed.value=g.dif.toFixed(1);
+                  var em=document.getElementById('mat-margem-${idx}');if(em)em.value=p.margem;
+                }
+                recalcularTelaOrc('${orderId}')">
               <option value="">Selecione...</option>
               ${pedras.map(p=>`<option value="${p.id}" ${item.pedraId===p.id?'selected':''}>${p.nome}</option>`).join('')}
             </select>
-            ${pedra ? `<div style="font-size:10px;color:#888;margin-top:2px;">${GRUPOS_DIFICULDADE.find(g=>g.id===pedra.grupoId)?.nome||''} · Quebra: ${pedra.quebra||11.11}%</div>` : ''}
+            ${pedra?`<div style="font-size:10px;color:#888;margin-top:2px;">${GRUPOS_DIFICULDADE.find(g=>g.id===pedra.grupoId)?.nome||''}</div>`:''}
           </div>
-          <input id="mat-custo-${idx}" class="form-input" type="number" step="0.01" style="padding:6px 8px;font-size:13px;font-weight:700;color:#006382;border:2px solid #006382;" value="${item.custoM2Override||pedra?.custoM2||0}"
+          <!-- Custo m² editável -->
+          <input id="mat-custo-${idx}" class="form-input" type="number" step="0.01"
+            style="padding:6px 8px;font-size:13px;font-weight:700;color:#006382;border:2px solid #006382;"
+            value="${item.custoM2Override||pedra?.custoM2||0}"
             onblur="orcamentoAtual.itens[${idx}].custoM2Override=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')">
-          <input id="mat-dif-${idx}" class="form-input" type="number" step="0.1" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="${(GRUPOS_DIFICULDADE.find(g=>g.id===pedra?.grupoId)?.dif||1).toFixed(1)}" readonly>
-          <input id="mat-margem-${idx}" class="form-input" type="number" step="0.1" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="${item.margemOverride||pedra?.margem||30}" readonly>
-          <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
-          <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
-          <input class="form-input" type="number" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
-          <input id="mat-valor-${idx}" class="form-input" style="padding:6px 8px;font-size:13px;font-weight:700;color:#006382;background:#f5f5f5;" value="${calc?fmt(calc.precoFinal):'—'}" readonly>
-          <input id="mat-llh-${idx}" class="form-input" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="${calc&&calc.tempoProdInterno>0?fmt(calc.lucroLiquido/calc.tempoProdInterno):'—'}" readonly>
+          <!-- Dif trabalho -->
+          <input id="mat-dif-${idx}" class="form-input" type="number" step="0.1"
+            style="padding:6px 8px;font-size:13px;background:#f5f5f5;" readonly
+            value="${(GRUPOS_DIFICULDADE.find(g=>g.id===pedra?.grupoId)?.dif||1).toFixed(1)}">
+          <!-- Margem -->
+          <input id="mat-margem-${idx}" class="form-input" type="number" step="0.1"
+            style="padding:6px 8px;font-size:13px;background:#f5f5f5;" readonly
+            value="${item.margemOverride||pedra?.margem||30}">
+          <!-- Comissões (sempre 0 por ora) -->
+          <input class="form-input" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
+          <input class="form-input" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
+          <input class="form-input" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
+          <!-- Valor de Venda -->
+          <input id="mat-valor-${idx}" class="form-input"
+            style="padding:6px 8px;font-size:13px;font-weight:700;color:#006382;background:#f5f5f5;" readonly
+            value="${calc?fmt(calc.precoFinal):'—'}">
+          <!-- LL/H -->
+          <input id="mat-llh-${idx}" class="form-input"
+            style="padding:6px 8px;font-size:13px;background:#f5f5f5;" readonly
+            value="${calc&&calc.tempoProdInterno>0?fmt(calc.lucroLiquido/calc.tempoProdInterno)+'':' —'}">
         </div>
 
-        <!-- CUSTOS E TEMPOS (colapsável) -->
-        <details style="margin-top:12px;" ${calc ? 'open' : ''}>
+        <!-- CUSTOS E TEMPOS (acordeão, idêntico ao Marmoprice) -->
+        <details style="margin-top:12px;" ${calc?'open':''}>
           <summary style="cursor:pointer;padding:10px 14px;background:#f0f0f0;border-radius:6px;font-size:13px;font-weight:600;color:#333;list-style:none;display:flex;justify-content:space-between;align-items:center;">
-            <span>Custos e tempos ${calc ? `<span style="font-size:11px;font-weight:400;color:#006382;margin-left:8px;">Preço: ${fmt(calc.precoFinal)} · Margem: ${calc.margem}%</span>` : '<span style="font-size:11px;font-weight:400;color:#999;margin-left:8px;">preencha as medidas para calcular</span>'}</span><span>▼</span>
+            <span>Custos e tempos</span><span id="ct-chevron-${idx}">${calc?'▲':'▼'}</span>
           </summary>
           <div id="custos-tempos-${idx}" style="margin-top:1px;border:1px solid #e0e0e0;border-radius:0 0 6px 6px;overflow:hidden;">
-            ${custoTemposHTML || `<div style="padding:20px;text-align:center;color:#999;font-size:13px;">⚠️ Preencha as medidas das peças para ver o detalhamento de custos.</div>`}
+            ${ctHTML}
           </div>
         </details>
 
-        <!-- Botões do item -->
-        <div style="display:flex;gap:8px;margin-top:12px;">
-          <button onclick="adicionarItemTelaOrc('${orderId}')" style="background:#006382;color:white;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">+ MATERIAL</button>
+        <!-- Botões + MATERIAL / ITEM -->
+        <div style="display:flex;gap:8px;margin-top:14px;">
+          <button onclick="adicionarMaterialItem(${idx},'${orderId}')" style="background:#006382;color:white;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">+ MATERIAL</button>
           <button onclick="adicionarItemTelaOrc('${orderId}')" style="background:#17a2b8;color:white;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">📋 ITEM</button>
           ${idx>0?`<button onclick="removerItemTelaOrc(${idx},'${orderId}')" style="background:#dc3545;color:white;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">🗑 ITEM</button>`:''}
         </div>
@@ -3688,165 +3761,163 @@ function recalcularTelaOrc(orderId) {
   const pedras = getPedrasCadastradas();
   const cfg = {...getConfigOrc(), transito: orcamentoAtual.transito};
   const { custoHoraEmpresa } = calcularCustoHora();
+  const fmtH = v => { const h=Math.floor(v||0); const m=Math.round(((v||0)-h)*60); return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); };
 
   orcamentoAtual.itens.forEach((item, idx) => {
     const pedra = resolverPedra(pedras, item);
     item.distancia = orcamentoAtual.distancia;
     item.idas = orcamentoAtual.idas || 1;
+
+    // Área
     const areaTotal = calcAreaTotalItem(item);
-    item.calc = (pedra && areaTotal > 0) ? calcularItem(item, pedra, {...cfg}) : null;
+    let areaBaseExataLocal = 0;
+    (item.pecas||[]).forEach(p => { const m=parseMedidas(p.medidas); areaBaseExataLocal+=m.l*m.c*(parseInt(p.qtd)||1); });
+    if (!areaBaseExataLocal) areaBaseExataLocal = areaTotal;
 
-    // Atualiza área
+    // Resolve custo override
+    if (!item.custoM2Override && pedra && pedra.custoM2) {
+      item.custoM2Override = pedra.custoM2;
+      item.margemOverride = pedra.margem;
+    }
+
+    // Calcula
+    item.calc = (pedra && areaTotal > 0 && (item.custoM2Override||pedra.custoM2) > 0)
+      ? calcularItem(item, pedra, cfg) : null;
+
+    // Atualiza área na tela
     const elArea = document.getElementById('area-total-' + idx);
-    if (elArea) elArea.textContent = areaTotal.toFixed(2).replace('.',',') + ' m²';
+    if (elArea) elArea.textContent = areaTotal.toFixed(2);
 
-    // Atualiza campos da linha de material
+    // Atualiza custo m²
     const elCusto = document.getElementById('mat-custo-' + idx);
-    if (elCusto) {
-      // Se não tem override ainda, busca da pedra resolvida
-      if (!item.custoM2Override && pedra && pedra.custoM2) {
-        item.custoM2Override = pedra.custoM2;
-        item.margemOverride = pedra.margem;
-        item.quebraOverride = pedra.quebra;
-      }
-      elCusto.value = item.custoM2Override || (pedra ? pedra.custoM2 : 0) || 0;
+    if (elCusto && !document.activeElement === elCusto) {
+      elCusto.value = item.custoM2Override || (pedra?pedra.custoM2:0) || 0;
     }
 
-    const elDif = document.getElementById('mat-dif-' + idx);
-    if (elDif) { const g = pedra ? (GRUPOS_DIFICULDADE.find(x=>x.id===pedra.grupoId)||{dif:1}) : {dif:1}; elDif.value = g.dif.toFixed(1); }
-
-    const elMargem = document.getElementById('mat-margem-' + idx);
-    if (elMargem) elMargem.value = pedra ? pedra.margem : 30;
-
+    // Atualiza valor de venda e LLH
     const elValor = document.getElementById('mat-valor-' + idx);
-    if (elValor) elValor.value = item.calc ? item.calc.precoFinal.toFixed(2).replace('.',',') : '—';
-
+    if (elValor) elValor.value = item.calc ? fmt(item.calc.precoFinal) : '—';
     const elLLH = document.getElementById('mat-llh-' + idx);
-    if (elLLH) elLLH.value = item.calc && item.calc.tempoProdTotal > 0 ? (item.calc.lucroLiquido/item.calc.tempoProdTotal).toFixed(2).replace('.',',') : '—';
+    if (elLLH) elLLH.value = item.calc && item.calc.tempoProdInterno>0 ? fmt(item.calc.lucroLiquido/item.calc.tempoProdInterno) : '—';
 
-    // Atualiza Tempo Instalação/Entrega calculado (só se não foi editado manualmente)
-    const elTempoInstal = document.getElementById('campo-tempo-instal-' + idx);
-    if (elTempoInstal && item.calc && (!item.tempoInstalManual || item.tempoInstalManual === '' || item.tempoInstalManual === '0')) {
-      const h = Math.floor(item.calc.tempoInstalEntrega||0);
-      const m = Math.round(((item.calc.tempoInstalEntrega||0)-h)*60);
-      elTempoInstal.value = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
-      elTempoInstal.style.background = '#e8f4f7'; // azul = calculado
+    // Atualiza tempo instalação (se não editado manualmente)
+    const elTI = document.getElementById('campo-tempo-instal-' + idx);
+    if (elTI && (!item.tempoInstalManual || item.tempoInstalManual==='' || item.tempoInstalManual==='0' || item.tempoInstalManual==='00:00')) {
+      const nP = parseInt(item.nPessoasInstal)||cfg.pessoasInstalacao||2;
+      let tI = 0;
+      if (item.tipoEntrega==='instalacao') tI = areaBaseExataLocal*(cfg.horasInstalacaoM2||1.5)*nP;
+      else if (item.tipoEntrega==='entrega') tI = areaBaseExataLocal*(cfg.horasEntregaM2||0.33)*(cfg.pessoasEntrega||1);
+      elTI.value = fmtH(tI);
     }
 
-    // Atualiza Nº Pessoas (padrão das configurações se não editado)
-    const elPessoas = document.getElementById('campo-pessoas-' + idx);
-    if (elPessoas && !item.nPessoasInstal) {
-      elPessoas.value = cfg.pessoasInstalacao || 2;
-    }
-
-    // Atualiza badge preço no header do item
-    const elPreco = document.getElementById('preco-item-' + idx);
-    if (elPreco) {
-      elPreco.textContent = item.calc ? fmt(item.calc.precoFinal) : '';
-      elPreco.style.display = item.calc ? '' : 'none';
-    }
-
-    // Atualiza custos e tempos inline
+    // Atualiza custos e tempos
     const elCT = document.getElementById('custos-tempos-' + idx);
     if (elCT && item.calc) {
       const c = item.calc;
-      const fmtH = v => { const h=Math.floor(v||0); const m=Math.round(((v||0)-h)*60); return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); };
+      const { custoHoraHomem } = calcularCustoHora();
       elCT.innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;">
-          <div style="border:1px solid #e0e0e0;border-radius:6px 0 0 6px;overflow:hidden;">
-            <div style="background:#2C2C2C;color:white;padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:1px;">CUSTOS DO ORÇAMENTO</div>
-            <div style="padding:8px 12px;background:#f9f9f9;border-bottom:1px solid #e0e0e0;">
-              ${[['Custo Estrutura', c.custoEstrutura],['Custo Hora Empresa', c.custoHoraHomem],['Custo Hora Homem', c.custoHoraEmpresa]].map(([n,v])=>`<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px;color:#888;"><span>${n}</span><span>${fmt(v||0)}</span></div>`).join('')}
-            </div>
-            ${[
-              ['Custo de Matéria Prima com Quebra', c.custoMaterial],
-              ['Custo de Descarga/Instalação', c.custoInstalacao],
-              ['Custo De Deslocamento (Descarga/Instalação)', c.custoDeslocamento],
-              ['Custo De Combustível (Descarga/Instalação)', c.custoCombustivel],
-              null,
-              ['Custo Serra', c.custoSerra],
-              ['Custo Corte 45', c.custoCorte45],
-              ['Custo Montagem 45', c.custoMontagem45],
-              ['Custo Comprimento Polimento Reto 2cm Manual (m)', c.custoPolimentoManual],
-              ['Custo Polimento Automático', c.custoPolimentoAuto],
-              ['Custo Área Bipolimento', c.custoBipolimento],
-              ['Custo Corte 45 Interno', c.custoCorte45Interno],
-              ['Custo Acabamento Colagem de topo (m)', (c.tColagemTopo||0)*c.custoHoraEmpresa],
-              ['Custo Acabamento Meio Boleado', (c.tMeioBoelado||0)*c.custoHoraEmpresa],
-              ['Custo Acabamento Meio Boleado Duplo', (c.tMeioBoeladoDuplo||0)*c.custoHoraEmpresa],
-              ['Custo Acabamento Meia Cana (m)', (c.tMeiaCana||0)*c.custoHoraEmpresa],
-              ['Custo Acabamento Meia Cana Duplo', (c.tMeiaCanaD||0)*c.custoHoraEmpresa],
-              ['Custo Acabamento Chanfrado', (c.tChanfrado45||0)*c.custoHoraEmpresa],
-              ['Custo Acabamento Chanfrado Duplo', (c.tChanfradoDuplo||0)*c.custoHoraEmpresa],
-              ['Custo Chanfro Alongado', (c.tChanfroAlongado||0)*c.custoHoraEmpresa],
-              ['Custo Rebaixo Americano Colado', (c.tRebaixoAmericano||0)*c.custoHoraEmpresa],
-              ['Custo Rebaixo Italiano Usinado', (c.tRebaixoItaliano||0)*c.custoHoraEmpresa],
-              ['Custo Furo de Cuba Polidos', (c.tCubas||0)*c.custoHoraEmpresa],
-              ['Custo Sistema Flush', (c.tFlush||0)*c.custoHoraEmpresa],
-              ['Custo Sistema Flath (un)', (c.tFlath||0)*c.custoHoraEmpresa],
-              ['Custo de Insumo Water Jet', c.custoWaterJet],
-              ['Custo Recortes Brutos', (c.tRecortes||0)*c.custoHoraEmpresa],
-              ['Custos com Acessórios', c.custoAcessorios],
-              ['Custos Adicionais (R$)', c.custoAdicionais],
-              ['Custo com Cantoneira/Mão Francesa/Tubulão', c.custoCantoneira],
-              ['Custo com Argamassa (R$)', c.custoArgamassa],
-              ['Custo de Insumos', c.custoInsumos],
-              ['Custo Horas Adicionais', c.custoHorasAdic],
-              null,
-              ['Custo Total do Produto', c.custoTotal],
-            ].map(row => {
-              if (row === null) return '<div style="height:8px;background:#f9f9f9;border-bottom:1px solid #e8e8e8;"></div>';
-              const [n,v] = row;
-              const isTotal = n==='Custo Total do Produto';
-              return `<div style="display:flex;justify-content:space-between;padding:${isTotal?'8':'5'}px 12px;border-bottom:1px solid #f0f0f0;font-size:12px;${isTotal?'font-weight:700;background:#f9f9f9;':''}"><span style="color:#555;">${n}</span><span style="font-weight:600;">${fmt(v||0)}</span></div>`;
-            }).join('')}
-            <div style="display:flex;justify-content:space-between;padding:6px 12px;font-size:12px;font-weight:600;"><span>Lucro Líquido</span><span style="color:#2E7D32;">${fmt(c.lucroLiquido)}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:11px;color:#888;"><span>Comissão Vendedor</span><span>${fmt(0)}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:11px;color:#888;"><span>Comissão Terceiros</span><span>${fmt(0)}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:4px 12px;font-size:11px;color:#888;border-bottom:1px solid #e0e0e0;"><span>Comissão Interna</span><span>${fmt(0)}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:6px 12px;font-size:12px;"><span>M² de compra de Chapa</span><span>${fmt((item.m2ChapaNaoComercial||0)*((pedras||[]).find?.(p=>p.id===item.pedraId)?.custoM2||0))}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:6px 12px;font-size:13px;font-weight:700;border-top:2px solid #006382;background:#e8f4f7;"><span>Preço Final do Produto</span><span style="color:#006382;">${fmt(c.precoFinal)}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:5px 12px;font-size:12px;border-top:1px solid #e0e0e0;"><span>Preço Final sem Matéria Prima</span><span>${fmt(c.precoFinal - c.custoMaterial*(1/(1-(c.margem/100))))}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:5px 12px;font-size:12px;"><span>Preço do Serviço (Mão de Obra)</span><span>${fmt(c.precoFinal * ((c.custoTotal - c.custoMaterial)/c.custoTotal))}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:5px 12px;font-size:12px;"><span>VMMO/VMMV</span><span>${c.tempoProdInterno>0?fmt(c.precoFinal/c.tempoProdInterno):fmt(0)}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:5px 12px;font-size:12px;font-weight:700;color:#006382;"><span>LL/H</span><span>${c.tempoProdInterno>0?fmt(c.lucroLiquido/c.tempoProdInterno)+'/h':fmt(0)}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:5px 12px;font-size:12px;border-top:1px solid #e0e0e0;"><span>Custo de Serviço por m²</span><span>${c.areaBase>0?fmt((c.custoTotal-c.custoMaterial)/c.areaBase):fmt(0)}</span></div>
-          </div>
-          <div style="border:1px solid #e0e0e0;border-left:none;border-radius:0 6px 6px 0;overflow:hidden;">
-            <div style="background:#2C2C2C;color:white;padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:1px;">(TEMPO PRODUTIVO + TEMPO IMPRODUTIVO)</div>
-            ${[
-              ['Tempo de Serra', c.tSerra],
-              ['Tempo de Montagem em 45°', c.tMontagem45],
-              ['Tempo de Corte em 45°', c.tCorte45],
-              ['Tempo de Corte em 45° Interno', c.tCorte45Interno],
-              ['Tempo Comprimento Polimento Reto 2cm Manual (m)', c.tPolimentoManual],
-              ['Tempo Comprimento de Polimento Automático', c.tPolimentoAuto],
-              ['Tempo Bipolimento', c.tBipolimento],
-              ['Tempo de Recortes com Polimento', c.tCubas],
-              ['Tempo de Recortes/Furos sem Polimento', c.tRecortes],
-              ['Tempo de Sistema Flush', c.tFlush],
-              ['Tempo de Sistema Flath (un)', c.tFlath],
-              ['Tempo Rebaixo Italiano Usinado', c.tRebaixoItaliano],
-              ['Tempo Rebaixo Americano Colado', c.tRebaixoAmericano],
-              ['Tempo Acabamento Colagem de topo (m)', c.tColagemTopo],
-              ['Tempo de Acabamento Meio Boleado', c.tMeioBoelado],
-              ['Tempo de Deslocamento Descarga/Instalação', c.tempoDeslocamento],
-              ['Tempo de Acabamento Meio Boleado Duplo', c.tMeioBoeladoDuplo],
-              ['Tempo de Instalação/Entrega (hr)', c.tempoInstalEntrega],
-              ['Tempo de Acabamento Chanfrado', c.tChanfrado45],
-              ['Tempo de Acabamento Chanfrado Duplo', c.tChanfradoDuplo],
-              ['Tempo de Chanfro Alongado', c.tChanfroAlongado],
-              ['Tempo Acabamento Meia Cana (m)', c.tMeiaCana],
-              ['Tempo de Acabamento Meia Cana Duplo', c.tMeiaCanaD],
-              ['Tempo Horas Adicionais', c.tHorasAdicionais],
-            ].map(([n,v])=>`<div style="display:flex;justify-content:space-between;padding:5px 12px;border-bottom:1px solid #f0f0f0;font-size:12px;"><span style="color:#555;">${n}</span><span style="font-weight:600;">${fmtH(v||0)}</span></div>`).join('')}
-            <div style="height:8px;background:#f9f9f9;border-bottom:1px solid #e8e8e8;"></div>
-            <div style="display:flex;justify-content:space-between;padding:7px 12px;font-size:12px;font-weight:700;background:#f9f9f9;"><span>Tempo Total de Produção Interna</span><span>${fmtH(c.tempoProdInterno)}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:7px 12px;font-size:12px;font-weight:700;border-top:2px solid #006382;background:#e8f4f7;"><span>Tempo Total de Descarga/Instalação</span><span>${fmtH(c.tempoDescargaInstalTotal)}</span></div>
-          </div>
-        </div>`;
-    } else if (elCT) {
-      elCT.innerHTML = `<div style="padding:20px;text-align:center;color:#999;font-size:13px;">⚠️ Preencha as medidas das peças para ver o detalhamento de custos.</div>`;
+      <div style="display:grid;grid-template-columns:1fr 1fr;">
+        <div style="border-right:1px solid #e0e0e0;overflow:hidden;">
+          <div style="background:#2C2C2C;color:white;padding:8px 14px;font-size:11px;font-weight:700;">CUSTOS DO ORÇAMENTO</div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead><tr style="background:#f5f5f5;"><th style="padding:5px 12px;text-align:left;color:#555;border-bottom:1px solid #e0e0e0;">NOME</th><th style="padding:5px 12px;text-align:right;color:#555;border-bottom:1px solid #e0e0e0;">VALOR</th></tr></thead>
+            <tbody>
+              ${[
+                ['Custo Estrutura', c.custoEstrutura, false, true],
+                ['Custo Hora Empresa', custoHoraEmpresa, false, true],
+                ['Custo Hora Homem', custoHoraHomem, false, true],
+                [null],
+                ['Custo de Matéria Prima com Quebra', c.custoMaterial],
+                ['Custo de Descarga/Instalação', c.custoInstalacao],
+                ['Custo De Deslocamento (Descarga/Instalação)', c.custoDeslocamento],
+                ['Custo De Combustível (Descarga/Instalação)', c.custoCombustivel],
+                [null],
+                ['Custo Serra', c.custoSerra],
+                ['Custo Corte 45', c.custoCorte45],
+                ['Custo Montagem 45', c.custoMontagem45],
+                ['Custo Comprimento Polimento Reto 2cm Manual (m)', c.custoPolimentoManual],
+                ['Custo Polimento Automático', c.custoPolimentoAuto],
+                ['Custo Área Bipolimento', c.custoBipolimento],
+                ['Custo Corte 45 Interno', c.custoCorte45Interno],
+                ['Custo Acabamento Colagem de topo (m)', (c.tColagemTopo||0)*custoHoraEmpresa],
+                ['Custo Acabamento Meio Boleado', (c.tMeioBoelado||0)*custoHoraEmpresa],
+                ['Custo Acabamento Meio Boleado Duplo', (c.tMeioBoeladoDuplo||0)*custoHoraEmpresa],
+                ['Custo Acabamento Meia Cana (m)', (c.tMeiaCana||0)*custoHoraEmpresa],
+                ['Custo Acabamento Meia Cana Duplo', (c.tMeiaCanaD||0)*custoHoraEmpresa],
+                ['Custo Acabamento Chanfrado', (c.tChanfrado45||0)*custoHoraEmpresa],
+                ['Custo Acabamento Chanfrado Duplo', (c.tChanfradoDuplo||0)*custoHoraEmpresa],
+                ['Custo Chanfro Alongado', (c.tChanfroAlongado||0)*custoHoraEmpresa],
+                ['Custo Rebaixo Americano Colado', (c.tRebaixoAmericano||0)*custoHoraEmpresa],
+                ['Custo Rebaixo Italiano Usinado', (c.tRebaixoItaliano||0)*custoHoraEmpresa],
+                ['Custo Furo de Cuba Polidos', (c.tCubas||0)*custoHoraEmpresa],
+                ['Custo Sistema Flush', (c.tFlush||0)*custoHoraEmpresa],
+                ['Custo Sistema Flath (un)', (c.tFlath||0)*custoHoraEmpresa],
+                ['Custo de Insumo Water Jet', c.custoWaterJet],
+                ['Custo Recortes Brutos', (c.tRecortes||0)*custoHoraEmpresa],
+                ['Custos com Acessórios', c.custoAcessorios],
+                ['Custos Adicionais (R$)', c.custoAdicionais],
+                ['Custo com Cantoneira/Mão Francesa/Tubulão', c.custoCantoneira],
+                ['Custo com Argamassa (R$)', c.custoArgamassa],
+                ['Custo de Insumos', c.custoInsumos],
+                ['Custo Horas Adicionais', c.custoHorasAdic],
+                [null],
+                ['Custo Total do Produto', c.custoTotal, true],
+                [null],
+                ['Lucro Líquido', c.lucroLiquido, false, false, '#2E7D32'],
+                ['Comissão Vendedor', 0, false, false, '#999'],
+                ['Comissão Terceiros', 0, false, false, '#999'],
+                ['Comissão Interna', 0, false, false, '#999'],
+                ['Taxas Adicionais', 0, false, false, '#999'],
+                [null],
+                ['M² de compra de Chapa', 0],
+                ['Preço Final do Produto', c.precoFinal, true, false, '#006382'],
+                ['Preço Final do Produto sem Matéria Prima', Math.max(0,c.precoFinal-(c.custoMaterial/(1-(c.margem||30)/100)))],
+                ['Preço do Serviço (Mão de Obra)', c.precoFinal*((c.custoTotal-(c.custoMaterial||0))/(c.custoTotal||1))],
+                ['VMMO/VMMV', c.tempoProdInterno>0?c.precoFinal/c.tempoProdInterno:0],
+                ['LL/H', c.tempoProdInterno>0?c.lucroLiquido/c.tempoProdInterno:0, false, false, '#006382', true],
+                ['Custo de Serviço por m²', c.areaBase>0?(c.custoTotal-(c.custoMaterial||0))/c.areaBase:0],
+              ].map(([nome,val,negrito,cinza,cor,llh])=>{
+                if(!nome)return '<tr><td colspan="2" style="padding:3px;background:#f9f9f9;border-bottom:1px solid #eee;"></td></tr>';
+                return `<tr style="${negrito?'background:#f5f5f5;':''}border-bottom:1px solid #f0f0f0;"><td style="padding:5px 12px;color:${cor||(cinza?'#bbb':'#555')};font-weight:${negrito?'700':'500'};">${nome}</td><td style="padding:5px 12px;text-align:right;color:${cor||'#333'};font-weight:${negrito?'700':'600'};">${llh?fmt(val||0)+'/h':fmt(val||0)}</td></tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div style="background:#2C2C2C;color:white;padding:8px 14px;font-size:11px;font-weight:700;">(TEMPO PRODUTIVO + TEMPO IMPRODUTIVO)</div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead><tr style="background:#f5f5f5;"><th style="padding:5px 12px;text-align:left;color:#555;border-bottom:1px solid #e0e0e0;">NOME</th><th style="padding:5px 12px;text-align:right;color:#555;border-bottom:1px solid #e0e0e0;">VALOR</th></tr></thead>
+            <tbody>
+              ${[
+                ['Tempo de Serra', c.tSerra],['Tempo de Montagem em 45°', c.tMontagem45],
+                ['Tempo de Corte em 45°', c.tCorte45],['Tempo de Corte em 45° Interno', c.tCorte45Interno],
+                ['Tempo Comprimento Polimento Reto 2cm Manual (m)', c.tPolimentoManual],
+                ['Tempo Comprimento de Polimento Automático', c.tPolimentoAuto],
+                ['Tempo Bipolimento', c.tBipolimento],['Tempo de Recortes com Polimento', c.tCubas],
+                ['Tempo de Recortes/Furos sem Polimento', c.tRecortes],['Tempo de Sistema Flush', c.tFlush],
+                ['Tempo de Sistema Flath (un)', c.tFlath],['Tempo Rebaixo Italiano Usinado', c.tRebaixoItaliano],
+                ['Tempo Rebaixo Americano Colado', c.tRebaixoAmericano],
+                ['Tempo Acabamento Colagem de topo (m)', c.tColagemTopo],
+                ['Tempo de Acabamento Meio Boleado', c.tMeioBoelado],
+                ['Tempo de Deslocamento Descarga/Instalação', c.tempoDeslocamento],
+                ['Tempo de Acabamento Meio Boleado Duplo', c.tMeioBoeladoDuplo],
+                ['Tempo de Instalação/Entrega (hr)', c.tempoInstalEntrega],
+                ['Tempo de Acabamento Chanfrado', c.tChanfrado45],
+                ['Tempo de Acabamento Chanfrado Duplo', c.tChanfradoDuplo],
+                ['Tempo de Chanfro Alongado', c.tChanfroAlongado],
+                ['Tempo Acabamento Meia Cana (m)', c.tMeiaCana],
+                ['Tempo de Acabamento Meia Cana Duplo', c.tMeiaCanaD],
+                ['Tempo Horas Adicionais', c.tHorasAdicionais],
+              ].map(([n,v])=>`<tr style="border-bottom:1px solid #f0f0f0;"><td style="padding:5px 12px;color:#555;">${n}</td><td style="padding:5px 12px;text-align:right;font-weight:600;">${fmtH(v||0)}</td></tr>`).join('')}
+              <tr style="background:#f5f5f5;"><td colspan="2" style="padding:2px;"></td></tr>
+              <tr style="background:#f5f5f5;font-weight:700;"><td style="padding:6px 12px;">Tempo Total de Produção Interna</td><td style="padding:6px 12px;text-align:right;">${fmtH(c.tempoProdInterno)}</td></tr>
+              <tr style="background:#e8f4f7;border-top:2px solid #006382;font-weight:700;"><td style="padding:6px 12px;color:#006382;">Tempo Total de Descarga/Instalação</td><td style="padding:6px 12px;text-align:right;color:#006382;">${fmtH(c.tempoDescargaInstalTotal)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+    } else if (elCT && !item.calc) {
+      elCT.innerHTML = '<div style="padding:20px;text-align:center;color:#999;font-size:13px;">⚠️ Selecione o material e preencha as medidas para calcular.</div>';
     }
   });
 
@@ -3933,15 +4004,18 @@ async function salvarEFecharPedido() {
 // ─── HELPERS PEÇA A PEÇA ─────────────────────────────────────────────────
 function parseMedidas(str) {
   if (!str) return {l:0, c:0};
-  // Aceita: 1,20x0,60 / 1.20x0.60 / 1,20X0,60 / 1,2 X 0,6 (com espaços)
-  const partes = str.toLowerCase().replace(/,/g,'.').replace(/\s/g,'').split('x');
-  const l = parseFloat(partes[0]) || 0;
-  const c = parseFloat(partes[1]) || 0;
+  // Remove espaços, normaliza para lowercase
+  let s = str.trim().toLowerCase().replace(/\s/g,'');
+  // Separa pelo X (separador de dimensão)
+  const parts = s.split('x');
+  if (parts.length < 2) return {l:0, c:0};
+  // Converte vírgula decimal para ponto
+  const l = parseFloat(parts[0].replace(',','.')) || 0;
+  const c = parseFloat(parts[1].replace(',','.')) || 0;
   return {l, c};
 }
 
 function calcAreaTotalItem(item) {
-  // Arredonda cada peça para 2 decimais antes de somar (igual Marmoprice)
   return (item.pecas||[]).reduce((s,p) => {
     const m = parseMedidas(p.medidas);
     const areaPeca = Math.round(m.l * m.c * (parseInt(p.qtd)||1) * 100) / 100;
@@ -4530,7 +4604,7 @@ function salvarProduto() {
 }
 
 function calcPreviewProduto() {
-  const custo = parseFloat((document.getElementById('prod-custo')?.value||'0').replace(',',',','.')) || 0;
+  const custo = parseFloat((document.getElementById('prod-custo')?.value||'0').replace(',','.')) || 0;
   const margem = parseFloat(document.getElementById('prod-margem')?.value) || 30;
   const quebra = parseFloat(document.getElementById('prod-quebra')?.value) || 10;
   const preview = document.getElementById('prod-preview');

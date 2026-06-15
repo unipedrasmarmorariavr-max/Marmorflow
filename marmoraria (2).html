@@ -3328,30 +3328,32 @@ function abrirTelaOrcamentoPedido(id) {
   if (!order) return;
   pedidoOrcAtual = id;
 
-  // Busca ou cria orçamento vinculado ao pedido
+  // Chave única do orçamento = pedidoId + data de criação do pedido
+  // Isso garante que pedidos recriados com mesmo ID não carregam orçamento antigo
+  const orcKey = id + '_' + (order.created_at||'').substring(0,10);
+
   let orcs = getOrcamentos();
-  let orc = orcs.find(o => o.pedidoId === id);
+  let orc = orcs.find(o => o.pedidoKey === orcKey || (!o.pedidoKey && o.pedidoId === id && o.criadoEm && order.created_at && o.criadoEm.substring(0,10) === (order.created_at||'').substring(0,10)));
+
   if (!orc) {
+    // Orçamento novo — começa do zero
     orc = {
       id: 'ORC-' + id,
       pedidoId: id,
+      pedidoKey: orcKey,
       cliente: order.cliente || '',
-      distancia: parseFloat(order.distancia) || 0,
-      idas: parseInt(order.idas) || 1,
+      distancia: 0,
+      idas: 1,
       transito: order.transito || 'rapido',
       status: 'Em aberto',
       criadoEm: new Date().toISOString(),
       itens: [{
-        nome: order.peca || '',
-        ambiente: order.ambiente || '',
+        nome: '',
+        ambiente: '',
         pedraId: '',
-        largura: 0,
-        comprimento: 0,
-        quantidade: 1,
-        pecas: [{nome: order.peca||'', medidas:'', qtd:'1'}],
-        tipoEntrega: order.tipoentrega === 'entrega_instalacao' ? 'instalacao' :
-                     order.tipoentrega === 'so_entrega' ? 'entrega' : 'retirada',
-        areaBipolida: 0, horasAdicionais: '00:00',
+        pecas: [{nome:'', medidas:'', qtd:'1'}],
+        tipoEntrega: 'instalacao',
+        areaBipolida:0, horasAdicionais:'00:00',
         compCorte45:0, compMontagem45:0, compCorte45Interno:0,
         compPolimentoManual:0, compPolimentoAuto:0,
         compMeioBoelado:0, compMeioBoeladoDuplo:0, compChanfrado45:0, compChanfradoDuplo:0,
@@ -3364,8 +3366,8 @@ function abrirTelaOrcamentoPedido(id) {
       }]
     };
   } else {
-    // Atualiza distância do pedido caso tenha mudado
-    if (!orc.distancia && order.distancia) orc.distancia = parseFloat(order.distancia)||0;
+    // Garante que a pedidoKey é atualizada nos orçamentos antigos
+    if (!orc.pedidoKey) orc.pedidoKey = orcKey;
   }
   orcamentoAtual = JSON.parse(JSON.stringify(orc));
 

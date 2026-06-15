@@ -2534,6 +2534,8 @@ function getOrcamentos() {
   } catch(e) { return []; }
 }
 function salvarOrcamentos(orcs) {
+  // Limita a 50 orçamentos para não estourar o localStorage
+  if (orcs.length > 50) orcs = orcs.slice(-50);
   localStorage.setItem('orcamentos_marmorflow', JSON.stringify(orcs));
 }
 
@@ -3328,31 +3330,37 @@ function abrirTelaOrcamentoPedido(id) {
   if (!order) return;
   pedidoOrcAtual = id;
 
-  // Chave única do orçamento = pedidoId + data de criação do pedido
-  // Isso garante que pedidos recriados com mesmo ID não carregam orçamento antigo
-  const orcKey = id + '_' + (order.created_at||'').substring(0,10);
+  // Chave única = pedidoId + timestamp de criação do pedido
+  // Garante que todo pedido novo começa do zero, mesmo com mesmo ID
+  const orcKey = id + '_' + (order.created_at || id);
 
   let orcs = getOrcamentos();
-  let orc = orcs.find(o => o.pedidoKey === orcKey || (!o.pedidoKey && o.pedidoId === id && o.criadoEm && order.created_at && o.criadoEm.substring(0,10) === (order.created_at||'').substring(0,10)));
+  // Só carrega se a chave bater EXATAMENTE — nunca carrega por ID sozinho
+  let orc = orcs.find(o => o.pedidoKey === orcKey);
 
   if (!orc) {
-    // Orçamento novo — começa do zero
+    // Sempre começa do zero — sem herdar nada
     orc = {
-      id: 'ORC-' + id,
+      id: 'ORC-' + Date.now(),
       pedidoId: id,
       pedidoKey: orcKey,
       cliente: order.cliente || '',
       distancia: 0,
       idas: 1,
-      transito: order.transito || 'rapido',
+      transito: 'rapido',
       status: 'Em aberto',
       criadoEm: new Date().toISOString(),
+      obsGeral: '',
+      prazoEntrega: '',
+      desconto: 0,
       itens: [{
         nome: '',
         ambiente: '',
         pedraId: '',
         pecas: [{nome:'', medidas:'', qtd:'1'}],
         tipoEntrega: 'instalacao',
+        tempoInstalManual: '',
+        nPessoasInstal: 2,
         areaBipolida:0, horasAdicionais:'00:00',
         compCorte45:0, compMontagem45:0, compCorte45Interno:0,
         compPolimentoManual:0, compPolimentoAuto:0,
@@ -3365,9 +3373,9 @@ function abrirTelaOrcamentoPedido(id) {
         apoioMovel: false, calc: null
       }]
     };
-  } else {
-    // Garante que a pedidoKey é atualizada nos orçamentos antigos
-    if (!orc.pedidoKey) orc.pedidoKey = orcKey;
+    // Salva já para ter a chave registrada
+    orcs.push(orc);
+    salvarOrcamentos(orcs);
   }
   orcamentoAtual = JSON.parse(JSON.stringify(orc));
 
@@ -3393,6 +3401,57 @@ function abrirTelaOrcamentoPedido(id) {
   }
 }
 
+function limparOrcamentoAtual() {
+  if (!pedidoOrcAtual) return;
+  if (!confirm('Tem certeza? Todo o orçamento será apagado e você começará do zero.')) return;
+
+  const order = orders.find(o => o.id === pedidoOrcAtual);
+  if (!order) return;
+
+  // Remove do localStorage
+  const orcKey = pedidoOrcAtual + '_' + (order.created_at || pedidoOrcAtual);
+  const orcs = getOrcamentos().filter(o => o.pedidoKey !== orcKey && o.pedidoId !== pedidoOrcAtual);
+  salvarOrcamentos(orcs);
+
+  // Cria orçamento zerado na memória
+  orcamentoAtual = {
+    id: 'ORC-' + Date.now(),
+    pedidoId: pedidoOrcAtual,
+    pedidoKey: orcKey,
+    cliente: order.cliente || '',
+    distancia: 0,
+    idas: 1,
+    transito: 'rapido',
+    status: 'Em aberto',
+    criadoEm: new Date().toISOString(),
+    obsGeral: '',
+    prazoEntrega: '',
+    desconto: 0,
+    itens: [{
+      nome: '',
+      ambiente: '',
+      pedraId: '',
+      pecas: [{nome:'', medidas:'', qtd:'1'}],
+      tipoEntrega: 'instalacao',
+      tempoInstalManual: '',
+      nPessoasInstal: 2,
+      areaBipolida:0, horasAdicionais:'00:00',
+      compCorte45:0, compMontagem45:0, compCorte45Interno:0,
+      compPolimentoManual:0, compPolimentoAuto:0,
+      compMeioBoelado:0, compMeioBoeladoDuplo:0, compChanfrado45:0, compChanfradoDuplo:0,
+      compMeiaCana:0, compMeiaCanaDuplo:0, compBoeladoDuplo:0, compChanfroAlongado:0,
+      compCubEsculpida:0, compColagemTopo:0, compWaterJet:0,
+      areaRebaixoItaliano:0, areaRebaixoAmericano:0,
+      qtdFlush:0, qtdFlath:0, qtdRecortes:0, qtdCubas:0,
+      custoAcessorios:0, custoInsumoInstal:0, custoArgamassa:0, custoAdicionais:0, custoCantoneira:0,
+      apoioMovel: false, calc: null
+    }]
+  };
+
+  renderTelaOrcamentoPedido(order);
+  showNotif('Orçamento limpo! Começando do zero.', 'success');
+}
+
 function fecharTelaOrcamentoPedido() {
   document.querySelector('.tabs').style.display = '';
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -3400,6 +3459,7 @@ function fecharTelaOrcamentoPedido() {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-kanban').classList.add('active');
   pedidoOrcAtual = null;
+  orcamentoAtual = null; // Limpa memória ao sair — próximo pedido começa do zero
 }
 
 function renderTelaOrcamentoPedido(order) {
@@ -3456,6 +3516,7 @@ function renderTelaOrcamentoPedido(order) {
           <div style="font-size:10px;opacity:0.6;text-transform:uppercase;">LLH</div>
           <div id="hdr-llh" style="font-size:15px;font-weight:700;color:#A8D5A2;">${fmt(llh)}</div>
         </div>
+        <button onclick="limparOrcamentoAtual()" style="background:#6c757d;color:white;border:none;padding:9px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;" title="Apagar todo o orçamento e começar do zero">🗑 Limpar</button>
         <button onclick="imprimirOrcamento()" style="background:#006382;color:white;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">🖨️ Salvar e Imprimir</button>
         <button onclick="salvarOrcamentoPedido()" style="background:#2E7D32;color:white;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">💾 Salvar</button>
         <button id="hdr-btn-fechar" onclick="salvarEFecharPedido()" style="background:var(--gold);color:white;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;${totalGeral>0?'':'display:none;'}">✅ Fechar Pedido</button>
@@ -4353,10 +4414,101 @@ function removerLinhaItem(btn, idx, orderId) {
   recalcularTelaOrc(orderId);
 }
 
-function removerPecaItem(idx, pi, orderId) {
-  if (orcamentoAtual.itens[idx].pecas.length <= 1) return;
-  orcamentoAtual.itens[idx].pecas.splice(pi, 1);
+// removerPecaItem: chamado pelo botão 🗑 no template com (btn, idx, orderId)
+function removerPecaItem(btn, idx, orderId) {
+  removerLinhaItem(btn, idx, orderId);
+}
+
+// Duplica uma peça existente (botão ⧉)
+function duplicarPecaItem(idx, pi, orderId) {
+  if (!orcamentoAtual.itens[idx] || !orcamentoAtual.itens[idx].pecas) return;
+  var original = orcamentoAtual.itens[idx].pecas[pi];
+  if (!original) return;
+  var copia = {nome: original.nome, medidas: original.medidas, qtd: original.qtd};
+
+  var newPi = orcamentoAtual.itens[idx].pecas.length;
+  orcamentoAtual.itens[idx].pecas.push(copia);
+
+  var lista = document.getElementById('pecas-lista-' + idx);
+  if (!lista) { recalcularTelaOrc(orderId); return; }
+
+  var row = document.createElement('div');
+  row.style.cssText = 'display:grid;grid-template-columns:2fr 1.2fr 0.6fr auto;gap:6px;margin-bottom:6px;align-items:center;';
+
+  function inp(style, type, placeholder, val) {
+    var el = document.createElement('input');
+    el.className = 'form-input';
+    el.style.cssText = style;
+    if (type) el.type = type;
+    if (placeholder) el.placeholder = placeholder;
+    if (val !== undefined) el.value = val;
+    return el;
+  }
+
+  var iNome = inp('padding:6px 10px;', null, 'Nome da peça', copia.nome || '');
+  iNome.oninput = (function(i){ return function(){ orcamentoAtual.itens[idx].pecas[i].nome = this.value; }; })(newPi);
+  iNome.onkeydown = (function(i){ return function(e){ pKD(e, this, idx, orderId); }; })(newPi);
+
+  var iMed = inp('padding:6px 10px;font-family:monospace;', null, '1,20x0,60', copia.medidas || '');
+  iMed.oninput = (function(i){ return function(){ orcamentoAtual.itens[idx].pecas[i].medidas = this.value; }; })(newPi);
+  iMed.onchange = function(){ recalcularTelaOrc(orderId); };
+  iMed.onkeydown = (function(i){ return function(e){ pKD(e, this, idx, orderId); }; })(newPi);
+
+  var iQtd = inp('padding:6px 10px;text-align:center;', 'number', '', copia.qtd || '1');
+  iQtd.min = '1';
+  iQtd.oninput = (function(i){ return function(){ orcamentoAtual.itens[idx].pecas[i].qtd = this.value; }; })(newPi);
+  iQtd.onchange = function(){ recalcularTelaOrc(orderId); };
+  iQtd.onkeydown = (function(i){ return function(e){ pKD(e, this, idx, orderId); }; })(newPi);
+
+  var btns = document.createElement('div');
+  btns.style.cssText = 'display:flex;gap:4px;';
+
+  var bAdd = document.createElement('button');
+  bAdd.style.cssText = 'background:#006382;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:14px;';
+  bAdd.title = 'Nova linha'; bAdd.textContent = '+';
+  bAdd.onclick = function(){ adicionarPecaItem(idx, orderId); };
+
+  var bRem = document.createElement('button');
+  bRem.style.cssText = 'background:#dc3545;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;';
+  bRem.title = 'Apagar'; bRem.textContent = '🗑';
+  bRem.onclick = function(){ removerLinhaItem(this, idx, orderId); };
+
+  var bDup = document.createElement('button');
+  bDup.style.cssText = 'background:#6c757d;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;';
+  bDup.title = 'Duplicar'; bDup.textContent = '⧉';
+  bDup.onclick = function(){ duplicarPecaItem(idx, newPi, orderId); };
+
+  btns.appendChild(bAdd); btns.appendChild(bRem); btns.appendChild(bDup);
+  row.appendChild(iNome); row.appendChild(iMed); row.appendChild(iQtd); row.appendChild(btns);
+  lista.appendChild(row);
+
   recalcularTelaOrc(orderId);
+  setTimeout(function(){ iNome.focus(); }, 20);
+}
+
+// Adiciona novo material (mesma pedra, nova linha de item com o mesmo ambiente)
+function adicionarMaterialItem(idx, orderId) {
+  // Copia o item atual para criar um segundo material no mesmo ambiente
+  var itemAtual = orcamentoAtual.itens[idx];
+  orcamentoAtual.itens.push({
+    nome: itemAtual.nome || '',
+    ambiente: itemAtual.ambiente || '',
+    pedraId: '',
+    custoM2Override: 0,
+    margemOverride: 0,
+    quebraOverride: 0,
+    tipoEntrega: itemAtual.tipoEntrega || 'instalacao',
+    pecas: [{nome:'', medidas:'', qtd:'1'}],
+    areaBipolida:0, horasAdicionais:0, m2ChapaNaoComercial:0,
+    compCorte45:0, compMontagem45:0, compPolimentoManual:0, compPolimentoAuto:0,
+    compMeioBoelado:0, compMeioBoeladoDuplo:0, compChanfrado45:0, compChanfradoDuplo:0,
+    compMeiaCana:0, compMeiaCanaDuplo:0, compBoeladoDuplo:0, compChanfroAlongado:0,
+    compCubEsculpida:0, compColagemTopo:0, compWaterJet:0,
+    areaRebaixoItaliano:0, areaRebaixoAmericano:0,
+    qtdFlush:0, qtdFlath:0, qtdRecortes:0, qtdCubas:0,
+    nPessoas:1, tempoInstalManual:'', calc:null
+  });
+  renderTelaOrcamentoPedido(orders.find(o => o.id === orderId));
 }
 // ─────────────────────────────────────────────────────────────────────────────
 

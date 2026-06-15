@@ -660,10 +660,10 @@ async function mostrarPedidoCliente(id) {
 // ============ LOGIN ============
 function doLogout() {
   currentUser=null; selectedProfile=null; perfilAtual=null;
+  localStorage.removeItem('mf_sessao');
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app').style.display='none';
   document.getElementById('pin-input').value='';
-  // Remove seleção visual de todos os perfis
   var ids = ['dono','medidor','comercial','producao','financeiro'];
   for (var i=0; i<ids.length; i++) {
     var el = document.getElementById('pb-'+ids[i]);
@@ -1144,7 +1144,6 @@ function selPerfil(p) {
 function entrar() {
   var pin = document.getElementById('pin-input').value.trim();
   if (!pin) { alert('Digite o PIN!'); return; }
-  // Detect profile from PIN
   var perfil = null;
   if (pin === '1234') perfil = 'dono';
   else if (pin === '2222') perfil = 'medidor';
@@ -1152,14 +1151,18 @@ function entrar() {
   else if (pin === '4444') perfil = 'producao';
   else if (pin === '5555') perfil = 'financeiro';
   else { alert('PIN incorreto!'); return; }
-  // Init supabase
+  ativarSessao(perfil);
+}
+
+function ativarSessao(perfil) {
+  if (!PROFILES[perfil]) return false;
   if (!sb) {
-    try { sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e) { alert('Erro banco: '+e.message); return; }
+    try { sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e) { alert('Erro banco: '+e.message); return false; }
   }
   currentUser = perfil;
   selectedProfile = perfil;
   perfilAtual = perfil;
-  // Carrega pedras padrão do Marmoprice se ainda não existirem
+  localStorage.setItem('mf_sessao', perfil);
   inicializarPedrasPadrao();
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
@@ -1169,11 +1172,10 @@ function entrar() {
   document.getElementById('user-info').innerHTML = p.icon + ' Olá, <strong>' + p.name + '</strong>';
   var btnNew = document.getElementById('btn-new-order');
   if (btnNew) btnNew.style.cssText = p.canCreate ? 'display:flex!important;' : 'display:none!important;';
-  // Show dashboard/materiais only for dono
   var tabDash = document.getElementById('tab-dashboard');
   var tabMat = document.getElementById('tab-materiais');
   var tabOrc = document.getElementById('tab-orcamento');
-  if (tabOrc) tabOrc.style.display = 'none'; // sempre oculto - orçamento é via pasta
+  if (tabOrc) tabOrc.style.display = 'none';
   var tabProd = document.getElementById('tab-produtos');
   if (tabProd) tabProd.style.display = (currentUser === 'dono' || currentUser === 'comercial') ? '' : 'none';
   var tabCfg = document.getElementById('tab-configuracoes');
@@ -1184,17 +1186,24 @@ function entrar() {
   var isDono = perfil==='dono';
   var isFinanceiro = perfil==='financeiro';
   var isComercial = perfil==='comercial';
+  var isProducao = perfil==='producao';
   if (tabDash) tabDash.style.display = isDono ? 'block' : 'none';
   if (tabMat) tabMat.style.display = isDono ? 'block' : 'none';
   if (tabFin) tabFin.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
   if (tabPortal) tabPortal.style.display = isDono ? 'block' : 'none';
-  var isProducao = perfil==='producao';
   if (tabAgenda) tabAgenda.style.display = (isDono||isComercial||isProducao) ? 'block' : 'none';
   if (isFinanceiro) { showTab('financeiro'); }
   loadOrders().then(function() { renderKanban(); });
+  return true;
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  // Restaura sessão salva (evita login ao recarregar)
+  var sessaoSalva = localStorage.getItem('mf_sessao');
+  if (sessaoSalva && PROFILES[sessaoSalva]) {
+    ativarSessao(sessaoSalva);
+    return;
+  }
   var pinEl = document.getElementById('pin-input');
   if (pinEl) pinEl.addEventListener('keydown', function(e){ if(e.key==='Enter') entrar(); });
 });

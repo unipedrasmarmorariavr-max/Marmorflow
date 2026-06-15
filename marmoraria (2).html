@@ -870,15 +870,21 @@ async function drop(e,stage) {
     return;
   }
 
-  // Se estava em Pedido Fechado e voltou para Negociação → remove cópia em Corte
+  // Se estava em Pedido Fechado e voltou para Negociação → remove cópia em Corte e limpa data da agenda
   if (order.stage === 'fechado' && stage === 'negociacao') {
     const copia = orders.find(o => o.ref_fechado === id);
     if (copia) {
-      if (!confirm(`Ao voltar para Negociação, a cópia ${copia.id} em Em Corte será removida. Confirmar?`)) return;
+      if (!confirm(`Ao voltar para Negociação, a cópia ${copia.id} em Em Corte será removida e a data de instalação será cancelada na agenda. Confirmar?`)) return;
       await getSB().from('pedidos').delete().eq('id', copia.id);
       orders = orders.filter(o => o.id !== copia.id);
       showNotif(`Cópia ${copia.id} removida de Em Corte`, 'error');
+    } else {
+      if (!confirm(`Ao voltar para Negociação, a data de instalação agendada será removida da agenda. Confirmar?`)) return;
     }
+    // Remove a data de instalação da agenda
+    order.dataentrega = null;
+    await getSB().from('pedidos').update({ dataentrega: null }).eq('id', id);
+    showNotif('📅 Data de instalação removida da agenda', 'error');
   }
 
   history.push({stage,date:hoje});

@@ -661,6 +661,7 @@ async function mostrarPedidoCliente(id) {
 function doLogout() {
   currentUser=null; selectedProfile=null; perfilAtual=null;
   localStorage.removeItem('mf_sessao');
+  localStorage.removeItem('mf_aba');
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app').style.display='none';
   document.getElementById('pin-input').value='';
@@ -692,8 +693,9 @@ async function nextId() {
 function showTab(tab) {
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('panel-'+tab).classList.add('active');
-  document.getElementById('tab-'+tab).classList.add('active');
+  document.getElementById('panel-'+tab)?.classList.add('active');
+  document.getElementById('tab-'+tab)?.classList.add('active');
+  localStorage.setItem('mf_aba', tab);
   if (tab==='dashboard') renderDashboard();
   if (tab==='materiais') renderMateriais();
   if (tab==='financeiro') renderFinanceiro();
@@ -1192,8 +1194,16 @@ function ativarSessao(perfil) {
   if (tabFin) tabFin.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
   if (tabPortal) tabPortal.style.display = isDono ? 'block' : 'none';
   if (tabAgenda) tabAgenda.style.display = (isDono||isComercial||isProducao) ? 'block' : 'none';
-  if (isFinanceiro) { showTab('financeiro'); }
-  loadOrders().then(function() { renderKanban(); });
+  if (isFinanceiro) { showTab('financeiro'); return true; }
+  loadOrders().then(function() {
+    renderKanban();
+    // Restaura aba ativa (após renderKanban para não ser sobrescrita)
+    var abaAtiva = localStorage.getItem('mf_aba');
+    if (abaAtiva && abaAtiva !== 'kanban' && abaAtiva !== 'orcamento' &&
+        document.getElementById('panel-'+abaAtiva)) {
+      showTab(abaAtiva);
+    }
+  });
   return true;
 }
 
@@ -1202,6 +1212,11 @@ document.addEventListener('DOMContentLoaded', function() {
   var sessaoSalva = localStorage.getItem('mf_sessao');
   if (sessaoSalva && PROFILES[sessaoSalva]) {
     ativarSessao(sessaoSalva);
+    // Restaura a aba que estava ativa
+    var abaSalva = localStorage.getItem('mf_aba');
+    if (abaSalva && abaSalva !== 'kanban') {
+      setTimeout(function() { showTab(abaSalva); }, 100);
+    }
     return;
   }
   var pinEl = document.getElementById('pin-input');

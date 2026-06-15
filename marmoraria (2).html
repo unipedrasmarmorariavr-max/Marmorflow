@@ -211,6 +211,97 @@
     .modal-header{padding:18px 18px 14px;}
     .modal-footer{padding:12px 18px 18px;}
     .login-card{width:100%;margin:16px;}
+
+    /* ORÇAMENTO MOBILE */
+    #panel-orcamento-pedido { padding-bottom: 120px; }
+
+    /* Header do orçamento */
+    #orc-header-top {
+      flex-direction: column !important;
+      gap: 10px !important;
+      padding: 12px !important;
+    }
+    #orc-header-top > div:first-child { font-size: 14px !important; }
+    #hdr-custo-wrap, #hdr-valor-wrap, #hdr-margem-wrap, #hdr-llh-wrap {
+      padding: 6px 10px !important;
+      font-size: 12px !important;
+    }
+    #hdr-valor { font-size: 15px !important; }
+
+    /* Campos do cabeçalho do orçamento - 1 coluna no mobile */
+    #orc-campos-header {
+      grid-template-columns: 1fr !important;
+    }
+    #orc-campos-linha2 {
+      grid-template-columns: 1fr 1fr !important;
+    }
+
+    /* Peça a peça - simplifica para mobile */
+    .peca-row {
+      grid-template-columns: 1fr 1fr auto !important;
+    }
+
+    /* Grid de acabamentos - 2 colunas no mobile */
+    .acabamentos-grid {
+      grid-template-columns: 1fr 1fr !important;
+    }
+
+    /* Custos adicionais - 2 colunas */
+    .custos-adicionais-grid {
+      grid-template-columns: 1fr 1fr !important;
+    }
+
+    /* Linha de materiais - empilha no mobile */
+    .materiais-linha {
+      grid-template-columns: 1fr 1fr !important;
+      gap: 6px !important;
+    }
+    .materiais-linha > *:first-child {
+      grid-column: 1 / -1 !important;
+    }
+
+    /* Custos e tempos - 1 coluna no mobile */
+    [id^="custos-tempos-"] > div {
+      grid-template-columns: 1fr !important;
+    }
+    [id^="custos-tempos-"] table {
+      font-size: 11px !important;
+    }
+    [id^="custos-tempos-"] th, [id^="custos-tempos-"] td {
+      padding: 4px 8px !important;
+    }
+
+    /* Rodapé fixo mobile */
+    .orc-rodape-fixo {
+      flex-wrap: wrap !important;
+      padding: 8px 12px !important;
+      gap: 6px !important;
+    }
+    .orc-rodape-campos {
+      grid-template-columns: 1fr !important;
+    }
+    .orc-rodape-fixo button {
+      padding: 8px 12px !important;
+      font-size: 11px !important;
+    }
+    #hdr-custo-wrap, #hdr-valor-wrap, #hdr-margem-wrap, #hdr-llh-wrap {
+      padding: 5px 8px !important;
+    }
+    #hdr-valor { font-size: 14px !important; }
+    #orc-header-top { padding: 8px 12px !important; }
+    #orc-campos-linha2 { grid-template-columns: 1fr 1fr !important; }
+    .materiais-linha { grid-template-columns: 1fr 1fr !important; }
+    .materiais-linha > div:first-child { grid-column: 1 / -1; }
+  }
+
+  @media(max-width:768px) and (min-width:601px){
+    /* Tablet */
+    .acabamentos-grid {
+      grid-template-columns: repeat(3, 1fr) !important;
+    }
+    .materiais-linha {
+      grid-template-columns: 2fr 1fr 1fr 1fr !important;
+    }
   }
 </style>
 </head>
@@ -2346,6 +2437,7 @@ const PEDRAS_PADRAO_MARMOPRICE = [
   { id: 'MP-85642', nome: 'GRANITO AMARELO ORNAMENTAL POLIDO', custoM2: 135, quebra: 10, margem: 30, grupoId: 1233 },
   { id: 'MP-109000', nome: 'GRANITO AMARELO OURO BRASIL BIPOLIDO', custoM2: 195, quebra: 10, margem: 30, grupoId: 1233 },
   { id: 'MP-109003', nome: 'GRANITO AMARELO OURO BRASIL FLAMEADO', custoM2: 245, quebra: 10, margem: 30, grupoId: 1233 },
+  { id: 'MP-109001', nome: 'GRANITO AMARELO OURO BRASIL LEVIGADO', custoM2: 195, quebra: 10, margem: 30, grupoId: 1233 },
   { id: 'MP-86313', nome: 'GRANITO AMARELO OURO BRASIL POLIDO', custoM2: 145, quebra: 10, margem: 30, grupoId: 1233 },
   { id: 'MP-85757', nome: 'GRANITO ANDORINHA BIPOLIDO', custoM2: 145, quebra: 10, margem: 30, grupoId: 1233 },
   { id: 'MP-85645', nome: 'GRANITO BRANCO DALLAS', custoM2: 115, quebra: 10, margem: 30, grupoId: 1233 },
@@ -2550,7 +2642,10 @@ function calcularItem(item, pedra, cfg) {
     if (tim.includes(':')) { const p=tim.split(':'); tempoInstalEntrega=(parseInt(p[0])||0)+(parseInt(p[1])||0)/60; }
     else { tempoInstalEntrega = parseFloat(tim)||0; }
   } else if (item.tipoEntrega==='instalacao') {
-    // Estimativa automática baseada na área
+    // Marmoprice: campo mostra tempo TOTAL / nPessoas
+    // Ex: área 1,044 × 1,5 = 1,566h total → campo mostra 01:34 (= 1,566/1 com 1 pessoa ou = 1,566/2×2 com 2)
+    // Na verdade o campo mostra o tempo total de instalação
+    // e o custo = tempo × nPessoas × custoHora
     tempoInstalEntrega = areaBaseExata * (cfg.horasInstalacaoM2||1.5);
   } else if (item.tipoEntrega==='entrega') {
     tempoInstalEntrega = areaBaseExata * (cfg.horasEntregaM2||0.33);
@@ -2575,8 +2670,9 @@ function calcularItem(item, pedra, cfg) {
   const custoHorasAdic       = tHorasAdicionais*custoHoraEmpresa;
 
   // CONFIRMADO: instalação e deslocamento = tempo * custoHora (SEM multiplicar nPessoas)
-  const custoInstalacao   = tempoInstalEntrega * custoHoraEmpresa;
-  const custoDeslocamento = tempoDeslocamento  * custoHoraEmpresa;
+  // CONFIRMADO pelas imagens: Marmoprice multiplica por nPessoas (ratio=2.0x com 2 pessoas)
+  const custoInstalacao   = tempoInstalEntrega * nPessoas * custoHoraEmpresa;
+  const custoDeslocamento = tempoDeslocamento  * nPessoas * custoHoraEmpresa;
   const custoCombustivel  = (distancia*2*idas/(cfg.consumoCombustivel||8))*(cfg.custoCombustivel||7);
 
   const custoAcessorios   = parseFloat(item.custoAcessorios)||0;
@@ -3329,7 +3425,7 @@ function renderTelaOrcamentoPedido(order) {
   <div style="min-height:100vh;background:#f5f5f5;padding-bottom:80px;">
 
     <!-- HEADER FIXO -->
-    <div style="background:#1a2332;color:white;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.3);">
+    <div id="orc-header-top" style="background:#1a2332;color:white;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.3);">
       <div style="display:flex;align-items:center;gap:16px;">
         <button onclick="fecharTelaOrcamentoPedido()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:white;padding:7px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">← Voltar</button>
         <div>
@@ -3366,7 +3462,7 @@ function renderTelaOrcamentoPedido(order) {
       <div style="background:white;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
 
         <!-- Linha 1: Cliente · Endereço · Status -->
-        <div style="display:grid;grid-template-columns:2fr 2fr 1fr;gap:12px;margin-bottom:14px;">
+        <div id="orc-campos-header" style="display:grid;grid-template-columns:2fr 2fr 1fr;gap:12px;margin-bottom:14px;">
           <div>
             <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">CLIENTE *</label>
             <input class="form-input" value="${orc.cliente||order.cliente||''}" oninput="orcamentoAtual.cliente=this.value" style="font-weight:600;">
@@ -3384,11 +3480,18 @@ function renderTelaOrcamentoPedido(order) {
         </div>
 
         <!-- Linha 2: Distância · Idas · Trânsito · Origem · Data -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 1.6fr 1.6fr 1.2fr;gap:12px;margin-bottom:14px;align-items:start;">
+        <div id="orc-campos-linha2" style="display:grid;grid-template-columns:1fr 1fr 1.6fr 1.6fr 1.2fr;gap:12px;margin-bottom:14px;align-items:start;">
           <div>
             <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">DISTÂNCIA (km) *</label>
-            <input class="form-input" type="number" value="${orc.distancia||order.distancia||0}"
-              oninput="orcamentoAtual.distancia=parseFloat(this.value)||0;recalcularTelaOrc('${order.id}')">
+            <input class="form-input" type="number" id="orc-distancia-tela"
+              value="${orc.distancia||0}"
+              style="${!orc.distancia ? 'border:2px solid #dc3545;background:#fff5f5;' : 'border:2px solid #2E7D32;'}"
+              oninput="
+                orcamentoAtual.distancia=parseFloat(this.value)||0;
+                this.style.border = this.value > 0 ? '2px solid #2E7D32' : '2px solid #dc3545';
+                this.style.background = this.value > 0 ? '' : '#fff5f5';
+                recalcularTelaOrc('${order.id}')">
+            ${!orc.distancia ? '<div style="font-size:10px;color:#dc3545;margin-top:3px;">⚠️ Preencha a distância!</div>' : ''}
           </div>
           <div>
             <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">IDAS ↺ <span style="font-size:9px;color:#999;font-weight:400;">(ida+volta)</span></label>
@@ -3518,12 +3621,12 @@ function renderTelaOrcamentoPedido(order) {
     </div>
 
     <!-- RODAPÉ FIXO (igual Marmoprice) -->
-    <div style="position:fixed;bottom:0;left:0;right:0;background:white;border-top:1px solid #ddd;padding:10px 24px;display:flex;gap:12px;align-items:center;z-index:99;box-shadow:0 -2px 8px rgba(0,0,0,0.08);">
+    <div class="orc-rodape-fixo" style="position:fixed;bottom:0;left:0;right:0;background:white;border-top:1px solid #ddd;padding:10px 24px;display:flex;gap:12px;align-items:center;z-index:99;box-shadow:0 -2px 8px rgba(0,0,0,0.08);">
       <div style="display:flex;align-items:center;gap:8px;background:#f5f5f5;padding:8px 14px;border-radius:6px;cursor:pointer;" onclick="abrirDescontoGeral(${custoTotal}, ${totalGeral}, ${margem.toFixed(3)}, ${lucroTotal}, ${llh.toFixed(2)})">
         <span style="font-size:18px;">🧮</span>
         <span style="font-size:12px;font-weight:600;color:#333;">Desconto<br>Geral</span>
       </div>
-      <div style="flex:1;display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;">
+      <div class="orc-rodape-campos" style="flex:1;display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;">
         <div><label style="font-size:10px;color:#666;">Observações gerais</label><input class="form-input" style="padding:6px 10px;" value="${orc.obsGeral||''}" oninput="orcamentoAtual.obsGeral=this.value"></div>
         <div><label style="font-size:10px;color:#666;">Prazo de Entrega</label><input class="form-input" style="padding:6px 10px;" value="${orc.prazoEntrega||''}" oninput="orcamentoAtual.prazoEntrega=this.value"></div>
         <div><label style="font-size:10px;color:#666;">Desconto (%)</label><input class="form-input" style="padding:6px 10px;" type="number" value="${orc.desconto||0}" oninput="orcamentoAtual.desconto=parseFloat(this.value)||0"></div>
@@ -3725,7 +3828,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
       </div>
 
       <!-- CAMPOS ACABAMENTO — 5 colunas, igual Marmoprice -->
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">
+      <div class="acabamentos-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">
         ${[
           ['Comprimento de Acabamento 45° Saia (m)', 'compCorte45'],
           ['Comprimento Polimento Reto 2cm Manual (m)', 'compPolimentoManual'],
@@ -3788,7 +3891,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
       <!-- CUSTOS ADICIONAIS -->
       <div style="margin-bottom:16px;padding:12px;background:#fffbf0;border-radius:6px;border:1px solid #f0e0a0;">
         <div style="font-size:11px;font-weight:700;color:#8B6914;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">💰 Custos Adicionais (R$)</div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
+        <div class="custos-adicionais-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
           ${[
             ['Custos de Acessórios (R$)', 'custoAcessorios'],
             ['Insumos de Instalação (R$)', 'custoInsumoInstal'],
@@ -3817,7 +3920,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
           ${['Nome *','Custo do Material (m²) *','Dif. de Trabalho *','Margem Lucro (%) *','Comissão Vendedor (%)','Comissão Terceiros (%)','Comissão Interna (%)','Valor de Venda (R$)','LL/H'].map(h=>`<div style="font-size:10px;color:#666;font-weight:600;">${h}</div>`).join('')}
         </div>
         <!-- Linha de dados -->
-        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;align-items:center;">
+        <div class="materiais-linha" style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;align-items:center;">
           <!-- Dropdown pedra -->
           <div>
             <select class="form-select" style="padding:6px 8px;font-size:12px;"

@@ -1783,24 +1783,22 @@ function dateToStr(d) {
 }
 
 function getDiasOcupados() {
-  // Pega todos os pedidos ativos com instalação e data — sem duplicar
+  // Só aparece na agenda se estiver em Pedido Fechado ou em produção
+  const stagesAgenda = ['fechado','corte','acabamento','pronto'];
   const vistos = new Set();
   return orders
     .filter(o => {
       const temInstalacao = o.tipoentrega === 'entrega_instalacao' || o.tipoentrega === 'so_instalacao';
-      const ativo = !['entregue'].includes(o.stage);
+      const emProducao = stagesAgenda.includes(o.stage);
       const temData = !!o.dataentrega;
-      return temInstalacao && ativo && temData;
+      return temInstalacao && emProducao && temData;
     })
     .filter(o => {
-      // Remove duplicatas — se for cópia (ref_fechado), usa o id original como chave
       const chave = o.ref_fechado || o.id;
       if (vistos.has(chave)) return false;
       vistos.add(chave);
       return true;
     })
-    // FIX: normaliza a data para "YYYY-MM-DD" cortando os 10 primeiros caracteres
-    // (Supabase pode retornar "2026-06-20T00:00:00+00:00" que quebra a comparação)
     .map(o => ({ data: (o.dataentrega||'').substring(0,10), id: o.id, cliente: o.cliente, peca: o.peca }));
 }
 

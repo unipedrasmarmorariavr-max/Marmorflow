@@ -2637,7 +2637,9 @@ function calcularItem(item, pedra, cfg) {
   const distancia = parseFloat(item.distancia)||0;
   const idas = parseInt(item.idas)||1;
   const minKm = cfg.transito==='lento'?(cfg.minKmLento||3):cfg.transito==='intermediario'?(cfg.minKmIntermediario||2):(cfg.minKmRapido||1);
-  const nPessoas = parseInt(item.nPessoasInstal)||(cfg.pessoasInstalacao||2);
+  // Padrão de pessoas: 2 para instalação, 1 para só entrega (igual Marmoprice)
+  const nPessoasDefault = (item.tipoEntrega === 'instalacao') ? (cfg.pessoasInstalacao||2) : 1;
+  const nPessoas = parseInt(item.nPessoasInstal) || nPessoasDefault;
 
   const tempoDeslocamento = (distancia * 2 * minKm * idas) / 60;
 
@@ -2675,10 +2677,10 @@ function calcularItem(item, pedra, cfg) {
   const custoWaterJet        = (parseFloat(item.compWaterJet)||0)*(cfg.waterJet||20);
   const custoHorasAdic       = tHorasAdicionais*custoHoraEmpresa;
 
-  // CONFIRMADO: instalação e deslocamento = tempo * custoHora (SEM multiplicar nPessoas)
-  // CONFIRMADO pelas imagens: Marmoprice multiplica por nPessoas (ratio=2.0x com 2 pessoas)
-  const custoInstalacao   = tempoInstalEntrega * nPessoas * custoHoraEmpresa;
-  const custoDeslocamento = tempoDeslocamento  * nPessoas * custoHoraEmpresa;
+  // IGUAL MARMOPRICE: instalação e deslocamento = tempo * custoHoraEmpresa (SEM multiplicar por nPessoas)
+  // nPessoas afeta apenas o tempo exibido, não multiplica o custo
+  const custoInstalacao   = tempoInstalEntrega * custoHoraEmpresa;
+  const custoDeslocamento = tempoDeslocamento  * custoHoraEmpresa;
   const custoCombustivel  = (distancia*2*idas/(cfg.consumoCombustivel||8))*(cfg.custoCombustivel||7);
 
   const custoAcessorios   = parseFloat(item.custoAcessorios)||0;
@@ -3360,7 +3362,7 @@ function abrirTelaOrcamentoPedido(id) {
         pecas: [{nome:'', medidas:'', qtd:'1'}],
         tipoEntrega: 'instalacao',
         tempoInstalManual: '',
-        nPessoasInstal: 2,
+        nPessoasInstal: 1,
         areaBipolida:0, horasAdicionais:'00:00',
         compCorte45:0, compMontagem45:0, compCorte45Interno:0,
         compPolimentoManual:0, compPolimentoAuto:0,
@@ -3434,7 +3436,7 @@ function limparOrcamentoAtual() {
       pecas: [{nome:'', medidas:'', qtd:'1'}],
       tipoEntrega: 'instalacao',
       tempoInstalManual: '',
-      nPessoasInstal: 2,
+      nPessoasInstal: 1,
       areaBipolida:0, horasAdicionais:'00:00',
       compCorte45:0, compMontagem45:0, compCorte45Interno:0,
       compPolimentoManual:0, compPolimentoAuto:0,
@@ -3940,7 +3942,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
               currentVal = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
             } else { currentVal = '00:00'; }
           }
-          if (isAutoPessoas) currentVal = item.nPessoasInstal || cfg.pessoasInstalacao || 2;
+          if (isAutoPessoas) currentVal = item.nPessoasInstal || (item.tipoEntrega === 'instalacao' ? (cfg.pessoasInstalacao||2) : 1);
           return `<div>
             <label style="font-size:10px;color:#666;display:block;margin-bottom:3px;">${label}${autoLabel}</label>
             <input id="${isAutoInstal?'campo-tempo-instal-'+idx:isAutoPessoas?'campo-pessoas-'+idx:''}"

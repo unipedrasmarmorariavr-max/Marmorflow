@@ -212,46 +212,86 @@
     .modal-footer{padding:12px 18px 18px;}
     .login-card{width:100%;margin:16px;}
 
-    /* ORÇAMENTO MOBILE */
-    #panel-orcamento-pedido { padding-bottom: 120px; }
+    /* ═══════════════════════════════════════════════
+       ORÇAMENTO MOBILE — layout completo responsivo
+       ═══════════════════════════════════════════════ */
+    #panel-orcamento-pedido { padding-bottom: 180px; }
 
-    /* Header do orçamento */
+    /* ── HEADER FIXO ─────────────────────────────── */
     #orc-header-top {
       flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 8px !important;
+      padding: 8px 12px !important;
+    }
+    /* Linha 1: Voltar + título */
+    #orc-header-top > div:first-child {
+      justify-content: flex-start !important;
       gap: 10px !important;
-      padding: 12px !important;
     }
-    #orc-header-top > div:first-child { font-size: 14px !important; }
+    #orc-header-top > div:first-child > div > div:first-child {
+      font-size: 13px !important;
+    }
+    /* Linha 2: métricas + botões — scroll horizontal */
+    #orc-header-top > div:last-child {
+      display: flex !important;
+      overflow-x: auto !important;
+      gap: 6px !important;
+      padding-bottom: 4px !important;
+      flex-wrap: nowrap !important;
+      -webkit-overflow-scrolling: touch;
+    }
     #hdr-custo-wrap, #hdr-valor-wrap, #hdr-margem-wrap, #hdr-llh-wrap {
-      padding: 6px 10px !important;
-      font-size: 12px !important;
+      padding: 5px 10px !important;
+      flex-shrink: 0 !important;
+      min-width: 80px !important;
     }
-    #hdr-valor { font-size: 15px !important; }
+    #hdr-custo { font-size: 12px !important; }
+    #hdr-valor { font-size: 13px !important; }
+    #hdr-margem { font-size: 13px !important; }
+    #hdr-llh { font-size: 12px !important; }
+    #orc-header-top button {
+      flex-shrink: 0 !important;
+      padding: 7px 10px !important;
+      font-size: 11px !important;
+      white-space: nowrap !important;
+    }
 
-    /* Campos do cabeçalho do orçamento - 1 coluna no mobile */
+    /* ── ÁREA DE CONTEÚDO ────────────────────────── */
+    #orcamento-pedido-content > div > div[style*="max-width:1300px"] {
+      padding: 12px 10px !important;
+    }
+
+    /* ── CABEÇALHO DO ORÇAMENTO ─────────────────── */
     #orc-campos-header {
       grid-template-columns: 1fr !important;
     }
     #orc-campos-linha2 {
       grid-template-columns: 1fr 1fr !important;
     }
-
-    /* Peça a peça - simplifica para mobile */
-    .peca-row {
-      grid-template-columns: 1fr 1fr auto !important;
+    /* Linha 2: Trânsito e Origem ocupam linha inteira */
+    #orc-campos-linha2 > div:nth-child(3),
+    #orc-campos-linha2 > div:nth-child(4) {
+      grid-column: 1 / -1 !important;
     }
 
-    /* Grid de acabamentos - 2 colunas no mobile */
+    /* ── PEÇA A PEÇA ─────────────────────────────── */
+    #panel-orcamento-pedido [id^="pecas-lista-"] > div {
+      grid-template-columns: 1fr 90px 60px auto !important;
+      gap: 4px !important;
+    }
+
+    /* ── CAMPOS DE ACABAMENTO ────────────────────── */
     .acabamentos-grid {
       grid-template-columns: 1fr 1fr !important;
     }
 
-    /* Custos adicionais - 2 colunas */
+    /* ── CUSTOS ADICIONAIS ───────────────────────── */
     .custos-adicionais-grid {
       grid-template-columns: 1fr 1fr !important;
     }
 
-    /* Linha de materiais - empilha no mobile */
+    /* ── MATERIAIS ───────────────────────────────── */
     .materiais-linha {
       grid-template-columns: 1fr 1fr !important;
       gap: 6px !important;
@@ -260,38 +300,54 @@
       grid-column: 1 / -1 !important;
     }
 
-    /* Custos e tempos - 1 coluna no mobile */
+    /* ── CUSTOS E TEMPOS ─────────────────────────── */
     [id^="custos-tempos-"] > div {
       grid-template-columns: 1fr !important;
+    }
+    [id^="custos-tempos-"] > div > div {
+      border-right: none !important;
+      border-bottom: 1px solid #e0e0e0 !important;
     }
     [id^="custos-tempos-"] table {
       font-size: 11px !important;
     }
-    [id^="custos-tempos-"] th, [id^="custos-tempos-"] td {
+    [id^="custos-tempos-"] th,
+    [id^="custos-tempos-"] td {
       padding: 4px 8px !important;
     }
 
-    /* Rodapé fixo mobile */
+    /* ── RODAPÉ FIXO ─────────────────────────────── */
     .orc-rodape-fixo {
-      flex-wrap: wrap !important;
-      padding: 8px 12px !important;
+      flex-direction: column !important;
+      padding: 8px 10px !important;
       gap: 6px !important;
     }
     .orc-rodape-campos {
-      grid-template-columns: 1fr !important;
+      grid-template-columns: 1fr 1fr !important;
+      width: 100% !important;
     }
+    /* Observações ocupa linha inteira */
+    .orc-rodape-campos > div:first-child {
+      grid-column: 1 / -1 !important;
+    }
+    /* Botões do rodapé em linha */
+    .orc-rodape-fixo > button,
     .orc-rodape-fixo button {
-      padding: 8px 12px !important;
-      font-size: 11px !important;
+      flex: 1 !important;
+      padding: 9px 8px !important;
+      font-size: 12px !important;
+      white-space: nowrap !important;
     }
-    #hdr-custo-wrap, #hdr-valor-wrap, #hdr-margem-wrap, #hdr-llh-wrap {
-      padding: 5px 8px !important;
+    /* Agrupa os botões do rodapé lado a lado */
+    .orc-rodape-fixo {
+      display: flex !important;
+      flex-wrap: wrap !important;
     }
-    #hdr-valor { font-size: 14px !important; }
-    #orc-header-top { padding: 8px 12px !important; }
-    #orc-campos-linha2 { grid-template-columns: 1fr 1fr !important; }
-    .materiais-linha { grid-template-columns: 1fr 1fr !important; }
-    .materiais-linha > div:first-child { grid-column: 1 / -1; }
+    .orc-rodape-btns-wrap {
+      display: flex !important;
+      gap: 6px !important;
+      width: 100% !important;
+    }
   }
 
   @media(max-width:768px) and (min-width:601px){
@@ -3700,9 +3756,11 @@ function renderTelaOrcamentoPedido(order) {
         <div><label style="font-size:10px;color:#666;">Prazo de Entrega</label><input class="form-input" style="padding:6px 10px;" value="${orc.prazoEntrega||''}" oninput="orcamentoAtual.prazoEntrega=this.value"></div>
         <div><label style="font-size:10px;color:#666;">Desconto (%)</label><input class="form-input" style="padding:6px 10px;" type="number" value="${orc.desconto||0}" oninput="orcamentoAtual.desconto=parseFloat(this.value)||0"></div>
       </div>
-      <button onclick="imprimirOrcamento()" style="background:#1a2332;color:white;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">SALVAR E IMPRIMIR</button>
-      <button onclick="salvarOrcamentoPedido()" style="background:#006382;color:white;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">SALVAR</button>
-      <button onclick="fecharTelaOrcamentoPedido()" style="background:#dc3545;color:white;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">VOLTAR</button>
+      <div class="orc-rodape-btns-wrap">
+        <button onclick="imprimirOrcamento()" style="background:#1a2332;color:white;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;flex:1;">🖨️ Imprimir</button>
+        <button onclick="salvarOrcamentoPedido()" style="background:#006382;color:white;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;flex:1;">💾 Salvar</button>
+        <button onclick="fecharTelaOrcamentoPedido()" style="background:#dc3545;color:white;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;flex:1;">← Voltar</button>
+      </div>
     </div>
   </div>`;
 

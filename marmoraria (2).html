@@ -2055,6 +2055,146 @@ async function deletarTransacao(id) {
   showNotif('Lançamento excluído','error');
 }
 
+async function renderFinanceiro() {
+  const el = document.getElementById('financeiro-content');
+  if (!el) return;
+
+  el.innerHTML = `<div style="padding:40px;text-align:center;color:#888;">Carregando...</div>`;
+
+  // Carrega transações do Supabase
+  let transacoes = [];
+  try {
+    const { data } = await getSB().from('transacoes').select('*').order('data', { ascending: false });
+    transacoes = data || [];
+  } catch(e) { console.error(e); }
+
+  const mesAtual = new Date().toISOString().substring(0,7); // YYYY-MM
+  const filtroMes = localStorage.getItem('fin_mes') || mesAtual;
+
+  const txMes = transacoes.filter(t => (t.data||'').substring(0,7) === filtroMes);
+  const entradas = txMes.filter(t => t.tipo === 'entrada');
+  const saidas = txMes.filter(t => t.tipo === 'saida');
+  const totalEntradas = entradas.reduce((s,t) => s + (parseFloat(t.valor)||0), 0);
+  const totalSaidas = saidas.reduce((s,t) => s + (parseFloat(t.valor)||0), 0);
+  const saldo = totalEntradas - totalSaidas;
+
+  const fmtV = v => 'R$ ' + (v||0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const fmtDt = d => d ? d.substring(8,10)+'/'+d.substring(5,7)+'/'+d.substring(0,4) : '';
+
+  el.innerHTML = `
+  <div style="padding:24px;max-width:1100px;margin:0 auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+      <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);">💰 Financeiro</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <input type="month" class="form-input" style="padding:8px 12px;font-size:13px;"
+          value="${filtroMes}"
+          onchange="localStorage.setItem('fin_mes',this.value);renderFinanceiro()">
+        <button onclick="abrirModalTransacao('entrada')"
+          style="background:#2E7D32;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">
+          + Entrada
+        </button>
+        <button onclick="abrirModalTransacao('saida')"
+          style="background:#B85A4A;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">
+          + Saída
+        </button>
+      </div>
+    </div>
+
+    <!-- CARDS RESUMO -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px;">
+      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;border-top:4px solid #2E7D32;">
+        <div style="font-size:12px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Total Entradas</div>
+        <div style="font-size:24px;font-weight:800;color:#2E7D32;">${fmtV(totalEntradas)}</div>
+        <div style="font-size:12px;color:#888;margin-top:4px;">${entradas.length} lançamento(s)</div>
+      </div>
+      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;border-top:4px solid #B85A4A;">
+        <div style="font-size:12px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Total Saídas</div>
+        <div style="font-size:24px;font-weight:800;color:#B85A4A;">${fmtV(totalSaidas)}</div>
+        <div style="font-size:12px;color:#888;margin-top:4px;">${saidas.length} lançamento(s)</div>
+      </div>
+      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;border-top:4px solid ${saldo>=0?'#2E7D32':'#B85A4A'};">
+        <div style="font-size:12px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Saldo do Mês</div>
+        <div style="font-size:24px;font-weight:800;color:${saldo>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldo)}</div>
+        <div style="font-size:12px;color:#888;margin-top:4px;">${saldo>=0?'Positivo ✅':'Negativo ⚠️'}</div>
+      </div>
+    </div>
+
+    <!-- LANÇAMENTOS -->
+    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
+      <div style="background:var(--stone);color:white;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:13px;font-weight:700;">Lançamentos de ${filtroMes.substring(5,7)}/${filtroMes.substring(0,4)}</div>
+        <div style="font-size:12px;opacity:.7;">${txMes.length} registros</div>
+      </div>
+      ${txMes.length === 0 ? `
+      <div style="padding:40px;text-align:center;color:#888;">
+        <div style="font-size:32px;margin-bottom:12px;">📭</div>
+        <div>Nenhum lançamento neste mês</div>
+      </div>` :
+      txMes.map(t => `
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--cream-dark);">
+        <div style="width:36px;height:36px;border-radius:50%;background:${t.tipo==='entrada'?'#f0fff4':'#fff5f5'};display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">
+          ${t.tipo==='entrada'?'↑':'↓'}
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:600;color:var(--stone);">${t.descricao||'—'}</div>
+          <div style="font-size:11px;color:#888;margin-top:2px;">
+            ${fmtDt(t.data)}
+            ${t.banco?' · '+t.banco:''}
+            ${t.categoria?' · '+t.categoria:''}
+            ${t.forma?' · '+t.forma:''}
+          </div>
+        </div>
+        <div style="font-size:15px;font-weight:700;color:${t.tipo==='entrada'?'#2E7D32':'#B85A4A'};">
+          ${t.tipo==='entrada'?'+':'-'}${fmtV(t.valor)}
+        </div>
+        <button onclick="deletarTransacao('${t.id}')"
+          style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">
+          🗑
+        </button>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function abrirModalTransacao(tipo) {
+  const isEntrada = tipo === 'entrada';
+  document.getElementById('modal-title').textContent = isEntrada ? '+ Nova Entrada' : '+ Nova Saída';
+  document.getElementById('modal-body').innerHTML = `
+    <div style="display:grid;gap:14px;">
+      <div>
+        <label class="form-label">Valor (R$) *</label>
+        <input class="form-input" id="fin-valor" type="number" step="0.01" placeholder="0,00" style="font-size:18px;font-weight:700;">
+      </div>
+      <div>
+        <label class="form-label">Descrição *</label>
+        <input class="form-input" id="fin-descricao" placeholder="${isEntrada?'Ex: Pagamento pedido ALICI':'Ex: Conta de energia'}">
+      </div>
+      <div>
+        <label class="form-label">Data *</label>
+        <input class="form-input" id="fin-data" type="date" value="${new Date().toISOString().substring(0,10)}">
+      </div>
+      <div>
+        <label class="form-label">${isEntrada?'Banco':'Categoria'}</label>
+        <input class="form-input" id="fin-banco-cat" placeholder="${isEntrada?'Ex: Sicredi, Mercado Pago':'Ex: Fornecedor, Energia'}">
+      </div>
+      ${isEntrada ? `<div>
+        <label class="form-label">Forma de Pagamento</label>
+        <select class="form-select" id="fin-forma">
+          <option value="">Selecione...</option>
+          <option>Pix</option><option>Dinheiro</option><option>Cartão Débito</option>
+          <option>Cartão Crédito</option><option>Transferência</option><option>Boleto</option>
+        </select>
+      </div>` : ''}
+    </div>`;
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn-secondary" onclick="closeModal('modal-detail')">Cancelar</button>
+    <button class="${isEntrada?'btn-primary':'btn-danger'}" onclick="salvarTransacao('${tipo}')" 
+      style="background:${isEntrada?'#2E7D32':'#B85A4A'};color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">
+      ${isEntrada?'✓ Salvar Entrada':'✓ Salvar Saída'}
+    </button>`;
+  openModal('modal-detail');
+}
+
 
 // ============ AGENDA DE INSTALAÇÃO ============
 

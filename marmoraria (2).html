@@ -3640,8 +3640,16 @@ function abrirTelaOrcamentoPedido(id) {
   const orcKey = id + '_' + (order.created_at || id);
 
   let orcs = getOrcamentos();
-  // Só carrega se a chave bater EXATAMENTE — nunca carrega por ID sozinho
-  let orc = orcs.find(o => o.pedidoKey === orcKey);
+  // Busca pelo pedidoKey exato primeiro, depois por pedidoId como fallback
+  // Isso garante que orçamentos existentes nunca são perdidos ao mudar de stage
+  let orc = orcs.find(o => o.pedidoKey === orcKey)
+           || orcs.find(o => o.pedidoId === id && o.itens && o.itens.some(it => it.pedraId || it.pecas?.some(p => p.medidas)));
+
+  if (orc && !orc.pedidoKey) {
+    // Atualiza a chave para evitar problema no futuro
+    orc.pedidoKey = orcKey;
+    salvarOrcamentos(orcs);
+  }
 
   if (!orc) {
     // Sempre começa do zero — sem herdar nada

@@ -2025,6 +2025,53 @@ function abrirLancamento(tipo) {
   openModal('modal-detail');
 }
 
+function abrirModalTransacao(tipo) {
+  const isEntrada = tipo === 'entrada';
+  const bancos = getBancos();
+  document.getElementById('modal-title').textContent = isEntrada ? '+ Nova Entrada' : '+ Nova Saída';
+  document.getElementById('modal-body').innerHTML = `
+    <div style="display:grid;gap:14px;">
+      <div>
+        <label class="form-label">Valor (R$) *</label>
+        <input class="form-input" id="fin-valor" type="number" step="0.01" placeholder="0,00" style="font-size:18px;font-weight:700;">
+      </div>
+      <div>
+        <label class="form-label">Descrição *</label>
+        <input class="form-input" id="fin-descricao" placeholder="${isEntrada?'Ex: Pagamento pedido ALICI':'Ex: Conta de energia'}">
+      </div>
+      <div>
+        <label class="form-label">Data *</label>
+        <input class="form-input" id="fin-data" type="date" value="${new Date().toISOString().substring(0,10)}">
+      </div>
+      <div>
+        <label class="form-label">${isEntrada?'Banco *':'Categoria'}</label>
+        ${isEntrada
+          ? `<select class="form-select" id="fin-banco-cat">
+              <option value="">Selecione o banco...</option>
+              ${bancos.map(b => `<option value="${b.nome}">${b.nome}</option>`).join('')}
+            </select>`
+          : `<input class="form-input" id="fin-banco-cat" placeholder="Ex: Fornecedor, Energia, Impostos...">`
+        }
+      </div>
+      ${isEntrada ? `
+      <div>
+        <label class="form-label">Forma de Pagamento</label>
+        <select class="form-select" id="fin-forma">
+          <option value="">Selecione...</option>
+          <option>Pix</option><option>Dinheiro</option><option>Cartão Débito</option>
+          <option>Cartão Crédito</option><option>Transferência</option><option>Boleto</option><option>Parcelado</option>
+        </select>
+      </div>` : ''}
+    </div>`;
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn-secondary" onclick="closeModal('modal-detail')">Cancelar</button>
+    <button onclick="salvarTransacao('${tipo}')"
+      style="background:${isEntrada?'#2E7D32':'#B85A4A'};color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">
+      ${isEntrada?'✓ Salvar Entrada':'✓ Salvar Saída'}
+    </button>`;
+  openModal('modal-detail');
+}
+
 async function salvarTransacao(tipo) {
   const valor = document.getElementById('fin-valor').value.trim().replace(',','.');
   const descricao = document.getElementById('fin-descricao').value.trim();
@@ -2058,71 +2105,140 @@ async function deletarTransacao(id) {
 async function renderFinanceiro() {
   const el = document.getElementById('financeiro-content');
   if (!el) return;
-
   el.innerHTML = `<div style="padding:40px;text-align:center;color:#888;">Carregando...</div>`;
 
-  // Carrega transações do Supabase
+  const bancos = getBancos();
   let transacoes = [];
   try {
     const { data } = await getSB().from('transacoes').select('*').order('data', { ascending: false });
     transacoes = data || [];
   } catch(e) { console.error(e); }
 
-  const mesAtual = new Date().toISOString().substring(0,7); // YYYY-MM
+  const mesAtual = new Date().toISOString().substring(0,7);
   const filtroMes = localStorage.getItem('fin_mes') || mesAtual;
+  const parseValor = o => parseFloat((o.valor||'0').toString().replace(',','.').replace(/[^0-9.]/g,''))||0;
 
+  // A Receber — pedidos fechados/produção sem cópia
+  const stagesReceber = ['fechado','corte','acabamento','pronto'];
+  const aReceber = orders.filter(o => stagesReceber.includes(o.stage) && !o.ref_fechado && o.valor);
+
+  // Lançamentos do mês
   const txMes = transacoes.filter(t => (t.data||'').substring(0,7) === filtroMes);
   const entradas = txMes.filter(t => t.tipo === 'entrada');
   const saidas = txMes.filter(t => t.tipo === 'saida');
-  const totalEntradas = entradas.reduce((s,t) => s + (parseFloat(t.valor)||0), 0);
-  const totalSaidas = saidas.reduce((s,t) => s + (parseFloat(t.valor)||0), 0);
+  const totalEntradas = entradas.reduce((s,t) => s+(parseFloat(t.valor)||0), 0);
+  const totalSaidas = saidas.reduce((s,t) => s+(parseFloat(t.valor)||0), 0);
   const saldo = totalEntradas - totalSaidas;
+  const totalAReceber = aReceber.reduce((s,o) => s+parseValor(o), 0);
 
-  const fmtV = v => 'R$ ' + (v||0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const fmtV = v => 'R$ '+(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
   const fmtDt = d => d ? d.substring(8,10)+'/'+d.substring(5,7)+'/'+d.substring(0,4) : '';
 
   el.innerHTML = `
   <div style="padding:24px;max-width:1100px;margin:0 auto;">
+
+    <!-- HEADER -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
       <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);">💰 Financeiro</div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-        <input type="month" class="form-input" style="padding:8px 12px;font-size:13px;"
-          value="${filtroMes}"
-          onchange="localStorage.setItem('fin_mes',this.value);renderFinanceiro()">
+        <input type="month" class="form-input" style="padding:8px 12px;font-size:13px;width:160px;"
+          value="${filtroMes}" onchange="localStorage.setItem('fin_mes',this.value);renderFinanceiro()">
         <button onclick="abrirModalTransacao('entrada')"
-          style="background:#2E7D32;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">
-          + Entrada
-        </button>
+          style="background:#2E7D32;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">+ Entrada</button>
         <button onclick="abrirModalTransacao('saida')"
-          style="background:#B85A4A;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">
-          + Saída
-        </button>
+          style="background:#B85A4A;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">+ Saída</button>
       </div>
     </div>
 
     <!-- CARDS RESUMO -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px;">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px;">
       <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;border-top:4px solid #2E7D32;">
-        <div style="font-size:12px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Total Entradas</div>
-        <div style="font-size:24px;font-weight:800;color:#2E7D32;">${fmtV(totalEntradas)}</div>
-        <div style="font-size:12px;color:#888;margin-top:4px;">${entradas.length} lançamento(s)</div>
+        <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Entradas no Mês</div>
+        <div style="font-size:22px;font-weight:800;color:#2E7D32;">${fmtV(totalEntradas)}</div>
+        <div style="font-size:11px;color:#888;margin-top:4px;">${entradas.length} lançamento(s)</div>
       </div>
       <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;border-top:4px solid #B85A4A;">
-        <div style="font-size:12px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Total Saídas</div>
-        <div style="font-size:24px;font-weight:800;color:#B85A4A;">${fmtV(totalSaidas)}</div>
-        <div style="font-size:12px;color:#888;margin-top:4px;">${saidas.length} lançamento(s)</div>
+        <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Saídas no Mês</div>
+        <div style="font-size:22px;font-weight:800;color:#B85A4A;">${fmtV(totalSaidas)}</div>
+        <div style="font-size:11px;color:#888;margin-top:4px;">${saidas.length} lançamento(s)</div>
       </div>
       <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;border-top:4px solid ${saldo>=0?'#2E7D32':'#B85A4A'};">
-        <div style="font-size:12px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Saldo do Mês</div>
-        <div style="font-size:24px;font-weight:800;color:${saldo>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldo)}</div>
-        <div style="font-size:12px;color:#888;margin-top:4px;">${saldo>=0?'Positivo ✅':'Negativo ⚠️'}</div>
+        <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Saldo do Mês</div>
+        <div style="font-size:22px;font-weight:800;color:${saldo>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldo)}</div>
+        <div style="font-size:11px;color:#888;margin-top:4px;">${saldo>=0?'✅ Positivo':'⚠️ Negativo'}</div>
+      </div>
+      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;border-top:4px solid #8B6914;">
+        <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">A Receber</div>
+        <div style="font-size:22px;font-weight:800;color:#8B6914;">${fmtV(totalAReceber)}</div>
+        <div style="font-size:11px;color:#888;margin-top:4px;">${aReceber.length} pedido(s) em aberto</div>
       </div>
     </div>
 
-    <!-- LANÇAMENTOS -->
+    <!-- A RECEBER -->
+    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:24px;">
+      <div style="background:#8B6914;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:14px;font-weight:700;">📋 A Receber — Pedidos Fechados</div>
+        <div style="font-size:12px;opacity:.8;">${aReceber.length} pedido(s) · ${fmtV(totalAReceber)}</div>
+      </div>
+      ${aReceber.length === 0 ? `
+      <div style="padding:30px;text-align:center;color:#888;font-size:13px;">
+        Nenhum pedido fechado aguardando recebimento
+      </div>` :
+      aReceber.map(o => {
+        const valor = parseValor(o);
+        const recebimentos = transacoes.filter(t => t.pedido_id === o.id && t.tipo === 'entrada');
+        const totalRecebido = recebimentos.reduce((s,t) => s+(parseFloat(t.valor)||0), 0);
+        const saldoPedido = valor - totalRecebido;
+        const statusCor = totalRecebido === 0 ? '#8B6914' : saldoPedido <= 0 ? '#2E7D32' : '#006382';
+        const statusLabel = totalRecebido === 0 ? 'Pendente' : saldoPedido <= 0 ? 'Recebido ✅' : 'Parcial';
+        return `
+        <div style="padding:14px 20px;border-bottom:1px solid var(--cream-dark);">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:200px;">
+              <div style="font-size:14px;font-weight:700;color:var(--stone);">${o.cliente||'—'}</div>
+              <div style="font-size:12px;color:#888;margin-top:2px;">
+                ${o.id} · ${o.peca||''} · ${o.stage==='fechado'?'Fechado':o.stage==='corte'?'Em Corte':o.stage==='acabamento'?'Acabamento':'Pronto'}
+              </div>
+            </div>
+            <div style="text-align:right;min-width:120px;">
+              <div style="font-size:13px;color:#888;">Valor do orçamento</div>
+              <div style="font-size:16px;font-weight:700;color:var(--stone);">${fmtV(valor)}</div>
+            </div>
+            ${totalRecebido > 0 ? `
+            <div style="text-align:right;min-width:120px;">
+              <div style="font-size:13px;color:#888;">Recebido</div>
+              <div style="font-size:16px;font-weight:700;color:#2E7D32;">${fmtV(totalRecebido)}</div>
+            </div>
+            <div style="text-align:right;min-width:120px;">
+              <div style="font-size:13px;color:#888;">Falta receber</div>
+              <div style="font-size:16px;font-weight:700;color:${saldoPedido>0?'#B85A4A':'#2E7D32'};">${fmtV(Math.max(0,saldoPedido))}</div>
+            </div>` : ''}
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="background:${statusCor}22;color:${statusCor};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;">${statusLabel}</span>
+              ${saldoPedido > 0 ? `
+              <button onclick="abrirConfirmarRecebimento('${o.id}','${o.cliente}',${saldoPedido.toFixed(2)})"
+                style="background:#2E7D32;color:white;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
+                ✓ Confirmar Recebimento
+              </button>` : ''}
+            </div>
+          </div>
+          ${recebimentos.length > 0 ? `
+          <div style="margin-top:10px;padding:10px 14px;background:#f8f8f8;border-radius:8px;">
+            <div style="font-size:11px;font-weight:700;color:#888;margin-bottom:6px;">RECEBIMENTOS:</div>
+            ${recebimentos.map(r => `
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:#555;margin-bottom:3px;">
+              <span>${fmtDt(r.data)} · ${r.forma||''} · ${r.banco||''}</span>
+              <span style="font-weight:700;color:#2E7D32;">+${fmtV(r.valor)}</span>
+            </div>`).join('')}
+          </div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+
+    <!-- LANÇAMENTOS DO MÊS -->
     <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
-      <div style="background:var(--stone);color:white;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;">
-        <div style="font-size:13px;font-weight:700;">Lançamentos de ${filtroMes.substring(5,7)}/${filtroMes.substring(0,4)}</div>
+      <div style="background:var(--stone);color:white;padding:14px 20px;display:flex;justify-content:space-between;">
+        <div style="font-size:14px;font-weight:700;">Lançamentos de ${filtroMes.substring(5,7)}/${filtroMes.substring(0,4)}</div>
         <div style="font-size:12px;opacity:.7;">${txMes.length} registros</div>
       </div>
       ${txMes.length === 0 ? `
@@ -2132,67 +2248,120 @@ async function renderFinanceiro() {
       </div>` :
       txMes.map(t => `
       <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--cream-dark);">
-        <div style="width:36px;height:36px;border-radius:50%;background:${t.tipo==='entrada'?'#f0fff4':'#fff5f5'};display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">
+        <div style="width:36px;height:36px;border-radius:50%;background:${t.tipo==='entrada'?'#f0fff4':'#fff5f5'};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">
           ${t.tipo==='entrada'?'↑':'↓'}
         </div>
         <div style="flex:1;">
           <div style="font-size:13px;font-weight:600;color:var(--stone);">${t.descricao||'—'}</div>
           <div style="font-size:11px;color:#888;margin-top:2px;">
-            ${fmtDt(t.data)}
-            ${t.banco?' · '+t.banco:''}
-            ${t.categoria?' · '+t.categoria:''}
-            ${t.forma?' · '+t.forma:''}
+            ${fmtDt(t.data)}${t.banco?' · '+t.banco:''}${t.categoria?' · '+t.categoria:''}${t.forma?' · '+t.forma:''}
           </div>
         </div>
         <div style="font-size:15px;font-weight:700;color:${t.tipo==='entrada'?'#2E7D32':'#B85A4A'};">
           ${t.tipo==='entrada'?'+':'-'}${fmtV(t.valor)}
         </div>
         <button onclick="deletarTransacao('${t.id}')"
-          style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">
-          🗑
-        </button>
+          style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">🗑</button>
       </div>`).join('')}
+    </div>
+  </div>
+
+  <!-- MODAL CONFIRMAR RECEBIMENTO -->
+  <div class="modal-overlay" id="modal-recebimento" style="align-items:flex-start;padding:20px;overflow-y:auto;">
+    <div class="modal" style="max-width:500px;width:100%;">
+      <div class="modal-header" style="background:#2E7D32;color:white;border-radius:12px 12px 0 0;">
+        <div class="modal-title">✓ Confirmar Recebimento</div>
+        <button class="modal-close" onclick="closeModal('modal-recebimento')" style="color:white;">✕</button>
+      </div>
+      <div class="modal-body" id="body-modal-recebimento"></div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('modal-recebimento')">Cancelar</button>
+        <button style="background:#2E7D32;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;"
+          onclick="confirmarRecebimento()">✓ Confirmar</button>
+      </div>
     </div>
   </div>`;
 }
 
-function abrirModalTransacao(tipo) {
-  const isEntrada = tipo === 'entrada';
-  document.getElementById('modal-title').textContent = isEntrada ? '+ Nova Entrada' : '+ Nova Saída';
-  document.getElementById('modal-body').innerHTML = `
+function abrirConfirmarRecebimento(pedidoId, cliente, valorEsperado) {
+  const bancos = getBancos();
+  document.getElementById('body-modal-recebimento').innerHTML = `
+    <input type="hidden" id="rec-pedido-id" value="${pedidoId}">
+    <div style="background:#f0fff4;border-radius:8px;padding:12px 16px;margin-bottom:16px;">
+      <div style="font-size:13px;color:#555;">Pedido: <strong>${pedidoId}</strong> · ${cliente}</div>
+      <div style="font-size:12px;color:#888;margin-top:4px;">Valor do orçamento: <strong>R$ ${valorEsperado.toFixed(2).replace('.',',')}</strong></div>
+    </div>
     <div style="display:grid;gap:14px;">
       <div>
-        <label class="form-label">Valor (R$) *</label>
-        <input class="form-input" id="fin-valor" type="number" step="0.01" placeholder="0,00" style="font-size:18px;font-weight:700;">
+        <label class="form-label">Valor Real Recebido (R$) *</label>
+        <input class="form-input" id="rec-valor" type="number" step="0.01"
+          value="${valorEsperado.toFixed(2)}"
+          style="font-size:20px;font-weight:700;border:2px solid #2E7D32;"
+          placeholder="0,00">
+        <div style="font-size:11px;color:#888;margin-top:4px;">💡 Ajuste se houve taxa de cartão, desconto ou parcelamento</div>
       </div>
       <div>
-        <label class="form-label">Descrição *</label>
-        <input class="form-input" id="fin-descricao" placeholder="${isEntrada?'Ex: Pagamento pedido ALICI':'Ex: Conta de energia'}">
-      </div>
-      <div>
-        <label class="form-label">Data *</label>
-        <input class="form-input" id="fin-data" type="date" value="${new Date().toISOString().substring(0,10)}">
-      </div>
-      <div>
-        <label class="form-label">${isEntrada?'Banco':'Categoria'}</label>
-        <input class="form-input" id="fin-banco-cat" placeholder="${isEntrada?'Ex: Sicredi, Mercado Pago':'Ex: Fornecedor, Energia'}">
-      </div>
-      ${isEntrada ? `<div>
-        <label class="form-label">Forma de Pagamento</label>
-        <select class="form-select" id="fin-forma">
+        <label class="form-label">Forma de Pagamento *</label>
+        <select class="form-select" id="rec-forma">
           <option value="">Selecione...</option>
-          <option>Pix</option><option>Dinheiro</option><option>Cartão Débito</option>
-          <option>Cartão Crédito</option><option>Transferência</option><option>Boleto</option>
+          <option value="Pix">Pix</option>
+          <option value="Dinheiro">Dinheiro</option>
+          <option value="Cartão Débito">Cartão Débito</option>
+          <option value="Cartão Crédito">Cartão Crédito</option>
+          <option value="Transferência">Transferência</option>
+          <option value="Boleto">Boleto</option>
+          <option value="Parcelado">Parcelado</option>
         </select>
-      </div>` : ''}
+      </div>
+      <div>
+        <label class="form-label">Banco *</label>
+        <select class="form-select" id="rec-banco">
+          <option value="">Selecione...</option>
+          ${bancos.map(b => `<option value="${b.nome}">${b.nome}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Data do Recebimento *</label>
+        <input class="form-input" id="rec-data" type="date" value="${new Date().toISOString().substring(0,10)}">
+      </div>
+      <div>
+        <label class="form-label">Observação</label>
+        <input class="form-input" id="rec-obs" placeholder="Ex: 2x no cartão, taxa 2.5%...">
+      </div>
     </div>`;
-  document.getElementById('modal-footer').innerHTML = `
-    <button class="btn-secondary" onclick="closeModal('modal-detail')">Cancelar</button>
-    <button class="${isEntrada?'btn-primary':'btn-danger'}" onclick="salvarTransacao('${tipo}')" 
-      style="background:${isEntrada?'#2E7D32':'#B85A4A'};color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">
-      ${isEntrada?'✓ Salvar Entrada':'✓ Salvar Saída'}
-    </button>`;
-  openModal('modal-detail');
+  openModal('modal-recebimento');
+}
+
+async function confirmarRecebimento() {
+  const pedidoId = document.getElementById('rec-pedido-id')?.value;
+  const valor = parseFloat(document.getElementById('rec-valor')?.value)||0;
+  const forma = document.getElementById('rec-forma')?.value;
+  const banco = document.getElementById('rec-banco')?.value;
+  const data = document.getElementById('rec-data')?.value;
+  const obs = document.getElementById('rec-obs')?.value.trim();
+
+  if (!valor || valor <= 0) { showNotif('Informe o valor recebido!', 'error'); return; }
+  if (!forma) { showNotif('Selecione a forma de pagamento!', 'error'); return; }
+  if (!banco) { showNotif('Selecione o banco!', 'error'); return; }
+  if (!data) { showNotif('Informe a data!', 'error'); return; }
+
+  const order = orders.find(o => o.id === pedidoId);
+  showLoading('Salvando...');
+  await getSB().from('transacoes').insert({
+    tipo: 'entrada',
+    valor,
+    descricao: `Recebimento — ${order?.cliente||pedidoId}`,
+    data,
+    banco,
+    forma,
+    observacao: obs,
+    pedido_id: pedidoId,
+    created_by: currentUser
+  });
+  hideLoading();
+  closeModal('modal-recebimento');
+  renderFinanceiro();
+  showNotif('Recebimento confirmado! ✓', 'success');
 }
 
 
@@ -5856,8 +6025,6 @@ function renderConfiguracoes() {
   el.innerHTML = `
   <div style="padding:24px;max-width:1200px;margin:0 auto;">
     <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);margin-bottom:24px;">⚙️ Configurações</div>
-
-    <!-- Tabs internas -->
     <div style="display:flex;gap:4px;margin-bottom:24px;border-bottom:2px solid var(--cream-dark);padding-bottom:0;">
       <button onclick="showSubConfig('gastos')" id="subcfg-gastos"
         style="padding:10px 20px;border:none;background:var(--gold);color:white;border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
@@ -5867,17 +6034,20 @@ function renderConfiguracoes() {
         style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
         ⏱️ Tempos de Produção
       </button>
+      <button onclick="showSubConfig('bancos')" id="subcfg-bancos"
+        style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
+        🏦 Bancos
+      </button>
     </div>
-
     <div id="subcfg-panel-gastos"><div id="gastos-content"></div></div>
     <div id="subcfg-panel-tempos" style="display:none;"><div id="tempos-content"></div></div>
+    <div id="subcfg-panel-bancos" style="display:none;"><div id="bancos-content"></div></div>
   </div>`;
-
   renderGastos();
 }
 
 function showSubConfig(aba) {
-  ['gastos','tempos'].forEach(a => {
+  ['gastos','tempos','bancos'].forEach(a => {
     const panel = document.getElementById('subcfg-panel-' + a);
     const btn = document.getElementById('subcfg-' + a);
     if (panel) panel.style.display = a === aba ? '' : 'none';
@@ -5888,6 +6058,137 @@ function showSubConfig(aba) {
   });
   if (aba === 'gastos') renderGastos();
   if (aba === 'tempos') renderTempos();
+  if (aba === 'bancos') renderBancos();
+}
+
+// ─── BANCOS ──────────────────────────────────────────────────────────────────
+function getBancos() {
+  try {
+    const s = localStorage.getItem('mf_bancos');
+    return s ? JSON.parse(s) : [
+      { id: 'b1', nome: 'Sicredi', tipo: 'conta_corrente', cor: '#006382' },
+      { id: 'b2', nome: 'Caixa Econômica', tipo: 'conta_corrente', cor: '#8B6914' },
+      { id: 'b3', nome: 'Mercado Pago', tipo: 'digital', cor: '#2E7D32' },
+    ];
+  } catch(e) { return []; }
+}
+function salvarBancos(bancos) { localStorage.setItem('mf_bancos', JSON.stringify(bancos)); }
+
+function renderBancos() {
+  const el = document.getElementById('bancos-content');
+  if (!el) return;
+  const bancos = getBancos();
+  const tipos = { conta_corrente:'Conta Corrente', poupanca:'Poupança', digital:'Conta Digital', caixa:'Caixa/Cofre' };
+
+  el.innerHTML = `
+  <div style="max-width:700px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div style="font-size:15px;font-weight:700;color:var(--stone);">🏦 Contas Bancárias</div>
+      <button onclick="abrirModalBanco()" style="background:var(--gold);color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">+ Adicionar Banco</button>
+    </div>
+    <div style="display:grid;gap:12px;">
+      ${bancos.map(b => `
+      <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px 20px;display:flex;align-items:center;gap:16px;border-left:4px solid ${b.cor||'var(--gold)'};">
+        <div style="width:44px;height:44px;border-radius:50%;background:${b.cor||'var(--gold)'};display:flex;align-items:center;justify-content:center;font-size:20px;color:white;font-weight:700;flex-shrink:0;">
+          ${b.nome.charAt(0)}
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:15px;font-weight:700;color:var(--stone);">${b.nome}</div>
+          <div style="font-size:12px;color:#888;">${tipos[b.tipo]||b.tipo}</div>
+          ${b.agencia||b.conta ? `<div style="font-size:11px;color:#888;">${b.agencia?'Ag: '+b.agencia:''} ${b.conta?'Conta: '+b.conta:''}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="abrirModalBanco('${b.id}')" style="background:var(--cream);border:1.5px solid var(--cream-dark);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;">✏️</button>
+          <button onclick="removerBanco('${b.id}')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">🗑</button>
+        </div>
+      </div>`).join('')}
+      ${bancos.length === 0 ? `<div style="text-align:center;padding:40px;color:#888;">Nenhum banco cadastrado</div>` : ''}
+    </div>
+    <div style="margin-top:16px;padding:12px 16px;background:#e8f4f7;border-radius:8px;font-size:12px;color:#006382;">
+      💡 Os bancos cadastrados aqui aparecem como opção ao confirmar recebimentos no Financeiro.
+    </div>
+  </div>
+
+  <!-- Modal Banco -->
+  <div class="modal-overlay" id="modal-banco" style="align-items:flex-start;padding:20px;overflow-y:auto;">
+    <div class="modal" style="max-width:480px;width:100%;">
+      <div class="modal-header">
+        <div class="modal-title" id="titulo-modal-banco">Adicionar Banco</div>
+        <button class="modal-close" onclick="closeModal('modal-banco')">✕</button>
+      </div>
+      <div class="modal-body" id="body-modal-banco"></div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('modal-banco')">Cancelar</button>
+        <button class="btn-primary" onclick="salvarBanco()">💾 Salvar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function abrirModalBanco(id) {
+  const bancos = getBancos();
+  const b = id ? bancos.find(x => x.id === id) : null;
+  document.getElementById('titulo-modal-banco').textContent = b ? 'Editar Banco' : 'Adicionar Banco';
+  document.getElementById('body-modal-banco').innerHTML = `
+    <input type="hidden" id="banco-edit-id" value="${id||''}">
+    <div style="display:grid;gap:14px;">
+      <div><label class="form-label">Nome do Banco *</label>
+        <input class="form-input" id="banco-nome" value="${b?.nome||''}" placeholder="Ex: Sicredi, Nubank, Bradesco..."></div>
+      <div><label class="form-label">Tipo</label>
+        <select class="form-select" id="banco-tipo">
+          <option value="conta_corrente" ${(!b||b.tipo==='conta_corrente')?'selected':''}>Conta Corrente</option>
+          <option value="poupanca" ${b?.tipo==='poupanca'?'selected':''}>Poupança</option>
+          <option value="digital" ${b?.tipo==='digital'?'selected':''}>Conta Digital</option>
+          <option value="caixa" ${b?.tipo==='caixa'?'selected':''}>Caixa/Cofre</option>
+        </select></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div><label class="form-label">Agência</label>
+          <input class="form-input" id="banco-agencia" value="${b?.agencia||''}" placeholder="0000"></div>
+        <div><label class="form-label">Conta</label>
+          <input class="form-input" id="banco-conta" value="${b?.conta||''}" placeholder="00000-0"></div>
+      </div>
+      <div><label class="form-label">Cor</label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          ${['#006382','#2E7D32','#8B6914','#B85A4A','#5B4A8B','#1a2332','#4A9B6B','#CC6600'].map(c =>
+            `<div onclick="document.getElementById('banco-cor').value='${c}';document.querySelectorAll('.cor-opt').forEach(x=>x.style.outline='none');this.style.outline='3px solid #333';"
+              class="cor-opt" style="width:32px;height:32px;border-radius:50%;background:${c};cursor:pointer;outline:${(b?.cor||'#006382')===c?'3px solid #333':'none'};"></div>`
+          ).join('')}
+        </div>
+        <input type="hidden" id="banco-cor" value="${b?.cor||'#006382'}">
+      </div>
+    </div>`;
+  openModal('modal-banco');
+}
+
+function salvarBanco() {
+  const nome = document.getElementById('banco-nome')?.value.trim();
+  if (!nome) { showNotif('Informe o nome do banco!', 'error'); return; }
+  const bancos = getBancos();
+  const editId = document.getElementById('banco-edit-id')?.value;
+  const dados = {
+    nome,
+    tipo: document.getElementById('banco-tipo')?.value||'conta_corrente',
+    agencia: document.getElementById('banco-agencia')?.value.trim(),
+    conta: document.getElementById('banco-conta')?.value.trim(),
+    cor: document.getElementById('banco-cor')?.value||'#006382',
+  };
+  if (editId) {
+    const idx = bancos.findIndex(b => b.id === editId);
+    if (idx >= 0) bancos[idx] = { ...bancos[idx], ...dados };
+  } else {
+    bancos.push({ id: 'B-'+Date.now(), ...dados });
+  }
+  salvarBancos(bancos);
+  closeModal('modal-banco');
+  renderBancos();
+  showNotif('Banco salvo! ✓', 'success');
+}
+
+function removerBanco(id) {
+  if (!confirm('Remover este banco?')) return;
+  salvarBancos(getBancos().filter(b => b.id !== id));
+  renderBancos();
+  showNotif('Banco removido', 'error');
 }
 
 function renderGastos() {

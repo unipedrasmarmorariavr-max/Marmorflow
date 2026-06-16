@@ -1540,205 +1540,360 @@ function rowD(label,val,color) {
 }
 
 // ============ MATERIAIS ============
+// ═══════════════════════════════════════════════════════════════════════
+// ESTOQUE DE CHAPAS
+// ═══════════════════════════════════════════════════════════════════════
+
+function getEstoque() {
+  try { return JSON.parse(localStorage.getItem('mf_estoque')||'[]'); } catch(e){ return []; }
+}
+function salvarEstoque(chapas) {
+  localStorage.setItem('mf_estoque', JSON.stringify(chapas));
+}
+
 function renderMateriais() {
   const el = document.getElementById('materiais-content');
   if (!el) return;
 
-  const stageProd = ['fechado','corte','acabamento','pronto','entregue'];
-  // Exclui cópias de Em Corte (ref_fechado) para não duplicar
-  const pedidosProd = orders.filter(o => stageProd.includes(o.stage) && o.material && o.metragem && !o.ref_fechado);
+  const chapas = getEstoque();
+  const pedras = getPedrasCadastradas();
 
-  // Group by material, com acabamentos separados
-  // Levigado do polido: desconta do levigado e soma no polido
-  const matMap = {};
-  pedidosProd.forEach(o => {
-    const mat = (o.material||'').trim().toLowerCase();
-    const m2 = parseFloat((o.metragem||'0').replace(',','.').replace(/[^0-9.]/g,''))||0;
-    if (!mat || m2===0) return;
-    const nomeCapitalizado = (o.material||'').trim().replace(/\b\w/g, c => c.toUpperCase());
-    if (!matMap[mat]) matMap[mat] = {nome:nomeCapitalizado, total:0, acabamentos:{}, comprar:{}};
+  // Pega pedidos fechados/em produção (não cópias)
+  const stagesAtivos = ['fechado','corte','acabamento'];
+  const pedidosAtivos = orders.filter(o => stagesAtivos.includes(o.stage) && !o.ref_fechado);
 
-    let acab = (o.acabamento||'Não informado');
-    let acabCompra = acab; // acabamento que vai para a conta de "o que comprar"
+  // Coleta todas as peças dos orçamentos dos pedidos ativos
+  const pecasPorMaterial = {}; // materialId → [{pedido, nomePeca, l, c, qtd}]
+  const orcs = getOrcamentos();
 
-    // Se levigado foi cortado do polido: conta como levigado no painel mas como polido na compra
-    if (acab === 'Levigado' && o.levigado_do_polido) {
-      acabCompra = 'Polido';
-    }
-
-    matMap[mat].total += m2;
-    matMap[mat].acabamentos[acab] = (matMap[mat].acabamentos[acab]||0) + m2;
-    matMap[mat].comprar[acabCompra] = (matMap[mat].comprar[acabCompra]||0) + m2;
+  pedidosAtivos.forEach(order => {
+    const orc = orcs.find(o => o.pedidoId === order.id);
+    if (!orc) return;
+    orc.itens.forEach(item => {
+      if (!item.pedraId) return;
+      const pedra = pedras.find(p => p.id === item.pedraId);
+      if (!pedra) return;
+      if (!pecasPorMaterial[item.pedraId]) pecasPorMaterial[item.pedraId] = [];
+      (item.pecas||[]).forEach(peca => {
+        if (!peca.medidas || !peca.medidas.trim()) return;
+        const m = parseMedidas(peca.medidas);
+        if (!m.l || !m.c) return;
+        const qtd = parseInt(peca.qtd)||1;
+        for (let i=0; i<qtd; i++) {
+          pecasPorMaterial[item.pedraId].push({
+            pedido: order.id,
+            cliente: order.cliente,
+            nomePeca: peca.nome||item.nome||'Peça',
+            l: Math.max(m.l, m.c), // maior dimensão = comprimento
+            c: Math.min(m.l, m.c), // menor dimensão = largura
+            stage: order.stage
+          });
+        }
+      });
+    });
   });
 
-  const sorted = Object.values(matMap).sort((a,b)=>b.total-a.total);
+  // Para cada material com peças pendentes, verifica o estoque
+  const analise = {}; // materialId → {pedra, chapasDisp, pecas, resultado}
+  Object.keys(pecasPorMaterial).forEach(matId => {
+    const pedra = pedras.find(p => p.id === matId);
+    if (!pedra) return;
+    const chapasDisp = chapas.filter(c => c.materialId === matId && c.status === 'disponivel');
+    const pecas = pecasPorMaterial[matId];
 
-  const ACABAMENTOS_ORDEM = ['Polido','Levigado','Escovado','Flameado','Outro','Não informado'];
-  const matHTML = sorted.length > 0 ? sorted.map(m => {
-    // Seção: vendido por acabamento
-    const linhasAcab = ACABAMENTOS_ORDEM
-      .filter(a => m.acabamentos[a])
-      .map(a => {
-        const isLevDoPol = a === 'Levigado' && m.comprar['Polido'] && m.comprar['Levigado'] !== m.acabamentos['Levigado'];
-        const obs = isLevDoPol ? `<span style="font-size:10px;color:var(--gold);margin-left:6px;">parte do polido</span>` : '';
-        return `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--cream-dark);">
-          <span style="font-size:13px;color:var(--stone-light);">${a}${obs}</span>
-          <span style="font-size:14px;font-weight:700;color:var(--stone);">${m.acabamentos[a].toFixed(2).replace('.',',')} m²</span>
-        </div>`;
-      }).join('');
+    // Algoritmo de encaixe: tenta encaixar cada peça em alguma chapa disponível
+    // Simula o uso das chapas (cada chapa pode ser usada por múltiplas peças)
+    // Usa cópia das chapas para não alterar o estoque real
+    const chapasTemp = chapasDisp.map(c => ({
+      ...c,
+      areaRestante: c.largura * c.comprimento,
+      pecasEncaixadas: []
+    }));
 
-    // Seção: o que comprar
-    const linhasComprar = ACABAMENTOS_ORDEM
-      .filter(a => m.comprar[a])
-      .map(a => `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;">
-          <span style="font-size:12px;color:var(--stone);font-weight:600;">📦 Chapa ${a}</span>
-          <span style="font-size:13px;font-weight:700;color:var(--gold);">${m.comprar[a].toFixed(2).replace('.',',')} m²</span>
-        </div>`).join('');
+    const resultado = pecas.map(peca => {
+      // Tenta encaixar em alguma chapa disponível
+      // Verifica se a peça CABE fisicamente (dimensão × dimensão)
+      for (let ch of chapasTemp) {
+        const cabeDireto = peca.l <= ch.comprimento && peca.c <= ch.largura;
+        const cabeRotac = peca.l <= ch.largura && peca.c <= ch.comprimento;
+        if (cabeDireto || cabeRotac) {
+          ch.pecasEncaixadas.push(peca);
+          ch.areaRestante -= peca.l * peca.c;
+          return { peca, status: 'ok', chapaId: ch.id, chapaCod: ch.codigo };
+        }
+      }
+      return { peca, status: 'falta', chapaId: null };
+    });
 
-    return `
-    <div style="background:white;border-radius:14px;padding:20px;box-shadow:var(--shadow);margin-bottom:14px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid var(--cream-dark);">
-        <div style="font-size:16px;font-weight:700;color:var(--stone);">🪨 ${m.nome}</div>
-        <div style="background:var(--gold);color:white;padding:5px 14px;border-radius:20px;font-size:13px;font-weight:700;">Total: ${m.total.toFixed(2).replace('.',',')} m²</div>
-      </div>
-      ${linhasAcab || '<div style="font-size:13px;color:var(--stone-light);">Sem acabamento informado</div>'}
-      ${linhasComprar ? `<div style="margin-top:12px;padding-top:12px;border-top:2px dashed var(--cream-dark);">${linhasComprar}</div>` : ''}
-    </div>`;
-  }).join('') : '<div class="empty-state"><div class="empty-icon">🪨</div>Nenhum material registrado ainda.<br>Adicione metragem e material nos pedidos fechados.</div>';
+    analise[matId] = { pedra, chapasDisp, pecas, resultado, chapasTemp };
+  });
 
-  el.innerHTML = `
-    <div style="max-width:900px;margin:0 auto;">
-      <div style="font-family:'DM Serif Display',serif;font-size:24px;color:var(--stone);margin-bottom:8px;">🪨 Controle de Materiais</div>
-      <div style="font-size:13px;color:var(--stone-light);margin-bottom:24px;">Soma de m² por material — apenas pedidos fechados e em produção</div>
-      <div style="background:var(--cream-dark);border-radius:12px;padding:16px;margin-bottom:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">
-        ${sorted.map(m=>`<div style="text-align:center;"><div style="font-size:11px;color:var(--stone-light);margin-bottom:2px;">${m.nome}</div><div style="font-size:20px;font-weight:700;color:var(--gold);">${m.total.toFixed(2).replace('.',',')} m²</div></div>`).join('')}
-      </div>
-      ${matHTML}
-    </div>`;
-}
-
-
-// ============ FINANCEIRO ============
-const BANCOS = ['Caixa', 'Sicredi', 'Mercado Pago', 'Outro'];
-const CAT_SAIDA = ['Fornecedor', 'Funcionário', 'Aluguel', 'Energia/Água/Internet', 'Material', 'Imposto', 'Outro'];
-
-async function renderFinanceiro() {
-  const el = document.getElementById('financeiro-content');
-  if (!el) return;
-  el.innerHTML = '<div class="empty-state"><div class="loading-spinner" style="font-size:24px;display:inline-block;">⚙️</div><br>Carregando...</div>';
-
-  // Load transactions
-  const { data: transacoes } = await getSB().from('transacoes').select('*').order('data', {ascending:false});
-  const tx = transacoes || [];
-
-  const entradas = tx.filter(t => t.tipo === 'entrada');
-  const saidas = tx.filter(t => t.tipo === 'saida');
-  const totalEntradas = entradas.reduce((s,t) => s + (parseFloat(t.valor)||0), 0);
-  const totalSaidas = saidas.reduce((s,t) => s + (parseFloat(t.valor)||0), 0);
-  const saldo = totalEntradas - totalSaidas;
-
-  // Total vendido from orders
-  const fechados = orders.filter(o => o.stage==='fechado');
-  const totalVendido = fechados.reduce((s,o) => s + (parseFloat((o.valor||'0').replace(',','.').replace(/[^0-9.]/g,''))||0), 0);
-
-  // Saldo por banco
-  const bancosMap = {};
-  BANCOS.forEach(b => bancosMap[b] = 0);
-  entradas.forEach(t => { const b = t.banco||'Outro'; bancosMap[b] = (bancosMap[b]||0) + (parseFloat(t.valor)||0); });
-  saidas.forEach(t => { const b = t.banco||'Outro'; bancosMap[b] = (bancosMap[b]||0) - (parseFloat(t.valor)||0); });
-
-  const canEdit = currentUser === 'dono' || currentUser === 'financeiro';
+  // Materiais em estoque sem pedidos ativos
+  const matsSoEstoque = [...new Set(chapas.map(c => c.materialId))]
+    .filter(mid => !analise[mid]);
 
   el.innerHTML = `
-    <div style="max-width:1000px;margin:0 auto;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
-        <div style="font-family:'DM Serif Display',serif;font-size:24px;color:var(--stone);">💰 Financeiro</div>
-        ${canEdit ? `<div style="display:flex;gap:10px;">
-          <button onclick="abrirLancamento('entrada')" style="background:var(--green);color:white;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;">+ Entrada</button>
-          <button onclick="abrirLancamento('saida')" style="background:var(--red);color:white;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;">- Saída</button>
-        </div>` : ''}
+  <div style="padding:24px;max-width:1100px;margin:0 auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+      <div>
+        <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);">📦 Estoque de Chapas</div>
+        <div style="font-size:13px;color:#888;margin-top:4px;">Verificação peça a peça — pedidos Fechados, Em Corte e Acabamento</div>
       </div>
+      <button onclick="abrirModalChapa()" style="background:var(--gold);color:white;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">+ Adicionar Chapa</button>
+    </div>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:24px;">
-        <div style="background:#E8F2EC;border-radius:14px;padding:20px;">
-          <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:#4A7C59;margin-bottom:4px;">Total Vendido</div>
-          <div style="font-size:22px;font-weight:700;color:var(--stone);">R$ ${totalVendido.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
-          <div style="font-size:11px;color:var(--stone-light);">${fechados.length} pedidos fechados</div>
-        </div>
-        <div style="background:#E8F2EC;border-radius:14px;padding:20px;">
-          <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:#4A7C59;margin-bottom:4px;">Entradas</div>
-          <div style="font-size:22px;font-weight:700;color:#4A7C59;">R$ ${totalEntradas.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
-          <div style="font-size:11px;color:var(--stone-light);">${entradas.length} lançamentos</div>
-        </div>
-        <div style="background:#F2E8E8;border-radius:14px;padding:20px;">
-          <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:#B85A4A;margin-bottom:4px;">Saídas</div>
-          <div style="font-size:22px;font-weight:700;color:#B85A4A;">R$ ${totalSaidas.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
-          <div style="font-size:11px;color:var(--stone-light);">${saidas.length} lançamentos</div>
-        </div>
-        <div style="background:${saldo>=0?'#E8F2EC':'#F2E8E8'};border-radius:14px;padding:20px;">
-          <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:${saldo>=0?'#4A7C59':'#B85A4A'};margin-bottom:4px;">Saldo</div>
-          <div style="font-size:22px;font-weight:700;color:${saldo>=0?'#4A7C59':'#B85A4A'};">R$ ${saldo.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
-          <div style="font-size:11px;color:var(--stone-light);">${saldo>=0?'positivo':'negativo'}</div>
-        </div>
-      </div>
+    ${Object.keys(analise).length === 0 && chapas.length === 0 ? `
+    <div style="text-align:center;padding:60px;background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+      <div style="font-size:48px;margin-bottom:16px;">📦</div>
+      <div style="font-size:16px;font-weight:600;color:#333;">Nenhuma chapa cadastrada</div>
+      <div style="font-size:13px;color:#888;margin-top:8px;">Cadastre as chapas que você tem no galpão</div>
+      <button onclick="abrirModalChapa()" style="margin-top:20px;background:var(--gold);color:white;border:none;padding:12px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">+ Adicionar Primeira Chapa</button>
+    </div>` : ''}
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;">
-        <div style="background:white;border-radius:16px;padding:20px;box-shadow:var(--shadow);">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:16px;">🏦 Saldo por Banco</div>
-          ${BANCOS.map(b => `
-            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--cream-dark);">
-              <span style="font-size:13px;color:var(--stone);">${b}</span>
-              <span style="font-size:13px;font-weight:700;color:${(bancosMap[b]||0)>=0?'#4A7C59':'#B85A4A'};">R$ ${(bancosMap[b]||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
-            </div>`).join('')}
-        </div>
-        <div style="background:white;border-radius:16px;padding:20px;box-shadow:var(--shadow);">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--red);margin-bottom:16px;">📊 Saídas por Categoria</div>
-          ${(()=>{
-            const catMap = {};
-            saidas.forEach(t => { const c=t.categoria||'Outro'; catMap[c]=(catMap[c]||0)+(parseFloat(t.valor)||0); });
-            const cats = Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
-            return cats.length ? cats.map(([c,v]) => `
-              <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--cream-dark);">
-                <span style="font-size:13px;color:var(--stone);">${c}</span>
-                <span style="font-size:13px;font-weight:700;color:#B85A4A;">R$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
-              </div>`).join('') : '<div style="color:var(--stone-light);font-size:13px;">Nenhuma saída ainda.</div>';
-          })()}
-        </div>
+    ${Object.keys(analise).length === 0 && chapas.length > 0 ? `
+    <div style="background:#f0fff4;border:1px solid #b7e4c7;border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:12px;">
+      <span style="font-size:24px;">✅</span>
+      <div>
+        <div style="font-weight:700;color:#2E7D32;">Sem pedidos ativos no momento</div>
+        <div style="font-size:13px;color:#555;">Nenhum pedido Fechado, Em Corte ou Acabamento com orçamento preenchido.</div>
       </div>
+    </div>` : ''}
 
-      <div style="background:white;border-radius:16px;padding:20px;box-shadow:var(--shadow);">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:16px;">📋 Lançamentos Recentes</div>
-        ${tx.length > 0 ? `
-          <div style="overflow-x:auto;">
-            <table style="width:100%;border-collapse:collapse;font-size:13px;">
-              <thead>
-                <tr style="border-bottom:2px solid var(--cream-dark);">
-                  <th style="text-align:left;padding:8px;color:var(--stone-light);font-weight:600;">Data</th>
-                  <th style="text-align:left;padding:8px;color:var(--stone-light);font-weight:600;">Descrição</th>
-                  <th style="text-align:left;padding:8px;color:var(--stone-light);font-weight:600;">Banco/Cat.</th>
-                  <th style="text-align:right;padding:8px;color:var(--stone-light);font-weight:600;">Valor</th>
-                  ${canEdit ? '<th style="padding:8px;"></th>' : ''}
-                </tr>
-              </thead>
-              <tbody>
-                ${tx.map(t => `
-                  <tr style="border-bottom:1px solid var(--cream-dark);">
-                    <td style="padding:8px;color:var(--stone-light);">${t.data||''}</td>
-                    <td style="padding:8px;color:var(--stone);">${t.descricao||''}</td>
-                    <td style="padding:8px;color:var(--stone-light);">${t.banco||t.categoria||''}</td>
-                    <td style="padding:8px;text-align:right;font-weight:700;color:${t.tipo==='entrada'?'#4A7C59':'#B85A4A'};">${t.tipo==='entrada'?'+':'-'} R$ ${(parseFloat(t.valor)||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-                    ${canEdit ? `<td style="padding:8px;"><button onclick="deletarTransacao('${t.id}')" style="background:var(--red-light);color:var(--red);border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">✕</button></td>` : ''}
-                  </tr>`).join('')}
-              </tbody>
-            </table>
-          </div>` : '<div style="color:var(--stone-light);font-size:13px;">Nenhum lançamento ainda.</div>'}
+    ${Object.keys(analise).map(matId => {
+      const { pedra, chapasDisp, resultado, chapasTemp } = analise[matId];
+      const totalPecas = resultado.length;
+      const pecasOk = resultado.filter(r => r.status === 'ok').length;
+      const pecasFaltando = resultado.filter(r => r.status === 'falta').length;
+      const todasOk = pecasFaltando === 0;
+
+      return `
+      <div style="background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:20px;overflow:hidden;border-left:4px solid ${todasOk?'#2E7D32':'#dc3545'};">
+        <!-- Header do material -->
+        <div style="padding:16px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;border-bottom:1px solid #f0f0f0;">
+          <div>
+            <div style="font-size:16px;font-weight:700;color:#333;">${pedra.nome}</div>
+            <div style="font-size:12px;color:#888;margin-top:2px;">${chapasDisp.length} chapa(s) disponível(is) · ${totalPecas} peça(s) comprometida(s)</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            ${todasOk
+              ? `<div style="background:#f0fff4;color:#2E7D32;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:700;">✅ Tem material para tudo</div>`
+              : `<div style="background:#fff5f5;color:#dc3545;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:700;">❌ Falta chapa para ${pecasFaltando} peça(s)</div>`
+            }
+            <button onclick="abrirModalChapa('${matId}')" style="background:#f0f0f0;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Chapa</button>
+          </div>
+        </div>
+
+        <!-- Chapas disponíveis -->
+        <div style="padding:14px 20px;border-bottom:1px solid #f0f0f0;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:10px;letter-spacing:.5px;">Chapas em Estoque</div>
+          ${chapasDisp.length === 0
+            ? `<div style="color:#dc3545;font-size:13px;">⚠️ Nenhuma chapa desta pedra em estoque</div>`
+            : chapasDisp.map(ch => {
+                const chTemp = chapasTemp.find(c => c.id === ch.id);
+                const areaUsada = (ch.largura*ch.comprimento) - (chTemp?.areaRestante||0);
+                const pctUsado = ch.largura*ch.comprimento > 0 ? (areaUsada/(ch.largura*ch.comprimento)*100) : 0;
+                const pecasNessa = chTemp?.pecasEncaixadas?.length || 0;
+                return `
+                <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:#f8f8f8;border-radius:8px;margin-bottom:6px;flex-wrap:wrap;">
+                  <div style="font-weight:700;color:#333;min-width:80px;">${ch.codigo||'Sem código'}</div>
+                  <div style="font-size:13px;color:#555;">${ch.largura.toFixed(2).replace('.',',')} × ${ch.comprimento.toFixed(2).replace('.',',')} m</div>
+                  <div style="font-size:12px;color:#888;">${(ch.largura*ch.comprimento).toFixed(2).replace('.',',')} m²</div>
+                  ${pecasNessa > 0 ? `<div style="font-size:12px;color:#006382;font-weight:600;">${pecasNessa} peça(s) encaixada(s)</div>` : ''}
+                  <div style="flex:1;min-width:100px;">
+                    <div style="height:6px;background:#e0e0e0;border-radius:3px;overflow:hidden;">
+                      <div style="height:100%;width:${Math.min(pctUsado,100)}%;background:${pctUsado>80?'#dc3545':pctUsado>50?'#F59E0B':'#2E7D32'};border-radius:3px;"></div>
+                    </div>
+                    <div style="font-size:10px;color:#888;margin-top:2px;">${pctUsado.toFixed(0)}% comprometido</div>
+                  </div>
+                  <div style="display:flex;gap:6px;">
+                    <button onclick="editarChapa('${ch.id}')" style="background:#e8f4f7;color:#006382;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px;">✏️</button>
+                    <button onclick="removerChapa('${ch.id}')" style="background:#fdeaea;color:#dc3545;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px;">🗑</button>
+                  </div>
+                </div>`;
+              }).join('')
+          }
+        </div>
+
+        <!-- Peças comprometidas -->
+        <div style="padding:14px 20px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:10px;letter-spacing:.5px;">Peças dos Pedidos Ativos</div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:#f5f5f5;">
+                <th style="padding:8px 12px;text-align:left;font-weight:600;color:#555;border-bottom:1px solid #e0e0e0;">Pedido</th>
+                <th style="padding:8px 12px;text-align:left;font-weight:600;color:#555;border-bottom:1px solid #e0e0e0;">Cliente</th>
+                <th style="padding:8px 12px;text-align:left;font-weight:600;color:#555;border-bottom:1px solid #e0e0e0;">Peça</th>
+                <th style="padding:8px 12px;text-align:center;font-weight:600;color:#555;border-bottom:1px solid #e0e0e0;">Dimensões</th>
+                <th style="padding:8px 12px;text-align:center;font-weight:600;color:#555;border-bottom:1px solid #e0e0e0;">Status</th>
+                <th style="padding:8px 12px;text-align:left;font-weight:600;color:#555;border-bottom:1px solid #e0e0e0;">Chapa</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${resultado.map(r => `
+              <tr style="border-bottom:1px solid #f0f0f0;">
+                <td style="padding:8px 12px;font-weight:600;color:#006382;">${r.peca.pedido}</td>
+                <td style="padding:8px 12px;color:#555;">${r.peca.cliente||'—'}</td>
+                <td style="padding:8px 12px;color:#333;">${r.peca.nomePeca}</td>
+                <td style="padding:8px 12px;text-align:center;font-family:monospace;">${r.peca.l.toFixed(2).replace('.',',')} × ${r.peca.c.toFixed(2).replace('.',',')} m</td>
+                <td style="padding:8px 12px;text-align:center;">
+                  ${r.status === 'ok'
+                    ? `<span style="background:#f0fff4;color:#2E7D32;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">✅ Tem</span>`
+                    : `<span style="background:#fff5f5;color:#dc3545;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">❌ Falta</span>`
+                  }
+                </td>
+                <td style="padding:8px 12px;font-size:12px;color:#888;">${r.chapaCod||'—'}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+    }).join('')}
+
+    ${matsSoEstoque.map(matId => {
+      const pedra = pedras.find(p => p.id === matId);
+      if (!pedra) return '';
+      const chapasDisp = chapas.filter(c => c.materialId === matId && c.status === 'disponivel');
+      const totalM2 = chapasDisp.reduce((s,c) => s + c.largura*c.comprimento, 0);
+      return `
+      <div style="background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:20px;overflow:hidden;border-left:4px solid #2E7D32;">
+        <div style="padding:16px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+          <div>
+            <div style="font-size:16px;font-weight:700;color:#333;">${pedra.nome}</div>
+            <div style="font-size:12px;color:#888;margin-top:2px;">${chapasDisp.length} chapa(s) · ${totalM2.toFixed(2).replace('.',',')} m² disponível — sem pedidos ativos</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div style="background:#f0fff4;color:#2E7D32;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:700;">✅ Disponível</div>
+            <button onclick="abrirModalChapa('${matId}')" style="background:#f0f0f0;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Chapa</button>
+          </div>
+        </div>
+        <div style="padding:0 20px 14px;">
+          ${chapasDisp.map(ch => `
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:#f8f8f8;border-radius:8px;margin-bottom:6px;flex-wrap:wrap;">
+            <div style="font-weight:700;color:#333;min-width:80px;">${ch.codigo||'Sem código'}</div>
+            <div style="font-size:13px;color:#555;">${ch.largura.toFixed(2).replace('.',',')} × ${ch.comprimento.toFixed(2).replace('.',',')} m</div>
+            <div style="font-size:12px;color:#888;">${(ch.largura*ch.comprimento).toFixed(2).replace('.',',')} m²</div>
+            <div style="display:flex;gap:6px;margin-left:auto;">
+              <button onclick="editarChapa('${ch.id}')" style="background:#e8f4f7;color:#006382;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px;">✏️</button>
+              <button onclick="removerChapa('${ch.id}')" style="background:#fdeaea;color:#dc3545;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px;">🗑</button>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('')}
+
+  </div>
+
+  <!-- MODAL CADASTRO DE CHAPA -->
+  <div class="modal-overlay" id="modal-chapa" style="align-items:flex-start;padding:20px;overflow-y:auto;">
+    <div class="modal" style="max-width:500px;width:100%;">
+      <div class="modal-header">
+        <div class="modal-title" id="titulo-modal-chapa">Adicionar Chapa ao Estoque</div>
+        <button class="modal-close" onclick="closeModal('modal-chapa')">✕</button>
       </div>
-    </div>`;
+      <div class="modal-body" id="body-modal-chapa"></div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('modal-chapa')">Cancelar</button>
+        <button class="btn-primary" onclick="salvarChapa()">💾 Salvar Chapa</button>
+      </div>
+    </div>
+  </div>`;
 }
 
-// Modal de lançamento
+function abrirModalChapa(materialIdPresel, chapaId) {
+  const pedras = getPedrasCadastradas();
+  const chapas = getEstoque();
+  const chapa = chapaId ? chapas.find(c => c.id === chapaId) : null;
+
+  document.getElementById('titulo-modal-chapa').textContent = chapa ? 'Editar Chapa' : 'Adicionar Chapa ao Estoque';
+  document.getElementById('body-modal-chapa').innerHTML = `
+    <input type="hidden" id="chapa-edit-id" value="${chapaId||''}">
+    <div style="display:grid;grid-template-columns:1fr;gap:14px;">
+      <div>
+        <label class="form-label">Material *</label>
+        <select class="form-select" id="chapa-material">
+          <option value="">Selecione o material...</option>
+          ${pedras.map(p => `<option value="${p.id}" ${(chapa?.materialId||materialIdPresel)===p.id?'selected':''}>${p.nome}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Código / Identificação</label>
+        <input class="form-input" id="chapa-codigo" value="${chapa?.codigo||''}" placeholder="Ex: PSG-01, Chapa A...">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="form-label">Largura (m) *</label>
+          <input class="form-input" id="chapa-largura" type="number" step="0.01" value="${chapa?.largura||''}" placeholder="Ex: 1,80">
+        </div>
+        <div>
+          <label class="form-label">Comprimento (m) *</label>
+          <input class="form-input" id="chapa-comprimento" type="number" step="0.01" value="${chapa?.comprimento||''}" placeholder="Ex: 3,20">
+        </div>
+      </div>
+      <div id="chapa-area-preview" style="background:#e8f4f7;border-radius:8px;padding:12px;text-align:center;font-size:14px;font-weight:700;color:#006382;display:none;"></div>
+      <div>
+        <label class="form-label">Status</label>
+        <select class="form-select" id="chapa-status">
+          <option value="disponivel" ${(!chapa||chapa.status==='disponivel')?'selected':''}>✅ Disponível</option>
+          <option value="reservada" ${chapa?.status==='reservada'?'selected':''}>🔒 Reservada</option>
+          <option value="esgotada" ${chapa?.status==='esgotada'?'selected':''}>❌ Esgotada</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Observações</label>
+        <input class="form-input" id="chapa-obs" value="${chapa?.obs||''}" placeholder="Ex: Sobra do pedido ALICI...">
+      </div>
+    </div>`;
+
+  // Preview da área
+  ['chapa-largura','chapa-comprimento'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', () => {
+      const l = parseFloat(document.getElementById('chapa-largura')?.value)||0;
+      const c = parseFloat(document.getElementById('chapa-comprimento')?.value)||0;
+      const prev = document.getElementById('chapa-area-preview');
+      if (l && c && prev) {
+        prev.style.display = 'block';
+        prev.textContent = `Área total: ${(l*c).toFixed(2).replace('.',',')} m²`;
+      }
+    });
+  });
+
+  openModal('modal-chapa');
+}
+
+function editarChapa(id) { abrirModalChapa(null, id); }
+
+function salvarChapa() {
+  const materialId = document.getElementById('chapa-material')?.value;
+  const codigo = document.getElementById('chapa-codigo')?.value.trim();
+  const largura = parseFloat(document.getElementById('chapa-largura')?.value)||0;
+  const comprimento = parseFloat(document.getElementById('chapa-comprimento')?.value)||0;
+  const status = document.getElementById('chapa-status')?.value||'disponivel';
+  const obs = document.getElementById('chapa-obs')?.value.trim();
+  const editId = document.getElementById('chapa-edit-id')?.value;
+
+  if (!materialId) { showNotif('Selecione o material!', 'error'); return; }
+  if (!largura || !comprimento) { showNotif('Informe as dimensões da chapa!', 'error'); return; }
+
+  const chapas = getEstoque();
+  if (editId) {
+    const idx = chapas.findIndex(c => c.id === editId);
+    if (idx >= 0) chapas[idx] = { ...chapas[idx], materialId, codigo, largura, comprimento, status, obs };
+  } else {
+    chapas.push({ id: 'CH-'+Date.now(), materialId, codigo, largura, comprimento, status, obs, criadoEm: new Date().toISOString() });
+  }
+  salvarEstoque(chapas);
+  closeModal('modal-chapa');
+  renderMateriais();
+  showNotif(editId ? 'Chapa atualizada! ✓' : 'Chapa adicionada ao estoque! ✓', 'success');
+}
+
+function removerChapa(id) {
+  if (!confirm('Remover esta chapa do estoque?')) return;
+  salvarEstoque(getEstoque().filter(c => c.id !== id));
+  renderMateriais();
+  showNotif('Chapa removida', 'error');
+}
+
 function abrirLancamento(tipo) {
   const isEntrada = tipo === 'entrada';
   const title = isEntrada ? '+ Nova Entrada' : '- Nova Saída';
@@ -2741,8 +2896,8 @@ function calcularItem(item, pedra, cfg) {
 
   // IGUAL MARMOPRICE: instalação e deslocamento = tempo * custoHoraEmpresa (SEM multiplicar por nPessoas)
   // nPessoas afeta apenas o tempo exibido, não multiplica o custo
-  const custoInstalacao   = tempoInstalEntrega * custoHoraEmpresa;
-  const custoDeslocamento = tempoDeslocamento  * custoHoraEmpresa;
+  const custoInstalacao   = tempoInstalEntrega * nPessoas * custoHoraEmpresa;
+  const custoDeslocamento = tempoDeslocamento  * nPessoas * custoHoraEmpresa;
   const custoCombustivel  = (distancia*2*idas/(cfg.consumoCombustivel||8))*(cfg.custoCombustivel||7);
 
   const custoAcessorios   = parseFloat(item.custoAcessorios)||0;

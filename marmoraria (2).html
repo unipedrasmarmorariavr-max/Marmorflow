@@ -5548,6 +5548,84 @@ function deletarProduto(id) {
   showNotif('Chapa excluída', 'error');
 }
 
+const GASTOS_DEFAULT = {
+  producao: {
+    nome: 'PRODUÇÃO',
+    subgrupos: [
+      { nome: 'CUSTOS FIXOS', itens: [
+        { nome: 'ALUGUEL', valor: 4200 },
+        { nome: 'FOLHA DE PAGAMENTO', valor: 13552 },
+        { nome: '13º SALÁRIO', valor: 1129.30 },
+        { nome: 'FÉRIAS', valor: 376.44 },
+        { nome: 'FGTS', valor: 1084.13 },
+        { nome: 'INSS (GPS)', valor: 0 },
+        { nome: 'SINDICATO', valor: 0 },
+        { nome: 'SEGURANÇA PRIVADA', valor: 0 },
+        { nome: 'ASSISTÊNCIA SAÚDE', valor: 0 },
+        { nome: 'LIMPEZA ENTULHO', valor: 250 },
+        { nome: 'SEGURO DE VIDA', valor: 0 },
+        { nome: 'SEGURO DE VEÍCULOS', valor: 0 },
+      ]},
+      { nome: 'CUSTOS VARIÁVEIS', itens: [
+        { nome: 'ALIMENTAÇÃO (VALE, CESTA E...)', valor: 1920 },
+        { nome: 'ENERGIA ELÉTRICA', valor: 552.69 },
+        { nome: 'ÁGUA', valor: 91.08 },
+        { nome: 'COMBUSTÍVEL', valor: 1569 },
+        { nome: 'COMISSÕES DA PRODUÇÃO', valor: 0 },
+        { nome: 'EMBALAGENS', valor: 0 },
+        { nome: 'MANUTENÇÃO DE MÁQUINA', valor: 250 },
+        { nome: 'FERRAMENTAS DE TRABALHO', valor: 70.92 },
+        { nome: 'MANUTENÇÃO, REVISÕES, IP...', valor: 70 },
+      ]},
+      { nome: 'INVESTIMENTOS', itens: [
+        { nome: 'ESTRUTURA', valor: 0 },
+        { nome: 'FERRAMENTAS', valor: 0 },
+        { nome: 'MÁQUINAS', valor: 0 },
+        { nome: 'SEGURANÇA', valor: 0 },
+        { nome: 'VEÍCULOS', valor: 0 },
+      ]}
+    ]
+  },
+  comercial: {
+    nome: 'COMERCIAL E ADM',
+    subgrupos: [
+      { nome: 'DESPESAS FIXAS', itens: [
+        { nome: 'FOLHA DE PAGAMENTO', valor: 5142.26 },
+        { nome: '13º SALÁRIO', valor: 428.52 },
+        { nome: 'FÉRIAS', valor: 142.84 },
+        { nome: 'FGTS SOBRE FOLHA DE PAGAMENTO', valor: 444.33 },
+        { nome: 'CONTABILIDADE', valor: 1400 },
+        { nome: 'IPTU', valor: 316.17 },
+        { nome: 'PROLABORE SÓCIOS', valor: 3000 },
+        { nome: 'SOFTWARE (MARMOPRICE)', valor: 784 },
+        { nome: 'CELULAR', valor: 409.41 },
+        { nome: 'INTERNET', valor: 293.39 },
+        { nome: 'FAXINEIRA', valor: 0 },
+      ]},
+      { nome: 'DESPESAS VARIÁVEIS', itens: [
+        { nome: 'DOAÇÕES E BRINDES', valor: 0 },
+        { nome: 'MATERIAL DE ESCRITÓRIO', valor: 20 },
+        { nome: 'PRODUTOS DE HIGIENE E LIM...', valor: 100 },
+        { nome: 'MARKETING', valor: 4000 },
+        { nome: 'SIMPLES NACIONAL', valor: 7000 },
+        { nome: 'DESPESAS FINANCEIRAS (BAN...)', valor: 120 },
+        { nome: 'UNIFORMES', valor: 75 },
+        { nome: 'EPI', valor: 100 },
+        { nome: 'VIAGENS E REPRESENTAÇÕES', valor: 60 },
+        { nome: 'RESCISÕES', valor: 0 },
+        { nome: 'DÍVIDA', valor: 6105.62 },
+      ]},
+      { nome: 'INVESTIMENTOS', itens: [
+        { nome: 'ESTRUTURA', valor: 0 },
+        { nome: 'FERRAMENTAS DIGITAIS', valor: 0 },
+        { nome: 'MÁQUINAS', valor: 0 },
+        { nome: 'SEGURANÇA', valor: 0 },
+        { nome: 'VEÍCULOS', valor: 0 },
+      ]}
+    ]
+  }
+};
+
 function getGastos() {
   try {
     const s = localStorage.getItem('gastos_marmorflow');

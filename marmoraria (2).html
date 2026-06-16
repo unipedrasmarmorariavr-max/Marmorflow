@@ -1810,10 +1810,8 @@ function abrirModalChapa(materialIdPresel, chapaId) {
     <div style="display:grid;grid-template-columns:1fr;gap:14px;">
       <div>
         <label class="form-label">Material *</label>
-        <select class="form-select" id="chapa-material">
-          <option value="">Selecione o material...</option>
-          ${pedras.map(p => `<option value="${p.id}" ${(chapa?.materialId||materialIdPresel)===p.id?'selected':''}>${p.nome}</option>`).join('')}
-        </select>
+        <div id="ac-chapa-mat" class="ac-chapa-container" data-pedraid="${chapa?.materialId||materialIdPresel||''}"></div>
+        <input type="hidden" id="chapa-mat-hidden" value="${chapa?.materialId||materialIdPresel||''}">
       </div>
       <div>
         <label class="form-label">Código / Identificação</label>
@@ -1858,12 +1856,18 @@ function abrirModalChapa(materialIdPresel, chapaId) {
   });
 
   openModal('modal-chapa');
+  // Inicializa autocomplete do material
+  setTimeout(() => {
+    criarAutocomplete('ac-chapa-mat', getPedrasCadastradas(), chapa?.materialId||materialIdPresel||'', function(id){
+      document.getElementById('chapa-mat-hidden').value = id;
+    });
+  }, 50);
 }
 
 function editarChapa(id) { abrirModalChapa(null, id); }
 
 function salvarChapa() {
-  const materialId = document.getElementById('chapa-material')?.value;
+  const materialId = document.getElementById('chapa-mat-hidden')?.value;
   const codigo = document.getElementById('chapa-codigo')?.value.trim();
   const largura = parseFloat(document.getElementById('chapa-largura')?.value)||0;
   const comprimento = parseFloat(document.getElementById('chapa-comprimento')?.value)||0;
@@ -2945,6 +2949,91 @@ function calcularItem(item, pedra, cfg) {
 
 function fmt(v) { return 'R$ ' + (v||0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
 
+// ─── AUTOCOMPLETE DE MATERIAL ────────────────────────────────────────────────
+// Uso: criarAutocomplete(containerId, pedras, valorAtual, onSelect)
+function criarAutocomplete(containerId, pedras, valorAtual, onSelect) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const pedraAtual = pedras.find(p => p.id === valorAtual);
+  container.innerHTML = `
+    <div style="position:relative;">
+      <input type="text" class="form-input ac-input" 
+        placeholder="Digite para buscar material..."
+        value="${pedraAtual ? pedraAtual.nome : ''}"
+        autocomplete="off"
+        style="width:100%;"
+        oninput="filtrarAC(this)"
+        onfocus="abrirAC(this)"
+        onblur="setTimeout(()=>fecharAC(this),200)">
+      <input type="hidden" class="ac-valor" value="${valorAtual||''}">
+      <div class="ac-lista" style="display:none;position:absolute;top:100%;left:0;right:0;background:white;border:1px solid #ddd;border-radius:0 0 8px 8px;max-height:240px;overflow-y:auto;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+      </div>
+    </div>`;
+
+  // Guarda callback no elemento
+  container.querySelector('.ac-input')._onSelect = onSelect;
+  container.querySelector('.ac-input')._pedras = pedras;
+}
+
+function filtrarAC(input) {
+  const query = input.value.toLowerCase().trim();
+  const pedras = input._pedras || [];
+  const lista = input.parentElement.querySelector('.ac-lista');
+  if (!lista) return;
+
+  const filtradas = query.length === 0
+    ? pedras.slice(0, 30) // mostra primeiras 30 se campo vazio
+    : pedras.filter(p => p.nome.toLowerCase().includes(query)).slice(0, 30);
+
+  if (filtradas.length === 0) {
+    lista.innerHTML = '<div style="padding:12px 16px;color:#888;font-size:13px;">Nenhum material encontrado</div>';
+  } else {
+    lista.innerHTML = filtradas.map(p => {
+      const nome = query ? p.nome.replace(new RegExp(`(${query})`, 'gi'), '<strong style="color:#006382;">$1</strong>') : p.nome;
+      return `<div class="ac-item" 
+        data-id="${p.id}" data-nome="${p.nome}"
+        onmousedown="selecionarAC(this)"
+        style="padding:10px 16px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;display:flex;justify-content:space-between;align-items:center;">
+        <span>${nome}</span>
+        <span style="font-size:11px;color:#888;">R$ ${(p.custoM2||0).toFixed(2).replace('.',',')}  /m²</span>
+      </div>`;
+    }).join('');
+  }
+  lista.style.display = 'block';
+}
+
+function abrirAC(input) {
+  filtrarAC(input);
+  // Hover style
+  input.parentElement.querySelectorAll('.ac-item').forEach(el => {
+    el.addEventListener('mouseover', () => el.style.background = '#f0f7ff');
+    el.addEventListener('mouseout', () => el.style.background = '');
+  });
+}
+
+function fecharAC(input) {
+  const lista = input.parentElement?.querySelector('.ac-lista');
+  if (lista) lista.style.display = 'none';
+  // Se o campo ficou com texto mas sem seleção válida, limpa
+  const valorHidden = input.parentElement?.querySelector('.ac-valor')?.value;
+  if (!valorHidden && input.value) {
+    const pedras = input._pedras || [];
+    const match = pedras.find(p => p.nome.toLowerCase() === input.value.toLowerCase());
+    if (!match) input.value = '';
+  }
+}
+
+function selecionarAC(item) {
+  const input = item.closest('div').querySelector('.ac-input');
+  const hidden = item.closest('div').querySelector('.ac-valor');
+  if (!input || !hidden) return;
+  input.value = item.dataset.nome;
+  hidden.value = item.dataset.id;
+  item.closest('.ac-lista').style.display = 'none';
+  if (input._onSelect) input._onSelect(item.dataset.id);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ─── RENDER PRINCIPAL ────────────────────────────────────────────────────
 function renderOrcamento() {
   const el = document.getElementById('orcamento-content');
@@ -3391,10 +3480,7 @@ function renderItemOrcamento(item, idx, pedras, cfg) {
       <div class="form-group"><label class="form-label">Nome do Item</label>
         <input class="form-input" value="${item.nome||''}" oninput="orcamentoAtual.itens[${idx}].nome=this.value"></div>
       <div class="form-group"><label class="form-label">Pedra / Material</label>
-        <select class="form-select" onchange="orcamentoAtual.itens[${idx}].pedraId=this.value;recalcularOrcamento()">
-          <option value="">Selecione...</option>
-          ${pedras.map(p => `<option value="${p.id}" ${item.pedraId===p.id?'selected':''}>${p.nome} — R$ ${p.custoM2.toFixed(2).replace('.',',')}/m²</option>`).join('')}
-        </select>
+        <div id="ac-mat-simples-${idx}" class="ac-mat-simples-container" data-pedraid="${item.pedraId||''}" data-idx="${idx}"></div>
       </div>
       <div class="form-group"><label class="form-label">Largura (m)</label>
         <input class="form-input" type="number" step="0.01" value="${item.largura||''}" oninput="orcamentoAtual.itens[${idx}].largura=parseFloat(this.value)||0;recalcularOrcamento()"></div>
@@ -3939,6 +4025,8 @@ function renderTelaOrcamentoPedido(order) {
     campoValor.value = totalGeral.toFixed(2).replace('.',',');
     orcamentoAtual.valorFinal = campoValor.value;
   }
+  // Inicializa autocompletes após render
+  setTimeout(inicializarAutocompletes, 50);
 }
 
 function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
@@ -4218,25 +4306,11 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
         </div>
         <!-- Linha de dados -->
         <div class="materiais-linha" style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;align-items:center;">
-          <!-- Dropdown pedra -->
+          <!-- Autocomplete pedra -->
           <div>
-            <select class="form-select" style="padding:6px 8px;font-size:12px;"
-              onchange="
-                orcamentoAtual.itens[${idx}].pedraId=this.value;
-                var p=getPedrasCadastradas().find(x=>x.id===this.value);
-                if(p){
-                  orcamentoAtual.itens[${idx}].custoM2Override=p.custoM2;
-                  orcamentoAtual.itens[${idx}].margemOverride=p.margem;
-                  orcamentoAtual.itens[${idx}].quebraOverride=p.quebra;
-                  var ec=document.getElementById('mat-custo-${idx}');if(ec)ec.value=p.custoM2;
-                  var ed=document.getElementById('mat-dif-${idx}');var g=GRUPOS_DIFICULDADE.find(x=>x.id===p.grupoId);if(ed&&g)ed.value=g.dif.toFixed(1);
-                  var em=document.getElementById('mat-margem-${idx}');if(em)em.value=p.margem;
-                }
-                recalcularTelaOrc('${orderId}')">
-              <option value="">Selecione...</option>
-              ${pedras.map(p=>`<option value="${p.id}" ${item.pedraId===p.id?'selected':''}>${p.nome}</option>`).join('')}
-            </select>
+            <div id="ac-mat-${idx}" data-pedraid="${item.pedraId||''}" data-idx="${idx}" data-orderid="${orderId}" class="ac-mat-container"></div>
             ${pedra?`<div style="font-size:10px;color:#888;margin-top:2px;">${GRUPOS_DIFICULDADE.find(g=>g.id===pedra.grupoId)?.nome||''}</div>`:''}
+          </div>
           </div>
           <!-- Custo m² editável -->
           <input id="mat-custo-${idx}" class="form-input" type="number" step="0.01"
@@ -4538,6 +4612,37 @@ async function salvarEFecharPedido() {
 
 
 // ─── HELPERS PEÇA A PEÇA ─────────────────────────────────────────────────
+function inicializarAutocompletes() {
+  // Autocompletes na tela de orçamento detalhado
+  document.querySelectorAll('.ac-mat-container').forEach(container => {
+    const idx = parseInt(container.dataset.idx);
+    const orderId = container.dataset.orderid;
+    const pedraId = container.dataset.pedraid;
+    criarAutocomplete(container.id, getPedrasCadastradas(), pedraId, function(id) {
+      orcamentoAtual.itens[idx].pedraId = id;
+      var p = getPedrasCadastradas().find(x=>x.id===id);
+      if(p){
+        orcamentoAtual.itens[idx].custoM2Override=p.custoM2;
+        orcamentoAtual.itens[idx].margemOverride=p.margem;
+        orcamentoAtual.itens[idx].quebraOverride=p.quebra;
+        var ec=document.getElementById('mat-custo-'+idx);if(ec)ec.value=p.custoM2;
+        var ed=document.getElementById('mat-dif-'+idx);var g=GRUPOS_DIFICULDADE.find(x=>x.id===p.grupoId);if(ed&&g)ed.value=g.dif.toFixed(1);
+        var em=document.getElementById('mat-margem-'+idx);if(em)em.value=p.margem;
+      }
+      recalcularTelaOrc(orderId);
+    });
+  });
+  // Autocompletes na tela de orçamento simples
+  document.querySelectorAll('.ac-mat-simples-container').forEach(container => {
+    const idx = parseInt(container.dataset.idx);
+    const pedraId = container.dataset.pedraid;
+    criarAutocomplete(container.id, getPedrasCadastradas(), pedraId, function(id) {
+      orcamentoAtual.itens[idx].pedraId = id;
+      recalcularOrcamento();
+    });
+  });
+}
+
 function parseMedidas(str) {
   if (!str) return {l:0, c:0};
   // Remove espaços, normaliza para lowercase

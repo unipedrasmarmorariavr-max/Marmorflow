@@ -1393,136 +1393,212 @@ function renderDashboard() {
   const el = document.getElementById('dashboard-content');
   if (!el) return;
 
-  const medicoes = orders.filter(o => o.stage==='medicao').length;
-  const negociando = orders.filter(o => o.stage==='negociacao');
-  const fechados = orders.filter(o => o.stage==='fechado');
-  const producao = orders.filter(o => ['corte','acabamento','pronto'].includes(o.stage));
-  const entregues = orders.filter(o => o.stage==='entregue');
+  // Pega filtro de período salvo
+  const filtroInicio = localStorage.getItem('dash_inicio') || '';
+  const filtroFim = localStorage.getItem('dash_fim') || '';
 
-  const parseValor = o => parseFloat((o.valor||'0').replace(',','.').replace(/[^0-9.]/g,''))||0;
-  const totalNeg = negociando.reduce((s,o) => s + parseValor(o), 0);
-  const totalFech = fechados.reduce((s,o) => s + parseValor(o), 0);
-  // Total orçado = TUDO que já recebeu valor (negociação + fechados + produção + entregues)
-  // Exclui apenas cópias de Em Corte (ref_fechado) para não duplicar
-  const todosOrcados = orders.filter(o => o.valor && !o.ref_fechado);
-  const totalOrcado = todosOrcados.reduce((s,o) => s + parseValor(o), 0);
-  const totalOrcadoCount = todosOrcados.length;
+  const parseValor = o => parseFloat((o.valor||'0').toString().replace(',','.').replace(/[^0-9.]/g,''))||0;
 
-  // Origem breakdown
-  const origemMap = {};
-  const origemValor = {};
-  fechados.forEach(o => {
-    const orig = o.origem||'outro';
-    origemMap[orig] = (origemMap[orig]||0) + 1;
-    origemValor[orig] = (origemValor[orig]||0) + (parseFloat((o.valor||'0').replace(',','.').replace(/[^0-9.]/g,''))||0);
-  });
+  // Filtra por período
+  const filtrarPeriodo = (lista) => {
+    if (!filtroInicio && !filtroFim) return lista;
+    return lista.filter(o => {
+      const dt = (o.created_at||o.datamedicao||'').substring(0,10);
+      if (filtroInicio && dt < filtroInicio) return false;
+      if (filtroFim && dt > filtroFim) return false;
+      return true;
+    });
+  };
 
-  const totalFechCount = fechados.length || 1;
-  const origemHTML = Object.keys(origemMap).sort((a,b)=>origemMap[b]-origemMap[a]).map(k => {
-    const pct = Math.round((origemMap[k]/totalFechCount)*100);
+  // Todos orçados (sem cópias)
+  const todos = filtrarPeriodo(orders.filter(o => !o.ref_fechado && o.valor));
+  const fechados = filtrarPeriodo(orders.filter(o => !o.ref_fechado && ['fechado','corte','acabamento','pronto','entregue'].includes(o.stage)));
+
+  const totalOrcado = todos.reduce((s,o) => s+parseValor(o), 0);
+  const ticketMedioOrc = todos.length > 0 ? totalOrcado/todos.length : 0;
+  const totalFechado = fechados.reduce((s,o) => s+parseValor(o), 0);
+  const ticketMedioFech = fechados.length > 0 ? totalFechado/fechados.length : 0;
+  const taxaConversao = todos.length > 0 ? (fechados.length/todos.length*100) : 0;
+
+  // ── Função para gerar bloco de origem ─────────────────────────────────────
+  const blocoOrigem = (lista, titulo) => {
+    const map = {};
+    lista.forEach(o => {
+      const k = o.origem||'nao_informado';
+      if (!map[k]) map[k] = { qtd:0, valor:0 };
+      map[k].qtd++;
+      map[k].valor += parseValor(o);
+    });
+    const total = lista.length || 1;
+    const cores = ['#006382','#4A9B6B','#8B6914','#B85A4A','#5B4A8B','#2E7D32','#006382','#8B4513'];
+    const sorted = Object.entries(map).sort((a,b) => b[1].qtd - a[1].qtd);
     return `
-      <div style="margin-bottom:14px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-          <span style="font-size:13px;font-weight:600;color:var(--stone);">${ORIGEM_LABELS[k]||k}${origemMap[k]>1?'':''}</span>
-          <span style="font-size:12px;color:var(--stone-light);">${origemMap[k]} pedido${origemMap[k]>1?'s':''} · R$ ${origemValor[k].toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;">
+      <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:16px;">📊 ${titulo}</div>
+      ${sorted.map(([k,v], i) => {
+        const pct = Math.round(v.qtd/total*100);
+        const cor = cores[i%cores.length];
+        return `
+        <div style="margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span style="font-size:13px;font-weight:600;color:var(--stone);">${ORIGEM_LABELS[k]||k}</span>
+            <span style="font-size:11px;color:var(--stone-light);">${v.qtd} pedido${v.qtd>1?'s':''} · ${fmt(v.valor)}</span>
+          </div>
+          <div style="background:var(--cream-dark);border-radius:20px;height:8px;overflow:hidden;">
+            <div style="width:${pct}%;height:100%;background:${cor};border-radius:20px;"></div>
+          </div>
+          <div style="font-size:10px;color:var(--stone-light);margin-top:2px;">${pct}%</div>
+        </div>`;
+      }).join('')}
+      ${sorted.length === 0 ? '<div style="color:#888;font-size:13px;text-align:center;padding:20px;">Sem dados no período</div>' : ''}
+    </div>`;
+  };
+
+  // ── Função para ranking ────────────────────────────────────────────────────
+  const ranking = (lista, campo, titulo, emoji) => {
+    const map = {};
+    lista.forEach(o => {
+      const k = (o[campo]||'Não informado').trim() || 'Não informado';
+      if (!map[k]) map[k] = { qtd:0, valor:0 };
+      map[k].qtd++;
+      map[k].valor += parseValor(o);
+    });
+    const sorted = Object.entries(map).sort((a,b) => b[1].valor - a[1].valor).slice(0,8);
+    const maxValor = sorted[0]?.[1]?.valor || 1;
+    const medalhas = ['🥇','🥈','🥉'];
+    return `
+    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;">
+      <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:16px;">${emoji} ${titulo}</div>
+      ${sorted.map(([nome, v], i) => `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+        <div style="font-size:18px;min-width:28px;">${medalhas[i]||'#'+(i+1)}</div>
+        <div style="flex:1;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+            <span style="font-size:13px;font-weight:600;color:var(--stone);">${nome}</span>
+            <span style="font-size:12px;color:var(--stone-light);">${v.qtd} pedido${v.qtd>1?'s':''}</span>
+          </div>
+          <div style="background:var(--cream-dark);border-radius:20px;height:6px;overflow:hidden;">
+            <div style="width:${Math.round(v.valor/maxValor*100)}%;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-light));border-radius:20px;"></div>
+          </div>
+          <div style="font-size:11px;color:var(--stone-light);margin-top:2px;">${fmt(v.valor)}</div>
         </div>
-        <div style="background:var(--cream-dark);border-radius:20px;height:8px;overflow:hidden;">
-          <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-light));border-radius:20px;transition:width 0.6s;"></div>
-        </div>
-        <div style="font-size:11px;color:var(--stone-light);margin-top:2px;">${pct}% dos fechamentos</div>
-      </div>`;
-  }).join('') || '<div style="color:var(--stone-light);font-size:13px;">Nenhum pedido fechado com origem registrada ainda.</div>';
+      </div>`).join('')}
+      ${sorted.length === 0 ? '<div style="color:#888;font-size:13px;text-align:center;padding:20px;">Sem dados no período</div>' : ''}
+    </div>`;
+  };
+
+  // ── Card de métrica ────────────────────────────────────────────────────────
+  const card = (titulo, valor, sub='', cor='var(--stone)') => `
+  <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;">
+    <div style="font-size:12px;color:var(--stone-light);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">${titulo}</div>
+    <div style="font-size:22px;font-weight:800;color:${cor};">${valor}</div>
+    ${sub ? `<div style="font-size:12px;color:var(--stone-light);margin-top:4px;">${sub}</div>` : ''}
+  </div>`;
 
   el.innerHTML = `
-    <div style="max-width:900px;margin:0 auto;">
-      <div style="font-family:'DM Serif Display',serif;font-size:24px;color:var(--stone);margin-bottom:24px;">📊 Dashboard</div>
+  <div style="padding:24px;max-width:1300px;margin:0 auto;">
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:32px;">
-        ${card('📐','Medições',medicoes,'pedidos em medição','#E8EFF6','#4A6C8C')}
-        ${card('💬','Negociando',negociando.length,'R$ '+totalNeg.toLocaleString('pt-BR',{minimumFractionDigits:2}),'#FEF3CD','#B8760A')}
-        ${card('✅','Fechados',fechados.length,'R$ '+totalFech.toLocaleString('pt-BR',{minimumFractionDigits:2}),'#E8F2EC','#4A7C59')}
-        ${card('⚙️','Em Produção',producao.length,'corte + acabamento + pronto','#F2E8F2','#8C5A8C')}
-        ${card('🚚','Entregues',entregues.length,'concluídos','#D8F0E4','#2C7A4B')}
+    <!-- TÍTULO + FILTRO -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:16px;">
+      <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);">📊 Dashboard</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div style="font-size:12px;color:var(--stone-light);font-weight:600;">PERÍODO</div>
+        <input type="date" class="form-input" style="padding:8px 12px;font-size:13px;width:150px;"
+          value="${filtroInicio}" onchange="localStorage.setItem('dash_inicio',this.value);renderDashboard()">
+        <span style="color:var(--stone-light);">→</span>
+        <input type="date" class="form-input" style="padding:8px 12px;font-size:13px;width:150px;"
+          value="${filtroFim}" onchange="localStorage.setItem('dash_fim',this.value);renderDashboard()">
+        <button onclick="localStorage.removeItem('dash_inicio');localStorage.removeItem('dash_fim');renderDashboard()"
+          style="background:var(--cream-dark);border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--stone);">
+          Limpar
+        </button>
       </div>
+    </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
-        <div style="background:white;border-radius:16px;padding:24px;box-shadow:var(--shadow);">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:20px;">Origem das Vendas</div>
-          ${origemHTML}
-        </div>
-        <div style="background:white;border-radius:16px;padding:24px;box-shadow:var(--shadow);">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:16px;">Resumo Financeiro</div>
-          ${rowD('Total orçado',totalOrcado,'#B8760A')}
-          ${rowD('Receita confirmada',totalFech,'#4A7C59')}
-          <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--cream-dark);">
-            <div style="font-size:12px;color:var(--stone-light);margin-bottom:6px;">Taxa de conversão</div>
-${(()=>{
-              const taxa = totalOrcadoCount > 0 ? Math.round((fechados.length / totalOrcadoCount) * 100) : 0;
-              return '<div style="font-size:24px;font-weight:700;color:var(--stone);">'+taxa+'%</div><div style="font-size:11px;color:var(--stone-light);">'+fechados.length+' fechado'+(fechados.length!==1?'s':'')+' de '+totalOrcadoCount+' orçamento'+(totalOrcadoCount!==1?'s':'')+'</div>';
-            })()}
-          </div>
-        </div>
+    <!-- RESUMO GERAL -->
+    <div style="background:var(--stone);color:white;border-radius:14px;padding:16px 24px;margin-bottom:24px;display:flex;gap:24px;flex-wrap:wrap;align-items:center;">
+      <div><div style="font-size:10px;opacity:.7;text-transform:uppercase;">Taxa de Conversão</div>
+        <div style="font-size:24px;font-weight:800;color:var(--gold);">${taxaConversao.toFixed(1)}%</div></div>
+      <div style="width:1px;height:40px;background:rgba(255,255,255,0.2);"></div>
+      <div><div style="font-size:10px;opacity:.7;text-transform:uppercase;">Total Orçado</div>
+        <div style="font-size:20px;font-weight:700;">${fmt(totalOrcado)}</div></div>
+      <div><div style="font-size:10px;opacity:.7;text-transform:uppercase;">Total Fechado</div>
+        <div style="font-size:20px;font-weight:700;color:var(--gold);">${fmt(totalFechado)}</div></div>
+      <div style="width:1px;height:40px;background:rgba(255,255,255,0.2);"></div>
+      <div><div style="font-size:10px;opacity:.7;text-transform:uppercase;">Orçamentos</div>
+        <div style="font-size:20px;font-weight:700;">${todos.length}</div></div>
+      <div><div style="font-size:10px;opacity:.7;text-transform:uppercase;">Fechados</div>
+        <div style="font-size:20px;font-weight:700;color:var(--gold);">${fechados.length}</div></div>
+    </div>
+
+    <!-- SEÇÃO: TODOS OS ORÇAMENTOS -->
+    <div style="font-size:16px;font-weight:700;color:var(--stone);margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid var(--cream-dark);">
+      📋 Todos os Orçamentos
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:16px;margin-bottom:28px;">
+      <div style="display:grid;gap:16px;">
+        ${card('Total Orçado', fmt(totalOrcado), `${todos.length} orçamentos`)}
+        ${card('Ticket Médio', fmt(ticketMedioOrc), 'por orçamento')}
       </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px;">
-
-        <div style="background:white;border-radius:16px;padding:24px;box-shadow:var(--shadow);">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:20px;">🏆 Ranking de Vendedores</div>
-          ${(()=>{
-            const origemInterna = ['whatsapp','instagram','visita','indicacao','outro',''];
-            const vendMap = {};
-            fechados.filter(o => origemInterna.includes(o.origem||'')).forEach(o => {
-              const v = (o.vendedor||'Não informado').trim();
-              if (!vendMap[v]) vendMap[v] = {nome:v, total:0, count:0};
-              vendMap[v].total += (parseFloat((o.valor||'0').replace(',','.').replace(/[^0-9.]/g,''))||0);
-              vendMap[v].count++;
-            });
-            const vlist = Object.values(vendMap).sort((a,b)=>b.total-a.total);
-            const maxVal = vlist.length ? vlist[0].total : 1;
-            return vlist.length ? vlist.map((v,i) => `
-              <div style="margin-bottom:16px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                  <span style="font-size:13px;font-weight:600;color:var(--stone);">${i===0?'🥇':i===1?'🥈':i===2?'🥉':'  '} ${v.nome}</span>
-                  <span style="font-size:12px;color:var(--stone-light);">${v.count} pedido${v.count>1?'s':''} · <strong style="color:var(--green);">R$ ${v.total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>
-                </div>
-                <div style="background:var(--cream-dark);border-radius:20px;height:8px;overflow:hidden;">
-                  <div style="width:${Math.round((v.total/maxVal)*100)}%;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-light));border-radius:20px;"></div>
-                </div>
-              </div>`).join('') : '<div style="color:var(--stone-light);font-size:13px;">Nenhum vendedor interno registrado ainda.</div>';
-          })()}
-        </div>
-
-        <div style="background:white;border-radius:16px;padding:24px;box-shadow:var(--shadow);">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#4A6C8C;margin-bottom:20px;">🏛️ Ranking de Arquitetos / Construtoras</div>
-          ${(()=>{
-            const arquMap = {};
-            fechados.filter(o => o.origem==='arquiteto'||o.origem==='construtora').forEach(o => {
-              const nome = (o.origemNome||o.origem||'Não informado').trim();
-              const tipo = o.origem==='arquiteto'?'📐':'🏗️';
-              const key = nome.toLowerCase();
-              if (!arquMap[key]) arquMap[key] = {nome, tipo, total:0, count:0};
-              arquMap[key].total += (parseFloat((o.valor||'0').replace(',','.').replace(/[^0-9.]/g,''))||0);
-              arquMap[key].count++;
-            });
-            const alist = Object.values(arquMap).sort((a,b)=>b.total-a.total);
-            const maxVal = alist.length ? alist[0].total : 1;
-            return alist.length ? alist.map((a,i) => `
-              <div style="margin-bottom:16px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                  <span style="font-size:13px;font-weight:600;color:var(--stone);">${i===0?'🥇':i===1?'🥈':i===2?'🥉':'  '} ${a.tipo} ${a.nome}</span>
-                  <span style="font-size:12px;color:var(--stone-light);">${a.count} pedido${a.count>1?'s':''} · <strong style="color:#4A6C8C;">R$ ${a.total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>
-                </div>
-                <div style="background:var(--cream-dark);border-radius:20px;height:8px;overflow:hidden;">
-                  <div style="width:${Math.round((a.total/maxVal)*100)}%;height:100%;background:linear-gradient(90deg,#4A6C8C,#6B8FAF);border-radius:20px;"></div>
-                </div>
-              </div>`).join('') : '<div style="color:var(--stone-light);font-size:13px;">Nenhum arquiteto ou construtora registrado ainda.</div>';
-          })()}
-        </div>
-
+      <div style="display:grid;gap:16px;">
+        ${card('Fechados', fmt(totalFechado), `${fechados.length} pedidos`, '#2E7D32')}
+        ${card('Ticket Médio Fechado', fmt(ticketMedioFech), 'por pedido fechado', '#2E7D32')}
       </div>
-    </div>`;
+      ${blocoOrigem(todos, 'Origem dos Orçamentos')}
+    </div>
+
+    <!-- SEÇÃO: SOMENTE FECHADOS -->
+    <div style="font-size:16px;font-weight:700;color:var(--stone);margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid var(--cream-dark);">
+      ✅ Somente Fechados
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;margin-bottom:28px;">
+      <div style="display:grid;gap:16px;align-content:start;">
+        ${card('Total Fechado', fmt(totalFechado), `${fechados.length} pedidos`, '#2E7D32')}
+        ${card('Ticket Médio', fmt(ticketMedioFech), 'por pedido fechado', '#2E7D32')}
+        ${card('Taxa de Conversão', taxaConversao.toFixed(1)+'%', `${fechados.length} de ${todos.length} orçamentos`)}
+      </div>
+      ${blocoOrigem(fechados, 'Origem dos Pedidos Fechados')}
+    </div>
+
+    <!-- SEÇÃO: RANKINGS -->
+    <div style="font-size:16px;font-weight:700;color:var(--stone);margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid var(--cream-dark);">
+      🏆 Rankings
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px;">
+      ${ranking(fechados, 'vendedor', 'Ranking de Vendedores', '👤')}
+      ${ranking(
+        fechados.filter(o => o.origem==='arquiteto'||o.origem==='construtora'),
+        'origemNome', 'Ranking de Arquitetos / Construtoras', '📐'
+      )}
+    </div>
+
+    <!-- SEÇÃO: PIPELINE DO KANBAN -->
+    <div style="font-size:16px;font-weight:700;color:var(--stone);margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid var(--cream-dark);">
+      🔄 Pipeline Atual
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:24px;">
+      ${[
+        ['medicao','🔍','Medição','#8B6914'],
+        ['negociacao','💬','Negociação','#006382'],
+        ['fechado','✅','Fechado','#2E7D32'],
+        ['corte','⚙️','Em Corte','#5B4A8B'],
+        ['acabamento','✨','Acabamento','#B85A4A'],
+        ['pronto','📦','Pronto','#4A9B6B'],
+      ].map(([stage, emoji, label, cor]) => {
+        const lista = orders.filter(o => o.stage===stage && !o.ref_fechado);
+        const total = lista.reduce((s,o) => s+parseValor(o), 0);
+        return `
+        <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:3px solid ${cor};text-align:center;">
+          <div style="font-size:20px;margin-bottom:6px;">${emoji}</div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:${cor};margin-bottom:4px;">${label}</div>
+          <div style="font-size:20px;font-weight:800;color:var(--stone);">${lista.length}</div>
+          <div style="font-size:11px;color:var(--stone-light);margin-top:4px;">${total>0?fmt(total):''}</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+  </div>`;
 }
-
 function card(icon,title,value,sub,bg,color) {
   return `<div style="background:${bg};border-radius:14px;padding:20px;">
     <div style="font-size:22px;margin-bottom:6px;">${icon}</div>

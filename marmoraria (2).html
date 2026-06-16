@@ -752,9 +752,15 @@ function formatDate(d) {
 // ============ CLIENTE VIEW ============
 async function mostrarPedidoCliente(id) {
   const body = document.getElementById('cliente-body');
+
+  // Busca o pedido pelo ID informado
   const { data, error } = await getSB().from('pedidos').select('*').eq('id', id).single();
   if (error || !data) { body.innerHTML=`<div class="empty-state"><div class="empty-icon">😕</div>Pedido não encontrado.</div>`; return; }
-  const o = data;
+
+  // Se este pedido tem uma CÓPIA em produção (ref_fechado = este id),
+  // mostra a cópia (que tem o stage real: corte, acabamento, pronto, entregue)
+  const { data: copia } = await getSB().from('pedidos').select('*').eq('ref_fechado', id).maybeSingle();
+  const o = copia || data; // usa a cópia ativa se existir, senão o original
   const stageIdx = STAGES.findIndex(s=>s.id===o.stage);
   const stage = STAGES[stageIdx];
   const progress = Math.round(((stageIdx+1)/STAGES.length)*100);

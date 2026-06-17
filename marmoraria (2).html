@@ -3367,54 +3367,55 @@ function filtrarAC(input) {
   if (!lista) return;
 
   const filtradas = query.length === 0
-    ? pedras.slice(0, 30) // mostra primeiras 30 se campo vazio
+    ? pedras.slice(0, 30)
     : pedras.filter(p => p.nome.toLowerCase().includes(query)).slice(0, 30);
 
   if (filtradas.length === 0) {
     lista.innerHTML = '<div style="padding:12px 16px;color:#888;font-size:13px;">Nenhum material encontrado</div>';
   } else {
     lista.innerHTML = filtradas.map(p => {
-      const nome = query ? p.nome.replace(new RegExp(`(${query})`, 'gi'), '<strong style="color:#006382;">$1</strong>') : p.nome;
-      return `<div class="ac-item" 
+      const nome = query ? p.nome.replace(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'), '<strong style="color:#006382;">$1</strong>') : p.nome;
+      return `<div class="ac-item"
         data-id="${p.id}" data-nome="${p.nome}"
-        onmousedown="selecionarAC(this)"
         style="padding:10px 16px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;display:flex;justify-content:space-between;align-items:center;">
         <span>${nome}</span>
-        <span style="font-size:11px;color:#888;">R$ ${(p.custoM2||0).toFixed(2).replace('.',',')}  /m²</span>
+        <span style="font-size:11px;color:#888;">R$ ${(p.custoM2||0).toFixed(2).replace('.',',')}/m²</span>
       </div>`;
     }).join('');
+
+    // Usa mousedown + preventDefault para não disparar o onblur antes do clique
+    lista.querySelectorAll('.ac-item').forEach(item => {
+      item.addEventListener('mousedown', function(e) {
+        e.preventDefault(); // impede o blur do input
+        selecionarAC(this);
+      });
+      item.addEventListener('mouseover', () => item.style.background = '#f0f7ff');
+      item.addEventListener('mouseout', () => item.style.background = '');
+    });
   }
   lista.style.display = 'block';
 }
 
 function abrirAC(input) {
   filtrarAC(input);
-  // Hover style
-  input.parentElement.querySelectorAll('.ac-item').forEach(el => {
-    el.addEventListener('mouseover', () => el.style.background = '#f0f7ff');
-    el.addEventListener('mouseout', () => el.style.background = '');
-  });
 }
 
 function fecharAC(input) {
-  const lista = input.parentElement?.querySelector('.ac-lista');
-  if (lista) lista.style.display = 'none';
-  // Se o campo ficou com texto mas sem seleção válida, limpa
-  const valorHidden = input.parentElement?.querySelector('.ac-valor')?.value;
-  if (!valorHidden && input.value) {
-    const pedras = input._pedras || [];
-    const match = pedras.find(p => p.nome.toLowerCase() === input.value.toLowerCase());
-    if (!match) input.value = '';
-  }
+  setTimeout(() => {
+    const lista = input.parentElement?.querySelector('.ac-lista');
+    if (lista) lista.style.display = 'none';
+  }, 150);
 }
 
 function selecionarAC(item) {
-  const input = item.closest('div').querySelector('.ac-input');
-  const hidden = item.closest('div').querySelector('.ac-valor');
-  if (!input || !hidden) return;
+  const container = item.closest('div');
+  const lista = container.querySelector('.ac-lista');
+  const input = container.parentElement?.querySelector('.ac-input');
+  const hidden = container.parentElement?.querySelector('.ac-valor');
+  if (!input) return;
   input.value = item.dataset.nome;
-  hidden.value = item.dataset.id;
-  item.closest('.ac-lista').style.display = 'none';
+  if (hidden) hidden.value = item.dataset.id;
+  if (lista) lista.style.display = 'none';
   if (input._onSelect) input._onSelect(item.dataset.id);
 }
 // ─────────────────────────────────────────────────────────────────────────────

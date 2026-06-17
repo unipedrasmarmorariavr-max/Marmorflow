@@ -1932,7 +1932,6 @@ function abrirModalChapa(materialIdPresel, chapaId) {
   });
 
   openModal('modal-chapa');
-  // Inicializa autocomplete do material
   setTimeout(() => {
     criarAutocomplete('ac-chapa-mat', getPedrasCadastradas(), chapa?.materialId||materialIdPresel||'', function(id){
       document.getElementById('chapa-mat-hidden').value = id;
@@ -3335,88 +3334,70 @@ function calcularItem(item, pedra, cfg) {
 function fmt(v) { return 'R$ ' + (v||0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
 
 // ─── AUTOCOMPLETE DE MATERIAL ────────────────────────────────────────────────
-// Uso: criarAutocomplete(containerId, pedras, valorAtual, onSelect)
+let _acCallback = {}; // guarda callbacks por containerId
+
 function criarAutocomplete(containerId, pedras, valorAtual, onSelect) {
   const container = document.getElementById(containerId);
   if (!container) return;
   const pedraAtual = pedras.find(p => p.id === valorAtual);
+  _acCallback[containerId] = onSelect;
+
   container.innerHTML = `
     <div style="position:relative;">
-      <input type="text" class="form-input ac-input" 
+      <input type="text" class="form-input ac-input"
+        id="ac-inp-${containerId}"
         placeholder="Digite para buscar material..."
         value="${pedraAtual ? pedraAtual.nome : ''}"
         autocomplete="off"
         style="width:100%;"
-        oninput="filtrarAC(this)"
-        onfocus="abrirAC(this)"
-        onblur="setTimeout(()=>fecharAC(this),200)">
-      <input type="hidden" class="ac-valor" value="${valorAtual||''}">
-      <div class="ac-lista" style="display:none;position:absolute;top:100%;left:0;right:0;background:white;border:1px solid #ddd;border-radius:0 0 8px 8px;max-height:240px;overflow-y:auto;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,0.15);">
-      </div>
+        oninput="acFiltrar('${containerId}')"
+        onfocus="acFiltrar('${containerId}')"
+        onblur="setTimeout(()=>{var l=document.getElementById('ac-lst-${containerId}');if(l)l.style.display='none';},200)">
+      <input type="hidden" id="ac-hid-${containerId}" value="${valorAtual||''}">
+      <div id="ac-lst-${containerId}" style="display:none;position:absolute;top:100%;left:0;right:0;background:white;border:1.5px solid #006382;border-top:none;border-radius:0 0 8px 8px;max-height:250px;overflow-y:auto;z-index:9999;box-shadow:0 6px 16px rgba(0,0,0,0.15);"></div>
     </div>`;
 
-  // Guarda callback no elemento
-  container.querySelector('.ac-input')._onSelect = onSelect;
-  container.querySelector('.ac-input')._pedras = pedras;
+  // Guarda pedras no input
+  document.getElementById('ac-inp-'+containerId)._pedras = pedras;
 }
 
-function filtrarAC(input) {
-  const query = input.value.toLowerCase().trim();
+function acFiltrar(containerId) {
+  const input = document.getElementById('ac-inp-'+containerId);
+  const lista = document.getElementById('ac-lst-'+containerId);
+  if (!input || !lista) return;
   const pedras = input._pedras || [];
-  const lista = input.parentElement.querySelector('.ac-lista');
-  if (!lista) return;
+  const query = input.value.toLowerCase().trim();
 
   const filtradas = query.length === 0
-    ? pedras.slice(0, 30)
-    : pedras.filter(p => p.nome.toLowerCase().includes(query)).slice(0, 30);
+    ? pedras.slice(0, 40)
+    : pedras.filter(p => p.nome.toLowerCase().includes(query)).slice(0, 40);
 
-  if (filtradas.length === 0) {
-    lista.innerHTML = '<div style="padding:12px 16px;color:#888;font-size:13px;">Nenhum material encontrado</div>';
-  } else {
-    lista.innerHTML = filtradas.map(p => {
-      const nome = query ? p.nome.replace(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'), '<strong style="color:#006382;">$1</strong>') : p.nome;
-      return `<div class="ac-item"
-        data-id="${p.id}" data-nome="${p.nome}"
-        style="padding:10px 16px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;display:flex;justify-content:space-between;align-items:center;">
-        <span>${nome}</span>
-        <span style="font-size:11px;color:#888;">R$ ${(p.custoM2||0).toFixed(2).replace('.',',')}/m²</span>
-      </div>`;
-    }).join('');
+  lista.innerHTML = filtradas.map(p => {
+    const nome = query
+      ? p.nome.replace(new RegExp('('+query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')', 'gi'),
+          '<strong style="color:#006382;background:#e8f4f7;">$1</strong>')
+      : p.nome;
+    return `<div
+      style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;display:flex;justify-content:space-between;align-items:center;"
+      onmousedown="event.preventDefault();acSelecionar('${containerId}','${p.id}','${p.nome.replace(/'/g,"\\'")}');"
+      onmouseover="this.style.background='#e8f4f7'"
+      onmouseout="this.style.background=''">
+      <span>${nome}</span>
+      <span style="font-size:11px;color:#888;flex-shrink:0;margin-left:8px;">R$ ${(p.custoM2||0).toFixed(2).replace('.',',')}/m²</span>
+    </div>`;
+  }).join('') || '<div style="padding:12px 16px;color:#888;font-size:13px;">Nenhum material encontrado</div>';
 
-    // Usa mousedown + preventDefault para não disparar o onblur antes do clique
-    lista.querySelectorAll('.ac-item').forEach(item => {
-      item.addEventListener('mousedown', function(e) {
-        e.preventDefault(); // impede o blur do input
-        selecionarAC(this);
-      });
-      item.addEventListener('mouseover', () => item.style.background = '#f0f7ff');
-      item.addEventListener('mouseout', () => item.style.background = '');
-    });
-  }
   lista.style.display = 'block';
 }
 
-function abrirAC(input) {
-  filtrarAC(input);
-}
-
-function fecharAC(input) {
-  setTimeout(() => {
-    const lista = input.parentElement?.querySelector('.ac-lista');
-    if (lista) lista.style.display = 'none';
-  }, 150);
-}
-
-function selecionarAC(item) {
-  const container = item.closest('div');
-  const lista = container.querySelector('.ac-lista');
-  const input = container.parentElement?.querySelector('.ac-input');
-  const hidden = container.parentElement?.querySelector('.ac-valor');
-  if (!input) return;
-  input.value = item.dataset.nome;
-  if (hidden) hidden.value = item.dataset.id;
+function acSelecionar(containerId, id, nome) {
+  const input = document.getElementById('ac-inp-'+containerId);
+  const hidden = document.getElementById('ac-hid-'+containerId);
+  const lista = document.getElementById('ac-lst-'+containerId);
+  if (input) input.value = nome;
+  if (hidden) hidden.value = id;
   if (lista) lista.style.display = 'none';
-  if (input._onSelect) input._onSelect(item.dataset.id);
+  if (_acCallback[containerId]) _acCallback[containerId](id);
 }
 // ─────────────────────────────────────────────────────────────────────────────
 

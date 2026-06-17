@@ -2024,6 +2024,183 @@ function abrirLancamento(tipo) {
   openModal('modal-detail');
 }
 
+// ─── CONTAS A PAGAR ──────────────────────────────────────────────────────────
+function getContasPagar() {
+  try { return JSON.parse(localStorage.getItem('mf_contas_pagar')||'[]'); } catch(e){ return []; }
+}
+function salvarContasPagar(c) { localStorage.setItem('mf_contas_pagar', JSON.stringify(c)); }
+
+function abrirModalContaPagar(id) {
+  const contas = getContasPagar();
+  const c = id ? contas.find(x => x.id === id) : null;
+  const bancos = getBancos();
+  document.getElementById('modal-title').textContent = c ? 'Editar Conta a Pagar' : '+ Nova Conta a Pagar';
+  document.getElementById('modal-body').innerHTML = `
+    <input type="hidden" id="cp-edit-id" value="${id||''}">
+    <div style="display:grid;gap:14px;">
+      <div>
+        <label class="form-label">Descrição *</label>
+        <input class="form-input" id="cp-descricao" value="${c?.descricao||''}" placeholder="Ex: Conta de energia, Fornecedor, Aluguel...">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="form-label">Valor (R$) *</label>
+          <input class="form-input" id="cp-valor" type="number" step="0.01" value="${c?.valor||''}" placeholder="0,00" style="font-size:18px;font-weight:700;">
+        </div>
+        <div>
+          <label class="form-label">Vencimento *</label>
+          <input class="form-input" id="cp-vencimento" type="date" value="${c?.vencimento||new Date().toISOString().substring(0,10)}">
+        </div>
+      </div>
+      <div>
+        <label class="form-label">Categoria</label>
+        <select class="form-select" id="cp-categoria">
+          <option value="">Selecione...</option>
+          ${['Aluguel','Energia','Água','Telefone/Internet','Fornecedor','Impostos','Folha de Pagamento','Manutenção','Marketing','Combustível','Outros'].map(cat =>
+            `<option value="${cat}" ${c?.categoria===cat?'selected':''}>${cat}</option>`
+          ).join('')}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Banco para Pagamento</label>
+        <select class="form-select" id="cp-banco">
+          <option value="">Selecione...</option>
+          ${bancos.map(b => `<option value="${b.nome}" ${c?.banco===b.nome?'selected':''}>${b.nome}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Recorrência</label>
+        <select class="form-select" id="cp-recorrencia">
+          <option value="unica" ${(!c||c.recorrencia==='unica')?'selected':''}>Única</option>
+          <option value="mensal" ${c?.recorrencia==='mensal'?'selected':''}>Mensal</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Observação</label>
+        <input class="form-input" id="cp-obs" value="${c?.obs||''}" placeholder="Detalhes adicionais...">
+      </div>
+    </div>`;
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn-secondary" onclick="closeModal('modal-detail')">Cancelar</button>
+    <button onclick="salvarContaPagar()" style="background:#B85A4A;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">
+      💾 Salvar Conta
+    </button>`;
+  openModal('modal-detail');
+}
+
+function salvarContaPagar() {
+  const descricao = document.getElementById('cp-descricao')?.value.trim();
+  const valor = parseFloat(document.getElementById('cp-valor')?.value)||0;
+  const vencimento = document.getElementById('cp-vencimento')?.value;
+  if (!descricao || !valor || !vencimento) { showNotif('Preencha descrição, valor e vencimento!', 'error'); return; }
+  const contas = getContasPagar();
+  const editId = document.getElementById('cp-edit-id')?.value;
+  const dados = {
+    descricao, valor, vencimento,
+    categoria: document.getElementById('cp-categoria')?.value||'',
+    banco: document.getElementById('cp-banco')?.value||'',
+    recorrencia: document.getElementById('cp-recorrencia')?.value||'unica',
+    obs: document.getElementById('cp-obs')?.value.trim(),
+    status: 'pendente',
+  };
+  if (editId) {
+    const idx = contas.findIndex(c => c.id === editId);
+    if (idx >= 0) contas[idx] = { ...contas[idx], ...dados };
+  } else {
+    contas.push({ id: 'CP-'+Date.now(), ...dados, criadoEm: new Date().toISOString() });
+  }
+  salvarContasPagar(contas);
+  closeModal('modal-detail');
+  renderFinanceiro();
+  showNotif('Conta salva! ✓', 'success');
+}
+
+async function pagarConta(id) {
+  const contas = getContasPagar();
+  const c = contas.find(x => x.id === id);
+  if (!c) return;
+  const bancos = getBancos();
+  document.getElementById('modal-title').textContent = '✓ Confirmar Pagamento';
+  document.getElementById('modal-body').innerHTML = `
+    <input type="hidden" id="pag-conta-id" value="${id}">
+    <div style="background:#fff5f5;border-radius:8px;padding:12px 16px;margin-bottom:16px;">
+      <div style="font-weight:700;color:var(--stone);">${c.descricao}</div>
+      <div style="font-size:13px;color:#888;">Vencimento: ${c.vencimento?.substring(8,10)+'/'+c.vencimento?.substring(5,7)+'/'+c.vencimento?.substring(0,4)}</div>
+    </div>
+    <div style="display:grid;gap:14px;">
+      <div>
+        <label class="form-label">Valor Pago (R$) *</label>
+        <input class="form-input" id="pag-valor" type="number" step="0.01" value="${c.valor}" style="font-size:18px;font-weight:700;">
+        <div style="font-size:11px;color:#888;margin-top:4px;">💡 Ajuste se o valor foi diferente</div>
+      </div>
+      <div>
+        <label class="form-label">Data do Pagamento *</label>
+        <input class="form-input" id="pag-data" type="date" value="${new Date().toISOString().substring(0,10)}">
+      </div>
+      <div>
+        <label class="form-label">Banco *</label>
+        <select class="form-select" id="pag-banco">
+          <option value="${c.banco||''}">${c.banco||'Selecione...'}</option>
+          ${bancos.filter(b => b.nome !== c.banco).map(b => `<option value="${b.nome}">${b.nome}</option>`).join('')}
+        </select>
+      </div>
+    </div>`;
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn-secondary" onclick="closeModal('modal-detail')">Cancelar</button>
+    <button onclick="confirmarPagamento()" style="background:#2E7D32;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">
+      ✓ Confirmar Pagamento
+    </button>`;
+  openModal('modal-detail');
+}
+
+async function confirmarPagamento() {
+  const contaId = document.getElementById('pag-conta-id')?.value;
+  const valor = parseFloat(document.getElementById('pag-valor')?.value)||0;
+  const data = document.getElementById('pag-data')?.value;
+  const banco = document.getElementById('pag-banco')?.value;
+  if (!valor || !data) { showNotif('Preencha valor e data!','error'); return; }
+
+  const contas = getContasPagar();
+  const idx = contas.findIndex(c => c.id === contaId);
+  if (idx >= 0) {
+    contas[idx].status = 'pago';
+    contas[idx].dataPagamento = data;
+    contas[idx].valorPago = valor;
+    contas[idx].bancoPago = banco;
+    // Se recorrente, cria próximo mês
+    if (contas[idx].recorrencia === 'mensal') {
+      const venc = new Date(contas[idx].vencimento+'T12:00:00');
+      venc.setMonth(venc.getMonth()+1);
+      contas.push({
+        ...contas[idx],
+        id: 'CP-'+Date.now(),
+        status: 'pendente',
+        vencimento: venc.toISOString().substring(0,10),
+        dataPagamento: null, valorPago: null, bancoPago: null,
+        criadoEm: new Date().toISOString()
+      });
+    }
+  }
+  salvarContasPagar(contas);
+  // Registra como saída no financeiro
+  await getSB().from('transacoes').insert({
+    tipo: 'saida', valor, data,
+    descricao: contas[idx]?.descricao||'Conta a pagar',
+    banco, categoria: contas[idx]?.categoria||'',
+    created_by: currentUser
+  });
+  closeModal('modal-detail');
+  renderFinanceiro();
+  showNotif('Pagamento confirmado! ✓', 'success');
+}
+
+function excluirContaPagar(id) {
+  if (!confirm('Excluir esta conta?')) return;
+  salvarContasPagar(getContasPagar().filter(c => c.id !== id));
+  renderFinanceiro();
+  showNotif('Conta excluída','error');
+}
+
 function abrirModalTransacao(tipo) {
   const isEntrada = tipo === 'entrada';
   const bancos = getBancos();
@@ -2115,13 +2292,12 @@ async function renderFinanceiro() {
 
   const mesAtual = new Date().toISOString().substring(0,7);
   const filtroMes = localStorage.getItem('fin_mes') || mesAtual;
+  const abaFin = localStorage.getItem('fin_aba') || 'geral';
   const parseValor = o => parseFloat((o.valor||'0').toString().replace(',','.').replace(/[^0-9.]/g,''))||0;
 
-  // A Receber — pedidos fechados/produção sem cópia
+  // Dados
   const stagesReceber = ['fechado','corte','acabamento','pronto'];
   const aReceber = orders.filter(o => stagesReceber.includes(o.stage) && !o.ref_fechado && o.valor);
-
-  // Lançamentos do mês
   const txMes = transacoes.filter(t => (t.data||'').substring(0,7) === filtroMes);
   const entradas = txMes.filter(t => t.tipo === 'entrada');
   const saidas = txMes.filter(t => t.tipo === 'saida');
@@ -2130,6 +2306,12 @@ async function renderFinanceiro() {
   const saldo = totalEntradas - totalSaidas;
   const totalAReceber = aReceber.reduce((s,o) => s+parseValor(o), 0);
 
+  const contas = getContasPagar();
+  const contasPendentes = contas.filter(c => c.status === 'pendente');
+  const contasMes = contasPendentes.filter(c => (c.vencimento||'').substring(0,7) === filtroMes);
+  const totalAPagar = contasMes.reduce((s,c) => s+(parseFloat(c.valor)||0), 0);
+  const contasVencidas = contasPendentes.filter(c => c.vencimento < new Date().toISOString().substring(0,10));
+
   const fmtV = v => 'R$ '+(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
   const fmtDt = d => d ? d.substring(8,10)+'/'+d.substring(5,7)+'/'+d.substring(0,4) : '';
 
@@ -2137,7 +2319,7 @@ async function renderFinanceiro() {
   <div style="padding:24px;max-width:1100px;margin:0 auto;">
 
     <!-- HEADER -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
       <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);">💰 Financeiro</div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         <input type="month" class="form-input" style="padding:8px 12px;font-size:13px;width:160px;"
@@ -2146,140 +2328,209 @@ async function renderFinanceiro() {
           style="background:#2E7D32;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">+ Entrada</button>
         <button onclick="abrirModalTransacao('saida')"
           style="background:#B85A4A;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">+ Saída</button>
+        <button onclick="abrirModalContaPagar()"
+          style="background:#8B6914;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">+ Conta a Pagar</button>
       </div>
     </div>
 
     <!-- CARDS RESUMO -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px;">
-      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;border-top:4px solid #2E7D32;">
-        <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Entradas no Mês</div>
-        <div style="font-size:22px;font-weight:800;color:#2E7D32;">${fmtV(totalEntradas)}</div>
-        <div style="font-size:11px;color:#888;margin-top:4px;">${entradas.length} lançamento(s)</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;">
+      <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid #2E7D32;">
+        <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Entradas</div>
+        <div style="font-size:20px;font-weight:800;color:#2E7D32;">${fmtV(totalEntradas)}</div>
+        <div style="font-size:11px;color:#888;">${entradas.length} lançamento(s)</div>
       </div>
-      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;border-top:4px solid #B85A4A;">
-        <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Saídas no Mês</div>
-        <div style="font-size:22px;font-weight:800;color:#B85A4A;">${fmtV(totalSaidas)}</div>
-        <div style="font-size:11px;color:#888;margin-top:4px;">${saidas.length} lançamento(s)</div>
+      <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid #B85A4A;">
+        <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Saídas</div>
+        <div style="font-size:20px;font-weight:800;color:#B85A4A;">${fmtV(totalSaidas)}</div>
+        <div style="font-size:11px;color:#888;">${saidas.length} lançamento(s)</div>
       </div>
-      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;border-top:4px solid ${saldo>=0?'#2E7D32':'#B85A4A'};">
-        <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Saldo do Mês</div>
-        <div style="font-size:22px;font-weight:800;color:${saldo>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldo)}</div>
-        <div style="font-size:11px;color:#888;margin-top:4px;">${saldo>=0?'✅ Positivo':'⚠️ Negativo'}</div>
+      <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid ${saldo>=0?'#2E7D32':'#B85A4A'};">
+        <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Saldo do Mês</div>
+        <div style="font-size:20px;font-weight:800;color:${saldo>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldo)}</div>
+        <div style="font-size:11px;color:#888;">${saldo>=0?'✅ Positivo':'⚠️ Negativo'}</div>
       </div>
-      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;border-top:4px solid #8B6914;">
-        <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">A Receber</div>
-        <div style="font-size:22px;font-weight:800;color:#8B6914;">${fmtV(totalAReceber)}</div>
-        <div style="font-size:11px;color:#888;margin-top:4px;">${aReceber.length} pedido(s) em aberto</div>
+      <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid #8B6914;">
+        <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">A Receber</div>
+        <div style="font-size:20px;font-weight:800;color:#8B6914;">${fmtV(totalAReceber)}</div>
+        <div style="font-size:11px;color:#888;">${aReceber.length} pedido(s)</div>
+      </div>
+      <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid ${contasVencidas.length>0?'#B85A4A':'#5B4A8B'};">
+        <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">A Pagar ${filtroMes.substring(5,7)}/${filtroMes.substring(0,4)}</div>
+        <div style="font-size:20px;font-weight:800;color:${contasVencidas.length>0?'#B85A4A':'#5B4A8B'};">${fmtV(totalAPagar)}</div>
+        <div style="font-size:11px;color:${contasVencidas.length>0?'#B85A4A':'#888'};">${contasVencidas.length>0?'⚠️ '+contasVencidas.length+' vencida(s)':contasMes.length+' conta(s)'}</div>
       </div>
     </div>
 
-    <!-- A RECEBER -->
-    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:24px;">
-      <div style="background:#8B6914;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
-        <div style="font-size:14px;font-weight:700;">📋 A Receber — Pedidos Fechados</div>
-        <div style="font-size:12px;opacity:.8;">${aReceber.length} pedido(s) · ${fmtV(totalAReceber)}</div>
+    <!-- TABS -->
+    <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid var(--cream-dark);">
+      ${[['geral','📊 Lançamentos'],['receber','📋 A Receber'],['pagar','📤 Contas a Pagar']].map(([aba,label]) => `
+      <button onclick="finSwitchAba('${aba}')" id="fin-aba-${aba}"
+        style="padding:10px 20px;border:none;background:${abaFin===aba?'var(--gold)':'var(--cream-dark)'};color:${abaFin===aba?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
+        ${label}
+      </button>`).join('')}
+    </div>
+
+    <!-- PAINEL LANÇAMENTOS -->
+    <div id="fin-painel-geral" style="display:${abaFin==='geral'?'block':'none'}">
+      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
+        <div style="background:var(--stone);color:white;padding:14px 20px;display:flex;justify-content:space-between;">
+          <div style="font-size:14px;font-weight:700;">Lançamentos de ${filtroMes.substring(5,7)}/${filtroMes.substring(0,4)}</div>
+          <div style="font-size:12px;opacity:.7;">${txMes.length} registros</div>
+        </div>
+        ${txMes.length === 0 ? `<div style="padding:40px;text-align:center;color:#888;"><div style="font-size:32px;margin-bottom:12px;">📭</div><div>Nenhum lançamento neste mês</div></div>` :
+        txMes.map(t => `
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--cream-dark);">
+          <div style="width:36px;height:36px;border-radius:50%;background:${t.tipo==='entrada'?'#f0fff4':'#fff5f5'};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">
+            ${t.tipo==='entrada'?'↑':'↓'}
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:600;color:var(--stone);">${t.descricao||'—'}</div>
+            <div style="font-size:11px;color:#888;">${fmtDt(t.data)}${t.banco?' · '+t.banco:''}${t.categoria?' · '+t.categoria:''}${t.forma?' · '+t.forma:''}</div>
+          </div>
+          <div style="font-size:15px;font-weight:700;color:${t.tipo==='entrada'?'#2E7D32':'#B85A4A'};">
+            ${t.tipo==='entrada'?'+':'-'}${fmtV(t.valor)}
+          </div>
+          <button onclick="deletarTransacao('${t.id}')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">🗑</button>
+        </div>`).join('')}
       </div>
-      ${aReceber.length === 0 ? `
-      <div style="padding:30px;text-align:center;color:#888;font-size:13px;">
-        Nenhum pedido fechado aguardando recebimento
-      </div>` :
-      aReceber.map(o => {
-        const valor = parseValor(o);
-        const recebimentos = transacoes.filter(t => t.pedido_id === o.id && t.tipo === 'entrada');
-        const totalRecebido = recebimentos.reduce((s,t) => s+(parseFloat(t.valor)||0), 0);
-        const saldoPedido = valor - totalRecebido;
-        const statusCor = totalRecebido === 0 ? '#8B6914' : saldoPedido <= 0 ? '#2E7D32' : '#006382';
-        const statusLabel = totalRecebido === 0 ? 'Pendente' : saldoPedido <= 0 ? 'Recebido ✅' : 'Parcial';
-        return `
-        <div style="padding:14px 20px;border-bottom:1px solid var(--cream-dark);">
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <div style="flex:1;min-width:200px;">
-              <div style="font-size:14px;font-weight:700;color:var(--stone);">${o.cliente||'—'}</div>
-              <div style="font-size:12px;color:#888;margin-top:2px;">
-                ${o.id} · ${o.peca||''} · ${o.stage==='fechado'?'Fechado':o.stage==='corte'?'Em Corte':o.stage==='acabamento'?'Acabamento':'Pronto'}
+    </div>
+
+    <!-- PAINEL A RECEBER -->
+    <div id="fin-painel-receber" style="display:${abaFin==='receber'?'block':'none'}">
+      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
+        <div style="background:#8B6914;color:white;padding:14px 20px;display:flex;justify-content:space-between;">
+          <div style="font-size:14px;font-weight:700;">📋 A Receber — Pedidos Fechados</div>
+          <div style="font-size:12px;opacity:.8;">${aReceber.length} pedido(s) · ${fmtV(totalAReceber)}</div>
+        </div>
+        ${aReceber.length === 0 ? `<div style="padding:30px;text-align:center;color:#888;">Nenhum pedido aguardando recebimento</div>` :
+        aReceber.map(o => {
+          const valor = parseValor(o);
+          const recebimentos = transacoes.filter(t => t.pedido_id === o.id && t.tipo === 'entrada');
+          const totalRecebido = recebimentos.reduce((s,t) => s+(parseFloat(t.valor)||0), 0);
+          const saldoPedido = valor - totalRecebido;
+          const statusCor = totalRecebido===0?'#8B6914':saldoPedido<=0?'#2E7D32':'#006382';
+          const statusLabel = totalRecebido===0?'Pendente':saldoPedido<=0?'Recebido ✅':'Parcial';
+          return `
+          <div style="padding:14px 20px;border-bottom:1px solid var(--cream-dark);">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+              <div style="flex:1;min-width:200px;">
+                <div style="font-size:14px;font-weight:700;color:var(--stone);">${o.cliente||'—'}</div>
+                <div style="font-size:12px;color:#888;">${o.id} · ${o.peca||''}</div>
+              </div>
+              <div style="text-align:right;min-width:110px;">
+                <div style="font-size:12px;color:#888;">Orçamento</div>
+                <div style="font-size:16px;font-weight:700;color:var(--stone);">${fmtV(valor)}</div>
+              </div>
+              ${totalRecebido>0?`
+              <div style="text-align:right;min-width:110px;">
+                <div style="font-size:12px;color:#888;">Recebido</div>
+                <div style="font-size:16px;font-weight:700;color:#2E7D32;">${fmtV(totalRecebido)}</div>
+              </div>
+              <div style="text-align:right;min-width:110px;">
+                <div style="font-size:12px;color:#888;">Falta</div>
+                <div style="font-size:16px;font-weight:700;color:${saldoPedido>0?'#B85A4A':'#2E7D32'};">${fmtV(Math.max(0,saldoPedido))}</div>
+              </div>`:''}
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="background:${statusCor}22;color:${statusCor};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;">${statusLabel}</span>
+                ${saldoPedido>0?`<button onclick="abrirConfirmarRecebimento('${o.id}','${o.cliente}',${saldoPedido.toFixed(2)})"
+                  style="background:#2E7D32;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">✓ Receber</button>`:''}
               </div>
             </div>
-            <div style="text-align:right;min-width:120px;">
-              <div style="font-size:13px;color:#888;">Valor do orçamento</div>
-              <div style="font-size:16px;font-weight:700;color:var(--stone);">${fmtV(valor)}</div>
-            </div>
-            ${totalRecebido > 0 ? `
-            <div style="text-align:right;min-width:120px;">
-              <div style="font-size:13px;color:#888;">Recebido</div>
-              <div style="font-size:16px;font-weight:700;color:#2E7D32;">${fmtV(totalRecebido)}</div>
-            </div>
-            <div style="text-align:right;min-width:120px;">
-              <div style="font-size:13px;color:#888;">Falta receber</div>
-              <div style="font-size:16px;font-weight:700;color:${saldoPedido>0?'#B85A4A':'#2E7D32'};">${fmtV(Math.max(0,saldoPedido))}</div>
-            </div>` : ''}
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span style="background:${statusCor}22;color:${statusCor};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;">${statusLabel}</span>
-              ${saldoPedido > 0 ? `
-              <button onclick="abrirConfirmarRecebimento('${o.id}','${o.cliente}',${saldoPedido.toFixed(2)})"
-                style="background:#2E7D32;color:white;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
-                ✓ Confirmar Recebimento
-              </button>` : ''}
-            </div>
-          </div>
-          ${recebimentos.length > 0 ? `
-          <div style="margin-top:10px;padding:10px 14px;background:#f8f8f8;border-radius:8px;">
-            <div style="font-size:11px;font-weight:700;color:#888;margin-bottom:6px;">RECEBIMENTOS:</div>
-            ${recebimentos.map(r => `
-            <div style="display:flex;justify-content:space-between;font-size:12px;color:#555;margin-bottom:3px;">
-              <span>${fmtDt(r.data)} · ${r.forma||''} · ${r.banco||''}</span>
-              <span style="font-weight:700;color:#2E7D32;">+${fmtV(r.valor)}</span>
-            </div>`).join('')}
-          </div>` : ''}
-        </div>`;
-      }).join('')}
+            ${recebimentos.length>0?`
+            <div style="margin-top:8px;padding:8px 12px;background:#f8f8f8;border-radius:8px;">
+              ${recebimentos.map(r=>`<div style="display:flex;justify-content:space-between;font-size:12px;color:#555;margin-bottom:2px;">
+                <span>${fmtDt(r.data)} · ${r.forma||''} · ${r.banco||''}</span>
+                <span style="font-weight:700;color:#2E7D32;">+${fmtV(r.valor)}</span>
+              </div>`).join('')}
+            </div>`:''}
+          </div>`;
+        }).join('')}
+      </div>
     </div>
 
-    <!-- LANÇAMENTOS DO MÊS -->
-    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
-      <div style="background:var(--stone);color:white;padding:14px 20px;display:flex;justify-content:space-between;">
-        <div style="font-size:14px;font-weight:700;">Lançamentos de ${filtroMes.substring(5,7)}/${filtroMes.substring(0,4)}</div>
-        <div style="font-size:12px;opacity:.7;">${txMes.length} registros</div>
-      </div>
-      ${txMes.length === 0 ? `
-      <div style="padding:40px;text-align:center;color:#888;">
-        <div style="font-size:32px;margin-bottom:12px;">📭</div>
-        <div>Nenhum lançamento neste mês</div>
-      </div>` :
-      txMes.map(t => `
-      <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--cream-dark);">
-        <div style="width:36px;height:36px;border-radius:50%;background:${t.tipo==='entrada'?'#f0fff4':'#fff5f5'};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">
-          ${t.tipo==='entrada'?'↑':'↓'}
+    <!-- PAINEL CONTAS A PAGAR -->
+    <div id="fin-painel-pagar" style="display:${abaFin==='pagar'?'block':'none'}">
+      ${contasVencidas.length>0?`
+      <div style="background:#fff5f5;border:2px solid #B85A4A;border-radius:12px;padding:14px 20px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">
+        <span style="font-size:24px;">⚠️</span>
+        <div>
+          <div style="font-weight:700;color:#B85A4A;">${contasVencidas.length} conta(s) vencida(s)!</div>
+          <div style="font-size:13px;color:#888;">Total: ${fmtV(contasVencidas.reduce((s,c)=>s+(parseFloat(c.valor)||0),0))}</div>
         </div>
-        <div style="flex:1;">
-          <div style="font-size:13px;font-weight:600;color:var(--stone);">${t.descricao||'—'}</div>
-          <div style="font-size:11px;color:#888;margin-top:2px;">
-            ${fmtDt(t.data)}${t.banco?' · '+t.banco:''}${t.categoria?' · '+t.categoria:''}${t.forma?' · '+t.forma:''}
-          </div>
-        </div>
-        <div style="font-size:15px;font-weight:700;color:${t.tipo==='entrada'?'#2E7D32':'#B85A4A'};">
-          ${t.tipo==='entrada'?'+':'-'}${fmtV(t.valor)}
-        </div>
-        <button onclick="deletarTransacao('${t.id}')"
-          style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">🗑</button>
-      </div>`).join('')}
-    </div>
-  </div>
+      </div>`:''}
 
-  <!-- MODAL CONFIRMAR RECEBIMENTO -->
-  <div class="modal-overlay" id="modal-recebimento" style="align-items:flex-start;padding:20px;overflow-y:auto;">
-    <div class="modal" style="max-width:500px;width:100%;">
-      <div class="modal-header" style="background:#2E7D32;color:white;border-radius:12px 12px 0 0;">
-        <div class="modal-title">✓ Confirmar Recebimento</div>
-        <button class="modal-close" onclick="closeModal('modal-recebimento')" style="color:white;">✕</button>
+      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
+        <div style="background:#5B4A8B;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-size:14px;font-weight:700;">📤 Contas a Pagar</div>
+          <button onclick="abrirModalContaPagar()" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Nova</button>
+        </div>
+        ${contasPendentes.length===0?`<div style="padding:40px;text-align:center;color:#888;"><div style="font-size:32px;margin-bottom:12px;">✅</div><div>Nenhuma conta pendente!</div></div>`:
+        contasPendentes.sort((a,b)=>a.vencimento.localeCompare(b.vencimento)).map(c => {
+          const hoje = new Date().toISOString().substring(0,10);
+          const vencida = c.vencimento < hoje;
+          const hojeVence = c.vencimento === hoje;
+          const diasVenc = Math.ceil((new Date(c.vencimento+'T12:00:00')-new Date())/(1000*60*60*24));
+          return `
+          <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--cream-dark);background:${vencida?'#fff8f8':hojeVence?'#fffbf0':'white'};">
+            <div style="flex:1;">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+                <span style="font-size:14px;font-weight:700;color:var(--stone);">${c.descricao}</span>
+                ${c.categoria?`<span style="font-size:11px;background:#f0f0f0;padding:2px 8px;border-radius:10px;color:#666;">${c.categoria}</span>`:''}
+                ${c.recorrencia==='mensal'?`<span style="font-size:10px;color:#006382;">🔄 Mensal</span>`:''}
+              </div>
+              <div style="font-size:12px;color:${vencida?'#B85A4A':hojeVence?'#8B6914':'#888'};">
+                ${vencida?'⚠️ Venceu em ':hojeVence?'⏰ Vence hoje! ':'📅 Vence em '}
+                ${fmtDt(c.vencimento)}
+                ${!vencida&&!hojeVence&&diasVenc>0?` (${diasVenc} dias)`:''}
+                ${c.banco?' · '+c.banco:''}
+              </div>
+              ${c.obs?`<div style="font-size:11px;color:#888;margin-top:2px;">💬 ${c.obs}</div>`:''}
+            </div>
+            <div style="text-align:right;min-width:100px;">
+              <div style="font-size:18px;font-weight:800;color:#B85A4A;">${fmtV(c.valor)}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <button onclick="pagarConta('${c.id}')"
+                style="background:#2E7D32;color:white;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">✓ Pagar</button>
+              <div style="display:flex;gap:4px;">
+                <button onclick="abrirModalContaPagar('${c.id}')" style="background:var(--cream-dark);border:none;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:11px;flex:1;">✏️</button>
+                <button onclick="excluirContaPagar('${c.id}')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:11px;flex:1;">🗑</button>
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
       </div>
-      <div class="modal-body" id="body-modal-recebimento"></div>
-      <div class="modal-footer">
-        <button class="btn-secondary" onclick="closeModal('modal-recebimento')">Cancelar</button>
-        <button style="background:#2E7D32;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;"
-          onclick="confirmarRecebimento()">✓ Confirmar</button>
-      </div>
+
+      ${contas.filter(c=>c.status==='pago'&&(c.dataPagamento||'').substring(0,7)===filtroMes).length>0?`
+      <details style="margin-top:16px;">
+        <summary style="cursor:pointer;padding:10px 16px;background:#f5f5f5;border-radius:8px;font-size:13px;font-weight:600;color:#888;">
+          Pagas em ${filtroMes.substring(5,7)}/${filtroMes.substring(0,4)} (${contas.filter(c=>c.status==='pago'&&(c.dataPagamento||'').substring(0,7)===filtroMes).length})
+        </summary>
+        <div style="background:white;border-radius:0 0 12px 12px;padding:8px;margin-top:2px;box-shadow:var(--shadow);">
+          ${contas.filter(c=>c.status==='pago'&&(c.dataPagamento||'').substring(0,7)===filtroMes).map(c=>`
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--cream-dark);">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:#888;text-decoration:line-through;">${c.descricao}</div>
+              <div style="font-size:11px;color:#888;">Pago em ${fmtDt(c.dataPagamento)} · ${c.bancoPago||c.banco||''}</div>
+            </div>
+            <div style="font-size:14px;font-weight:700;color:#2E7D32;">✅ ${fmtV(c.valorPago||c.valor)}</div>
+          </div>`).join('')}
+        </div>
+      </details>`:''}
     </div>
+
   </div>`;
+}
+
+function finSwitchAba(aba) {
+  localStorage.setItem('fin_aba', aba);
+  ['geral','receber','pagar'].forEach(a => {
+    const btn = document.getElementById('fin-aba-'+a);
+    const panel = document.getElementById('fin-painel-'+a);
+    if (btn) { btn.style.background = a===aba?'var(--gold)':'var(--cream-dark)'; btn.style.color = a===aba?'white':'var(--stone)'; }
+    if (panel) panel.style.display = a===aba?'block':'none';
+  });
 }
 
 function abrirConfirmarRecebimento(pedidoId, cliente, valorEsperado) {
@@ -2435,12 +2686,311 @@ function calcDataInstalacao(diasUteis) {
 function renderAgenda() {
   const el = document.getElementById('agenda-content');
   if (!el) return;
+  const abaAtiva = localStorage.getItem('agenda_aba') || 'medicao';
+  
+  el.innerHTML = `
+  <div style="padding:24px;max-width:1000px;margin:0 auto;">
+    <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);margin-bottom:20px;">📅 Agenda</div>
+    
+    <!-- TABS -->
+    <div style="display:flex;gap:4px;margin-bottom:24px;border-bottom:2px solid var(--cream-dark);">
+      <button onclick="switchAgendaAba('medicao')" id="aba-medicao"
+        style="padding:10px 24px;border:none;background:${abaAtiva==='medicao'?'var(--gold)':'var(--cream-dark)'};color:${abaAtiva==='medicao'?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
+        📐 Medições
+      </button>
+      <button onclick="switchAgendaAba('instalacao')" id="aba-instalacao"
+        style="padding:10px 24px;border:none;background:${abaAtiva==='instalacao'?'var(--gold)':'var(--cream-dark)'};color:${abaAtiva==='instalacao'?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
+        🔧 Instalações
+      </button>
+    </div>
+    
+    <div id="painel-agenda-medicao" style="display:${abaAtiva==='medicao'?'block':'none'}"></div>
+    <div id="painel-agenda-instalacao" style="display:${abaAtiva==='instalacao'?'block':'none'}"></div>
+  </div>`;
+
+  if (abaAtiva === 'medicao') renderAgendaMedicao();
+  else renderAgendaInstalacao();
+}
+
+function switchAgendaAba(aba) {
+  localStorage.setItem('agenda_aba', aba);
+  ['medicao','instalacao'].forEach(a => {
+    const btn = document.getElementById('aba-'+a);
+    const panel = document.getElementById('painel-agenda-'+a);
+    if (btn) {
+      btn.style.background = a===aba ? 'var(--gold)' : 'var(--cream-dark)';
+      btn.style.color = a===aba ? 'white' : 'var(--stone)';
+    }
+    if (panel) panel.style.display = a===aba ? 'block' : 'none';
+  });
+  if (aba === 'medicao') renderAgendaMedicao();
+  else renderAgendaInstalacao();
+}
+
+// ─── AGENDA DE MEDIÇÕES ───────────────────────────────────────────────────────
+function getMedicoes() {
+  try { return JSON.parse(localStorage.getItem('mf_medicoes')||'[]'); } catch(e){ return []; }
+}
+function salvarMedicoes(m) { localStorage.setItem('mf_medicoes', JSON.stringify(m)); }
+
+function renderAgendaMedicao() {
+  const el = document.getElementById('painel-agenda-medicao');
+  if (!el) return;
+  const medicoes = getMedicoes().sort((a,b) => {
+    if (a.data !== b.data) return a.data.localeCompare(b.data);
+    return (a.horario||'').localeCompare(b.horario||'');
+  });
+  const hoje = new Date().toISOString().substring(0,10);
+  const isPerfMedidor = currentUser === 'medidor';
+  
+  // Agrupa: hoje, futuras, passadas
+  const hojeList = medicoes.filter(m => m.data === hoje);
+  const futuras = medicoes.filter(m => m.data > hoje);
+  const passadas = medicoes.filter(m => m.data < hoje);
+
+  el.innerHTML = `
+  <div>
+    ${!isPerfMedidor ? `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
+      <button onclick="abrirModalMedicao()"
+        style="background:var(--gold);color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">
+        + Agendar Medição
+      </button>
+    </div>` : ''}
+
+    ${hojeList.length > 0 ? `
+    <div style="background:#FFF8E8;border:2px solid var(--gold);border-radius:14px;padding:20px;margin-bottom:20px;">
+      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:14px;">📍 HOJE — ${hojeList.length} visita(s)</div>
+      ${hojeList.map(m => cardMedicao(m, true)).join('')}
+    </div>` : `
+    <div style="background:#f5f5f5;border-radius:14px;padding:16px 20px;margin-bottom:20px;text-align:center;color:#888;font-size:13px;">
+      Nenhuma medição agendada para hoje
+    </div>`}
+
+    ${futuras.length > 0 ? `
+    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;margin-bottom:20px;">
+      <div style="font-size:13px;font-weight:700;color:var(--stone);margin-bottom:14px;">📅 Próximas Medições (${futuras.length})</div>
+      ${futuras.map(m => cardMedicao(m, false)).join('')}
+    </div>` : ''}
+
+    ${passadas.length > 0 ? `
+    <details style="margin-top:8px;">
+      <summary style="cursor:pointer;padding:10px 16px;background:#f5f5f5;border-radius:8px;font-size:13px;font-weight:600;color:#888;">
+        Histórico (${passadas.length} medições passadas)
+      </summary>
+      <div style="background:white;border-radius:0 0 12px 12px;padding:16px;margin-top:2px;box-shadow:var(--shadow);">
+        ${passadas.reverse().map(m => cardMedicao(m, false, true)).join('')}
+      </div>
+    </details>` : ''}
+
+    ${medicoes.length === 0 ? `
+    <div style="text-align:center;padding:60px;background:white;border-radius:14px;box-shadow:var(--shadow);">
+      <div style="font-size:48px;margin-bottom:16px;">📐</div>
+      <div style="font-size:16px;font-weight:600;color:var(--stone);">Nenhuma medição agendada</div>
+      ${!isPerfMedidor ? `<button onclick="abrirModalMedicao()" style="margin-top:16px;background:var(--gold);color:white;border:none;padding:12px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">+ Agendar primeira medição</button>` : ''}
+    </div>` : ''}
+  </div>
+
+  <!-- MODAL MEDIÇÃO -->
+  <div class="modal-overlay" id="modal-medicao-ag" style="align-items:flex-start;padding:20px;overflow-y:auto;">
+    <div class="modal" style="max-width:500px;width:100%;">
+      <div class="modal-header">
+        <div class="modal-title" id="titulo-modal-medicao-ag">Agendar Medição</div>
+        <button class="modal-close" onclick="closeModal('modal-medicao-ag')">✕</button>
+      </div>
+      <div class="modal-body" id="body-modal-medicao-ag"></div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('modal-medicao-ag')">Cancelar</button>
+        <button class="btn-primary" onclick="salvarAgendaMedicao()">💾 Salvar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function cardMedicao(m, isHoje, passada) {
+  const statusCor = m.status==='concluido'?'#2E7D32':m.status==='revisitar'?'#B85A4A':'#8B6914';
+  const statusLabel = m.status==='concluido'?'✅ Concluído':m.status==='revisitar'?'🔄 Revisitar':'⏳ Pendente';
+  const enderecoCompleto = [m.endereco, m.numero, m.complemento].filter(Boolean).join(', ');
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(enderecoCompleto+', '+m.cidade)}`;
+  const isPerfMedidor = currentUser === 'medidor';
+
+  return `
+  <div style="border:1px solid var(--cream-dark);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:${passada?'#fafafa':'white'};">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+      <div style="flex:1;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+          ${isHoje&&m.horario?`<span style="background:var(--gold);color:white;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">🕐 ${m.horario}</span>`:''}
+          <span style="font-size:11px;color:#888;">${m.data?m.data.substring(8,10)+'/'+m.data.substring(5,7)+'/'+m.data.substring(0,4):''} ${m.horario&&!isHoje?'• '+m.horario:''}</span>
+          <span style="background:${statusCor}22;color:${statusCor};padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;">${statusLabel}</span>
+        </div>
+        <div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">${m.cliente||'—'}</div>
+        <div style="font-size:13px;color:#555;margin-bottom:4px;">📍 ${enderecoCompleto||'Endereço não informado'}</div>
+        ${m.obs?`<div style="font-size:12px;color:#888;font-style:italic;">💬 ${m.obs}</div>`:''}
+        ${m.motivoRevisita?`<div style="font-size:12px;color:#B85A4A;margin-top:4px;">🔄 ${m.motivoRevisita}</div>`:''}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+        ${enderecoCompleto ? `
+        <a href="${mapsUrl}" target="_blank"
+          style="background:#006382;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:6px;">
+          🗺️ Navegar
+        </a>` : ''}
+        ${isPerfMedidor && m.status === 'pendente' ? `
+        <button onclick="concluirMedicao('${m.id}')"
+          style="background:#2E7D32;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
+          ✅ Concluído
+        </button>
+        <button onclick="solicitarRevisita('${m.id}')"
+          style="background:#B85A4A;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
+          🔄 Revisitar
+        </button>` : ''}
+        ${!isPerfMedidor ? `
+        <button onclick="abrirModalMedicao('${m.id}')"
+          style="background:var(--cream-dark);border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:11px;">✏️</button>
+        <button onclick="excluirMedicao('${m.id}')"
+          style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;">🗑</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function abrirModalMedicao(id) {
+  const medicoes = getMedicoes();
+  const m = id ? medicoes.find(x => x.id === id) : null;
+  const pedidosMedicao = orders.filter(o => o.stage === 'medicao' || o.stage === 'negociacao');
+  
+  document.getElementById('titulo-modal-medicao-ag').textContent = m ? 'Editar Medição' : 'Agendar Medição';
+  document.getElementById('body-modal-medicao-ag').innerHTML = `
+    <input type="hidden" id="med-edit-id" value="${id||''}">
+    <div style="display:grid;gap:14px;">
+      <div>
+        <label class="form-label">Pedido (opcional)</label>
+        <select class="form-select" id="med-pedido" onchange="preencherClienteMedicao(this.value)">
+          <option value="">Sem pedido vinculado</option>
+          ${pedidosMedicao.map(o => `<option value="${o.id}" ${m?.pedidoId===o.id?'selected':''}>${o.id} — ${o.cliente}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Cliente *</label>
+        <input class="form-input" id="med-cliente" value="${m?.cliente||''}" placeholder="Nome do cliente">
+      </div>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;">
+        <div>
+          <label class="form-label">Data *</label>
+          <input class="form-input" id="med-data" type="date" value="${m?.data||new Date().toISOString().substring(0,10)}">
+        </div>
+        <div>
+          <label class="form-label">Horário *</label>
+          <input class="form-input" id="med-horario" type="time" value="${m?.horario||'08:00'}">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;">
+        <div>
+          <label class="form-label">Endereço *</label>
+          <input class="form-input" id="med-endereco" value="${m?.endereco||''}" placeholder="Rua, Av...">
+        </div>
+        <div>
+          <label class="form-label">Número *</label>
+          <input class="form-input" id="med-numero" value="${m?.numero||''}" placeholder="123">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="form-label">Complemento</label>
+          <input class="form-input" id="med-complemento" value="${m?.complemento||''}" placeholder="Apto 201, Bloco B...">
+        </div>
+        <div>
+          <label class="form-label">Cidade</label>
+          <input class="form-input" id="med-cidade" value="${m?.cidade||'Volta Redonda/RJ'}" placeholder="Cidade">
+        </div>
+      </div>
+      <div>
+        <label class="form-label">Observações</label>
+        <input class="form-input" id="med-obs" value="${m?.obs||''}" placeholder="Ex: Apartamento 3º andar, portaria confirma...">
+      </div>
+    </div>`;
+  openModal('modal-medicao-ag');
+}
+
+function preencherClienteMedicao(pedidoId) {
+  if (!pedidoId) return;
+  const order = orders.find(o => o.id === pedidoId);
+  if (!order) return;
+  const el = document.getElementById('med-cliente');
+  if (el && !el.value) el.value = order.cliente||'';
+  const elEnd = document.getElementById('med-endereco');
+  if (elEnd && !elEnd.value && order.enderecoObra) elEnd.value = order.enderecoObra;
+}
+
+function salvarAgendaMedicao() {
+  const cliente = document.getElementById('med-cliente')?.value.trim();
+  const data = document.getElementById('med-data')?.value;
+  const horario = document.getElementById('med-horario')?.value;
+  const endereco = document.getElementById('med-endereco')?.value.trim();
+  const numero = document.getElementById('med-numero')?.value.trim();
+  if (!cliente || !data || !endereco) { showNotif('Preencha cliente, data e endereço!', 'error'); return; }
+
+  const medicoes = getMedicoes();
+  const editId = document.getElementById('med-edit-id')?.value;
+  const dados = {
+    cliente, data, horario,
+    endereco, numero,
+    complemento: document.getElementById('med-complemento')?.value.trim(),
+    cidade: document.getElementById('med-cidade')?.value.trim()||'Volta Redonda/RJ',
+    obs: document.getElementById('med-obs')?.value.trim(),
+    pedidoId: document.getElementById('med-pedido')?.value||'',
+    status: 'pendente',
+  };
+  if (editId) {
+    const idx = medicoes.findIndex(m => m.id === editId);
+    if (idx >= 0) medicoes[idx] = { ...medicoes[idx], ...dados };
+  } else {
+    medicoes.push({ id: 'MED-'+Date.now(), ...dados, criadoEm: new Date().toISOString() });
+  }
+  salvarMedicoes(medicoes);
+  closeModal('modal-medicao-ag');
+  renderAgendaMedicao();
+  showNotif('Medição agendada! ✓', 'success');
+}
+
+function concluirMedicao(id) {
+  const medicoes = getMedicoes();
+  const idx = medicoes.findIndex(m => m.id === id);
+  if (idx >= 0) medicoes[idx].status = 'concluido';
+  salvarMedicoes(medicoes);
+  renderAgendaMedicao();
+  showNotif('Medição concluída! ✅', 'success');
+}
+
+function solicitarRevisita(id) {
+  const motivo = prompt('Motivo da revisita (opcional):');
+  if (motivo === null) return; // cancelou
+  const medicoes = getMedicoes();
+  const idx = medicoes.findIndex(m => m.id === id);
+  if (idx >= 0) {
+    medicoes[idx].status = 'revisitar';
+    medicoes[idx].motivoRevisita = motivo || 'Revisita necessária';
+  }
+  salvarMedicoes(medicoes);
+  renderAgendaMedicao();
+  showNotif('Marcado para revisitar', 'error');
+}
+
+function excluirMedicao(id) {
+  if (!confirm('Excluir este agendamento?')) return;
+  salvarMedicoes(getMedicoes().filter(m => m.id !== id));
+  renderAgendaMedicao();
+  showNotif('Agendamento excluído', 'error');
+}
+
+// ─── AGENDA DE INSTALAÇÕES ────────────────────────────────────────────────────
+function renderAgendaInstalacao() {
+  const el = document.getElementById('painel-agenda-instalacao');
+  if (!el) return;
 
   const ocupados = getDiasOcupados();
   const hoje = new Date();
   hoje.setHours(0,0,0,0);
 
-  // Gera próximos 45 dias úteis
   const dias = [];
   let d = new Date(hoje);
   let count = 0;
@@ -2449,99 +2999,80 @@ function renderAgenda() {
     if (isDiaUtil(d)) {
       const ds = dateToStr(d);
       const pedido = ocupados.find(o => o.data === ds);
-      dias.push({ data: ds, pedido: pedido || null, passado: d < hoje });
+      dias.push({ data: ds, pedido: pedido || null });
       count++;
     }
   }
 
-  // Agrupar por semana
   const semanas = [];
   let semana = [];
   dias.forEach((dia, i) => {
     semana.push(dia);
-    if (semana.length === 5 || i === dias.length - 1) {
-      semanas.push([...semana]);
-      semana = [];
-    }
+    if (semana.length === 5 || i === dias.length - 1) { semanas.push([...semana]); semana = []; }
   });
 
   const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const diasSemana = ['Seg','Ter','Qua','Qui','Sex'];
-
-  const calHTML = semanas.map(semana => `
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px;">
-      ${semana.map(dia => {
-        const d = new Date(dia.data + 'T12:00:00');
-        const isHoje = dateToStr(d) === dateToStr(new Date());
-        const dow = d.getDay(); // 1=seg, 5=sex
-        const nomeDia = diasSemana[dow-1];
-        const bg = dia.pedido ? '#F2E8E8' : '#E8F2EC';
-        const border = isHoje ? '2px solid #B8965A' : '1px solid transparent';
-        const cor = dia.pedido ? '#B85A4A' : '#4A7C59';
-        return `
-          <div style="background:${bg};border-radius:10px;padding:10px;border:${border};min-height:80px;">
-            <div style="font-size:10px;color:var(--stone-light);margin-bottom:2px;">${nomeDia} ${isHoje?'• HOJE':''}</div>
-            <div style="font-size:16px;font-weight:700;color:${cor};margin-bottom:4px;">${d.getDate()} ${meses[d.getMonth()]}</div>
-            ${dia.pedido ? `
-              <div style="font-size:10px;font-weight:600;color:#B85A4A;">🔧 ${dia.pedido.cliente}</div>
-              <div style="font-size:10px;color:var(--stone-light);">${dia.pedido.peca||''} · ${dia.pedido.id}</div>
-            ` : `<div style="font-size:10px;color:#4A7C59;">✓ Livre</div>`}
-          </div>`;
-      }).join('')}
-    </div>`).join('');
-
   const livres = dias.filter(d => !d.pedido).length;
   const ocupadosCont = dias.filter(d => d.pedido).length;
 
   el.innerHTML = `
-    <div style="max-width:900px;margin:0 auto;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
-        <div>
-          <div style="font-family:'DM Serif Display',serif;font-size:24px;color:var(--stone);">📅 Agenda de Instalação</div>
-          <div style="font-size:13px;color:var(--stone-light);margin-top:4px;">1 instalação por dia útil — próximos 45 dias</div>
-        </div>
-        <div style="display:flex;gap:16px;">
-          <div style="text-align:center;background:#E8F2EC;border-radius:10px;padding:10px 16px;">
-            <div style="font-size:20px;font-weight:700;color:#4A7C59;">${livres}</div>
-            <div style="font-size:11px;color:var(--stone-light);">Dias livres</div>
-          </div>
-          <div style="text-align:center;background:#F2E8E8;border-radius:10px;padding:10px 16px;">
-            <div style="font-size:20px;font-weight:700;color:#B85A4A;">${ocupadosCont}</div>
-            <div style="font-size:11px;color:var(--stone-light);">Agendados</div>
-          </div>
-        </div>
+  <div>
+    <div style="display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap;">
+      <div style="background:#E8F2EC;border-radius:10px;padding:10px 20px;text-align:center;">
+        <div style="font-size:22px;font-weight:700;color:#4A7C59;">${livres}</div>
+        <div style="font-size:11px;color:var(--stone-light);">Dias livres</div>
       </div>
+      <div style="background:#F2E8E8;border-radius:10px;padding:10px 20px;text-align:center;">
+        <div style="font-size:22px;font-weight:700;color:#B85A4A;">${ocupadosCont}</div>
+        <div style="font-size:11px;color:var(--stone-light);">Agendados</div>
+      </div>
+    </div>
 
-      <div style="background:white;border-radius:16px;padding:20px;box-shadow:var(--shadow);margin-bottom:20px;">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:16px;">Calendário</div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">
-          ${diasSemana.map(d=>`<div style="text-align:center;font-size:11px;font-weight:700;color:var(--stone-light);text-transform:uppercase;letter-spacing:0.5px;">${d}</div>`).join('')}
-        </div>
-        ${calHTML}
+    <div style="background:white;border-radius:16px;padding:20px;box-shadow:var(--shadow);margin-bottom:20px;">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">
+        ${diasSemana.map(d=>`<div style="text-align:center;font-size:11px;font-weight:700;color:var(--stone-light);text-transform:uppercase;">${d}</div>`).join('')}
       </div>
+      ${semanas.map(sem => `
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px;">
+        ${sem.map(dia => {
+          const dd = new Date(dia.data+'T12:00:00');
+          const isHoje = dateToStr(dd) === dateToStr(new Date());
+          const dow = dd.getDay();
+          const nomeDia = diasSemana[dow-1];
+          const bg = dia.pedido ? '#F2E8E8' : '#E8F2EC';
+          const cor = dia.pedido ? '#B85A4A' : '#4A7C59';
+          return `<div style="background:${bg};border-radius:10px;padding:10px;border:${isHoje?'2px solid var(--gold)':'1px solid transparent'};min-height:80px;">
+            <div style="font-size:10px;color:var(--stone-light);margin-bottom:2px;">${nomeDia}${isHoje?' • HOJE':''}</div>
+            <div style="font-size:16px;font-weight:700;color:${cor};margin-bottom:4px;">${dd.getDate()} ${meses[dd.getMonth()]}</div>
+            ${dia.pedido
+              ? `<div style="font-size:10px;font-weight:600;color:#B85A4A;">🔧 ${dia.pedido.cliente}</div><div style="font-size:10px;color:var(--stone-light);">${dia.pedido.peca||''}</div>`
+              : `<div style="font-size:10px;color:#4A7C59;">✓ Livre</div>`}
+          </div>`;
+        }).join('')}
+      </div>`).join('')}
+    </div>
 
-      <div style="background:white;border-radius:16px;padding:20px;box-shadow:var(--shadow);">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:16px;">Próximas Instalações</div>
-        ${ocupados.filter(o => o.data >= dateToStr(hoje)).sort((a,b)=>a.data.localeCompare(b.data)).map(o => {
-          const d = new Date(o.data + 'T12:00:00');
-          const diasRestantes = Math.ceil((d-hoje)/(1000*60*60*24));
-          return `
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--cream-dark);">
-              <div>
-                <div style="font-size:13px;font-weight:600;color:var(--stone);">${o.cliente} · ${o.id}</div>
-                <div style="font-size:11px;color:var(--stone-light);">${o.peca||''}</div>
-              </div>
-              <div style="text-align:right;">
-                <div style="font-size:13px;font-weight:700;color:${diasRestantes<=3?'#B85A4A':diasRestantes<=7?'#B8760A':'#4A7C59'};">${d.getDate()}/${d.getMonth()+1}</div>
-                <div style="font-size:11px;color:var(--stone-light);">${diasRestantes===0?'Hoje':diasRestantes===1?'Amanhã':diasRestantes+' dias'}</div>
-              </div>
-            </div>`;
-        }).join('') || '<div style="color:var(--stone-light);font-size:13px;">Nenhuma instalação agendada.</div>'}
-      </div>
-    </div>`;
+    <div style="background:white;border-radius:16px;padding:20px;box-shadow:var(--shadow);">
+      <div style="font-size:13px;font-weight:700;color:var(--stone);margin-bottom:14px;">Próximas Instalações</div>
+      ${ocupados.filter(o => o.data >= dateToStr(hoje)).sort((a,b)=>a.data.localeCompare(b.data)).map(o => {
+        const dd = new Date(o.data+'T12:00:00');
+        const diasRestantes = Math.ceil((dd-hoje)/(1000*60*60*24));
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--cream-dark);">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--stone);">${o.cliente} · ${o.id}</div>
+            <div style="font-size:11px;color:var(--stone-light);">${o.peca||''}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:13px;font-weight:700;color:${diasRestantes<=3?'#B85A4A':diasRestantes<=7?'#B8760A':'#4A7C59'};">${dd.getDate()}/${dd.getMonth()+1}</div>
+            <div style="font-size:11px;color:var(--stone-light);">${diasRestantes===0?'Hoje':diasRestantes===1?'Amanhã':diasRestantes+' dias'}</div>
+          </div>
+        </div>`;
+      }).join('') || '<div style="color:var(--stone-light);font-size:13px;">Nenhuma instalação agendada.</div>'}
+    </div>
+  </div>`;
 }
 
-// Atualiza modal comercial para mostrar alerta de conflito
 function atualizarDataComConflito() {
   const tipoEntrega = document.getElementById('c-tipoentrega')?.value;
   const dataInput = document.getElementById('c-dataentrega');

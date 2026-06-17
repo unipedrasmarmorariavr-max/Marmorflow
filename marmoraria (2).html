@@ -1348,12 +1348,19 @@ function ativarSessao(perfil) {
   var isFinanceiro = perfil==='financeiro';
   var isComercial = perfil==='comercial';
   var isProducao = perfil==='producao';
+  var isMedidor = perfil==='medidor';
   if (tabDash) tabDash.style.display = isDono ? 'block' : 'none';
   if (tabMat) tabMat.style.display = isDono ? 'block' : 'none';
   if (tabFin) tabFin.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
   if (tabPortal) tabPortal.style.display = isDono ? 'block' : 'none';
-  if (tabAgenda) tabAgenda.style.display = (isDono||isComercial||isProducao) ? 'block' : 'none';
+  if (tabAgenda) tabAgenda.style.display = (isDono||isComercial||isProducao||isMedidor) ? 'block' : 'none';
   if (isFinanceiro) { showTab('financeiro'); return true; }
+  // Medidor abre direto na agenda de medições
+  if (isMedidor) {
+    localStorage.setItem('agenda_aba','medicao');
+    loadOrders().then(function() { showTab('agenda'); });
+    return true;
+  }
   loadOrders().then(function() {
     renderKanban();
     // Restaura aba ativa (após renderKanban para não ser sobrescrita)
@@ -2811,8 +2818,72 @@ function cardMedicao(m, isHoje, passada) {
   const statusCor = m.status==='concluido'?'#2E7D32':m.status==='revisitar'?'#B85A4A':'#8B6914';
   const statusLabel = m.status==='concluido'?'✅ Concluído':m.status==='revisitar'?'🔄 Revisitar':'⏳ Pendente';
   const enderecoCompleto = [m.endereco, m.numero, m.complemento].filter(Boolean).join(', ');
-  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(enderecoCompleto+', '+m.cidade)}`;
+  const cidadeStr = m.cidade || 'Volta Redonda RJ';
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(enderecoCompleto+', '+cidadeStr)}`;
   const isPerfMedidor = currentUser === 'medidor';
+
+  return `
+  <div style="border:1px solid ${isHoje&&m.status==='pendente'?'var(--gold)':'var(--cream-dark)'};border-radius:12px;padding:16px;margin-bottom:12px;background:${passada?'#fafafa':isHoje&&m.status==='pendente'?'white':'white'};${isHoje&&m.status==='pendente'?'box-shadow:0 2px 12px rgba(184,150,90,0.2);':''}">
+    
+    ${isPerfMedidor && isHoje && m.status==='pendente' ? `
+    <!-- VIEW MOBILE MEDIDOR — HOJE -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="background:var(--gold);color:white;padding:6px 16px;border-radius:20px;font-size:15px;font-weight:700;">🕐 ${m.horario||'Horário não definido'}</div>
+      <span style="background:${statusCor}22;color:${statusCor};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;">${statusLabel}</span>
+    </div>
+    <div style="font-size:18px;font-weight:800;color:var(--stone);margin-bottom:6px;">${m.cliente||'—'}</div>
+    <div style="font-size:14px;color:#555;margin-bottom:4px;">📍 ${enderecoCompleto||'Endereço não informado'}</div>
+    ${m.obs?`<div style="font-size:13px;color:#888;margin-bottom:12px;">💬 ${m.obs}</div>`:'<div style="margin-bottom:12px;"></div>'}
+    <a href="${mapsUrl}" target="_blank"
+      style="display:flex;align-items:center;justify-content:center;gap:8px;background:#006382;color:white;text-decoration:none;padding:14px;border-radius:10px;font-size:15px;font-weight:700;margin-bottom:10px;">
+      🗺️ Abrir Navegação
+    </a>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <button onclick="concluirMedicao('${m.id}')"
+        style="background:#2E7D32;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;">
+        ✅ Concluído
+      </button>
+      <button onclick="solicitarRevisita('${m.id}')"
+        style="background:#B85A4A;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;">
+        🔄 Revisitar
+      </button>
+    </div>` : `
+    <!-- VIEW NORMAL -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+      <div style="flex:1;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+          ${m.horario?`<span style="background:${isHoje?'var(--gold)':'var(--cream-dark)'};color:${isHoje?'white':'var(--stone)'};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">🕐 ${m.horario}</span>`:''}
+          <span style="font-size:11px;color:#888;">${m.data?m.data.substring(8,10)+'/'+m.data.substring(5,7)+'/'+m.data.substring(0,4):''}</span>
+          <span style="background:${statusCor}22;color:${statusCor};padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;">${statusLabel}</span>
+        </div>
+        <div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">${m.cliente||'—'}</div>
+        <div style="font-size:13px;color:#555;">📍 ${enderecoCompleto||'Endereço não informado'}</div>
+        ${m.obs?`<div style="font-size:12px;color:#888;margin-top:4px;">💬 ${m.obs}</div>`:''}
+        ${m.motivoRevisita?`<div style="font-size:12px;color:#B85A4A;margin-top:4px;">🔄 ${m.motivoRevisita}</div>`:''}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+        ${enderecoCompleto ? `
+        <a href="${mapsUrl}" target="_blank"
+          style="background:#006382;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:6px;">
+          🗺️ Navegar
+        </a>` : ''}
+        ${isPerfMedidor && m.status==='pendente' ? `
+        <button onclick="concluirMedicao('${m.id}')"
+          style="background:#2E7D32;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
+          ✅ Concluído
+        </button>
+        <button onclick="solicitarRevisita('${m.id}')"
+          style="background:#B85A4A;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
+          🔄 Revisitar
+        </button>` : ''}
+        ${!isPerfMedidor ? `
+        <button onclick="abrirModalMedicao('${m.id}')"
+          style="background:var(--cream-dark);border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:11px;">✏️</button>
+        <button onclick="excluirMedicao('${m.id}')"
+          style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;">🗑</button>` : ''}
+      </div>
+    </div>`}
+  </div>`;
 
   return `
   <div style="border:1px solid var(--cream-dark);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:${passada?'#fafafa':'white'};">

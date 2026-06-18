@@ -850,6 +850,7 @@ function showTab(tab) {
   document.getElementById('panel-'+tab)?.classList.add('active');
   document.getElementById('tab-'+tab)?.classList.add('active');
   localStorage.setItem('mf_aba', tab);
+  if (tab==='kanban') renderKanban();
   if (tab==='dashboard') renderDashboard();
   if (tab==='materiais') renderMateriais();
   if (tab==='financeiro') renderFinanceiro();
@@ -1373,26 +1374,23 @@ function ativarSessao(perfil) {
   if (tabPortal) tabPortal.style.display = isDono ? 'block' : 'none';
   if (tabAgenda) tabAgenda.style.display = (isDono||isComercial||isProducao||isMedidor) ? 'block' : 'none';
   if (isFinanceiro) { showTab('financeiro'); return true; }
-  // Medidor: carrega pedidos E abre na agenda de medições
   loadOrders().then(function() {
     renderKanban();
-    if (isMedidor) {
+    // Restaura aba anterior para TODOS os perfis
+    var abaAnterior = localStorage.getItem('mf_aba');
+    if (isMedidor && !abaAnterior) {
+      // Primeira vez do medidor → abre agenda
       localStorage.setItem('agenda_aba','medicao');
-      var abaAnterior = localStorage.getItem('mf_aba');
-      // Se já estava em pedidos, mantém em pedidos
-      if (abaAnterior === 'kanban' || !abaAnterior) {
-        showTab('agenda');
-      } else if (document.getElementById('panel-'+abaAnterior)) {
-        showTab(abaAnterior);
-      } else {
-        showTab('agenda');
+      showTab('agenda');
+    } else if (abaAnterior && abaAnterior !== 'orcamento' &&
+        document.getElementById('panel-'+abaAnterior)) {
+      if (abaAnterior === 'agenda' && isMedidor) {
+        localStorage.setItem('agenda_aba','medicao');
       }
-    } else {
-      var abaAtiva = localStorage.getItem('mf_aba');
-      if (abaAtiva && abaAtiva !== 'kanban' && abaAtiva !== 'orcamento' &&
-          document.getElementById('panel-'+abaAtiva)) {
-        showTab(abaAtiva);
-      }
+      showTab(abaAnterior);
+    } else if (isMedidor) {
+      localStorage.setItem('agenda_aba','medicao');
+      showTab('agenda');
     }
   });
   return true;

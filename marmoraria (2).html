@@ -2792,6 +2792,30 @@ async function renderAgendaMedicao() {
   const el = document.getElementById('painel-agenda-medicao');
   if (!el) return;
   el.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">Carregando...</div>';
+
+  // DEBUG: testa diretamente a query e mostra resultado na tela
+  try {
+    const { data: dbgData, error: dbgErr } = await getSB().from('medicoes').select('*');
+    if (dbgErr) {
+      el.innerHTML = `<div style="background:#fff0f0;border:2px solid #dc3545;border-radius:12px;padding:20px;margin:16px;">
+        <b>❌ Erro ao buscar medições:</b><br><code>${dbgErr.message}</code><br>
+        <small>Código: ${dbgErr.code} | Detalhes: ${dbgErr.details||'-'}</small><br><br>
+        <b>Solução provável:</b> Ativar política de leitura na tabela <code>medicoes</code> no Supabase Dashboard → Authentication → Policies → medicoes → Enable RLS off ou adicionar policy SELECT para anon.
+      </div>`;
+      return;
+    }
+    if (!dbgData || dbgData.length === 0) {
+      console.log('getMedicoes: query OK mas retornou 0 registros');
+    } else {
+      console.log('getMedicoes: OK, ' + dbgData.length + ' registros. Primeiro:', dbgData[0]);
+    }
+  } catch(dbgEx) {
+    el.innerHTML = `<div style="background:#fff0f0;border:2px solid #dc3545;border-radius:12px;padding:20px;margin:16px;">
+      <b>❌ Exceção ao buscar medições:</b><br><code>${dbgEx.message}</code>
+    </div>`;
+    return;
+  }
+
   const todas = await getMedicoes();
   const medicoes = todas.sort((a,b) => {
     if (a.Data !== b.Data) return a.Data.localeCompare(b.Data);

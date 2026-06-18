@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>MarmorFlow — Gestão de Pedidos</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -201,162 +201,192 @@
   .field-comercial{background:#FFFBF0;border-radius:8px;padding:12px;border:1px solid #F0E4B8;margin-top:4px;}
   .field-comercial .form-label::after{content:' (Comercial)';color:var(--gold);font-size:9px;}
 
-  @media(max-width:600px){
-    .content{padding:16px;}
-    .form-grid{grid-template-columns:1fr;}
-    .form-group.span2{grid-column:1;}
-    .kanban-col{min-width:170px;}
-    .modal{max-width:100%;margin:8px;}
-    .modal-body{padding:16px 18px;}
-    .modal-header{padding:18px 18px 14px;}
-    .modal-footer{padding:12px 18px 18px;}
-    .login-card{width:100%;margin:16px;}
+  /* ═══════════════════════════════════════════════════════
+     MOBILE RESPONSIVO — todas as áreas do sistema
+     ═══════════════════════════════════════════════════════ */
+  @media(max-width:768px){
 
-    /* ═══════════════════════════════════════════════
-       ORÇAMENTO MOBILE — layout completo responsivo
-       ═══════════════════════════════════════════════ */
-    #panel-orcamento-pedido { padding-bottom: 180px; }
+    /* ── GERAL ──────────────────────────────────────── */
+    body { font-size: 14px; }
+    .content { padding: 10px !important; }
+    .tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+    .tab-btn { font-size: 11px !important; padding: 8px 10px !important; white-space: nowrap; flex-shrink: 0; }
+    .login-card { width: 100%; margin: 12px; }
 
-    /* ── HEADER FIXO ─────────────────────────────── */
+    /* ── MODAIS ─────────────────────────────────────── */
+    .modal { max-width: 100% !important; margin: 0 !important; border-radius: 16px 16px 0 0 !important; max-height: 92vh; overflow-y: auto; }
+    .modal-overlay { align-items: flex-end !important; }
+    .modal-body { padding: 14px 16px !important; }
+    .modal-header { padding: 16px 16px 12px !important; }
+    .modal-footer { padding: 10px 16px 16px !important; gap: 8px !important; }
+    .modal-footer button { flex: 1; font-size: 13px !important; padding: 10px 8px !important; }
+
+    /* ── FORMULÁRIOS ────────────────────────────────── */
+    .form-grid { grid-template-columns: 1fr !important; }
+    .form-group.span2 { grid-column: 1 !important; }
+    .form-input, .form-select { font-size: 16px !important; } /* evita zoom no iOS */
+
+    /* ── KANBAN ─────────────────────────────────────── */
+    .kanban-board { gap: 10px !important; padding: 0 10px 10px !important; }
+    .kanban-col { min-width: 240px !important; max-width: 280px; }
+    .kanban-col-header { padding: 10px 12px !important; font-size: 12px !important; }
+    .order-card { padding: 10px 12px !important; }
+    .order-card .card-title { font-size: 14px !important; }
+    .order-card .card-meta { font-size: 11px !important; }
+    .card-actions { flex-wrap: wrap; gap: 4px; }
+    .card-actions button { font-size: 11px !important; padding: 5px 8px !important; }
+
+    /* ── AGENDA ─────────────────────────────────────── */
+    #panel-agenda { padding: 12px 10px !important; }
+    .agenda-tabs { gap: 6px !important; }
+    .agenda-tabs button { font-size: 13px !important; padding: 8px 14px !important; }
+    #painel-agenda-medicao, #painel-agenda-instalacao { padding: 0 !important; }
+
+    /* Cards de medição */
+    [style*="display:grid"][style*="align-items:center"][style*="gap:12px"] {
+      display: flex !important; flex-direction: column !important; align-items: stretch !important;
+    }
+
+    /* ── DASHBOARD ──────────────────────────────────── */
+    #panel-dashboard { padding: 10px !important; }
+    .dashboard-cards { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+    .dash-card { padding: 12px !important; }
+    .dash-card-value { font-size: 20px !important; }
+    .dash-ranking { font-size: 12px !important; }
+
+    /* ── FINANCEIRO ─────────────────────────────────── */
+    #panel-financeiro { padding: 10px !important; }
+    .fin-tabs { overflow-x: auto; flex-wrap: nowrap; gap: 6px; }
+    .fin-tabs button { flex-shrink: 0; font-size: 12px !important; padding: 7px 12px !important; }
+    .fin-table { font-size: 12px !important; }
+    .fin-table th, .fin-table td { padding: 8px 6px !important; }
+
+    /* ── MATERIAIS / PRODUTOS ───────────────────────── */
+    #panel-materiais, #panel-produtos { padding: 10px !important; }
+    .materiais-grid { grid-template-columns: 1fr !important; }
+    .produto-card { padding: 12px !important; }
+
+    /* ── CONFIGURAÇÕES ──────────────────────────────── */
+    #panel-configuracoes { padding: 10px !important; }
+    .config-grid { grid-template-columns: 1fr !important; }
+
+    /* ══════════════════════════════════════════════════
+       ORÇAMENTO — responsivo completo
+       ══════════════════════════════════════════════════ */
+    #panel-orcamento-pedido { padding-bottom: 160px; }
+
+    /* Header fixo do orçamento */
     #orc-header-top {
       flex-direction: column !important;
       align-items: stretch !important;
-      gap: 8px !important;
-      padding: 8px 12px !important;
+      gap: 6px !important;
+      padding: 8px 10px !important;
     }
-    /* Linha 1: Voltar + título */
     #orc-header-top > div:first-child {
-      justify-content: flex-start !important;
-      gap: 10px !important;
+      font-size: 12px !important;
     }
-    #orc-header-top > div:first-child > div > div:first-child {
-      font-size: 13px !important;
-    }
-    /* Linha 2: métricas + botões — scroll horizontal */
     #orc-header-top > div:last-child {
       display: flex !important;
       overflow-x: auto !important;
       gap: 6px !important;
-      padding-bottom: 4px !important;
       flex-wrap: nowrap !important;
+      padding-bottom: 2px !important;
       -webkit-overflow-scrolling: touch;
     }
     #hdr-custo-wrap, #hdr-valor-wrap, #hdr-margem-wrap, #hdr-llh-wrap {
-      padding: 5px 10px !important;
       flex-shrink: 0 !important;
-      min-width: 80px !important;
+      padding: 5px 8px !important;
+      min-width: 75px !important;
     }
-    #hdr-custo { font-size: 12px !important; }
-    #hdr-valor { font-size: 13px !important; }
-    #hdr-margem { font-size: 13px !important; }
-    #hdr-llh { font-size: 12px !important; }
+    #hdr-custo, #hdr-llh { font-size: 11px !important; }
+    #hdr-valor, #hdr-margem { font-size: 13px !important; }
     #orc-header-top button {
       flex-shrink: 0 !important;
-      padding: 7px 10px !important;
+      padding: 7px 9px !important;
       font-size: 11px !important;
       white-space: nowrap !important;
     }
 
-    /* ── ÁREA DE CONTEÚDO ────────────────────────── */
+    /* Conteúdo do orçamento */
     #orcamento-pedido-content > div > div[style*="max-width:1300px"] {
-      padding: 12px 10px !important;
+      padding: 10px 8px !important;
     }
 
-    /* ── CABEÇALHO DO ORÇAMENTO ─────────────────── */
-    #orc-campos-header {
-      grid-template-columns: 1fr !important;
-    }
-    #orc-campos-linha2 {
+    /* Cabeçalho do orçamento - 1 coluna */
+    #orc-campos-header { grid-template-columns: 1fr !important; }
+    #orc-campos-linha2 { grid-template-columns: 1fr 1fr !important; }
+    #orc-campos-linha2 > div:nth-child(3),
+    #orc-campos-linha2 > div:nth-child(4) { grid-column: 1 / -1 !important; }
+
+    /* Item do orçamento */
+    [style*="grid-template-columns:1fr 1.5fr 1fr auto"] {
       grid-template-columns: 1fr 1fr !important;
     }
-    /* Linha 2: Trânsito e Origem ocupam linha inteira */
-    #orc-campos-linha2 > div:nth-child(3),
-    #orc-campos-linha2 > div:nth-child(4) {
+    [style*="grid-template-columns:1fr 1.5fr 1fr auto"] > div:last-child {
       grid-column: 1 / -1 !important;
     }
 
-    /* ── PEÇA A PEÇA ─────────────────────────────── */
-    #panel-orcamento-pedido [id^="pecas-lista-"] > div {
-      grid-template-columns: 1fr 90px 60px auto !important;
+    /* Peça a Peça */
+    [id^="pecas-lista-"] > div {
+      grid-template-columns: 1fr 85px 55px auto !important;
       gap: 4px !important;
     }
+    [id^="pecas-lista-"] input { font-size: 13px !important; padding: 5px 6px !important; }
 
-    /* ── CAMPOS DE ACABAMENTO ────────────────────── */
-    .acabamentos-grid {
+    /* Campos de acabamento — 2 colunas */
+    .acabamentos-grid,
+    [style*="grid-template-columns:repeat(5"] {
       grid-template-columns: 1fr 1fr !important;
     }
 
-    /* ── CUSTOS ADICIONAIS ───────────────────────── */
-    .custos-adicionais-grid {
-      grid-template-columns: 1fr 1fr !important;
-    }
+    /* Custos adicionais — 2 colunas */
+    .custos-adicionais-grid { grid-template-columns: 1fr 1fr !important; }
 
-    /* ── MATERIAIS ───────────────────────────────── */
-    .materiais-linha {
-      grid-template-columns: 1fr 1fr !important;
-      gap: 6px !important;
-    }
-    .materiais-linha > *:first-child {
-      grid-column: 1 / -1 !important;
-    }
+    /* Materiais linha */
+    .materiais-linha { grid-template-columns: 1fr 1fr !important; gap: 6px !important; }
+    .materiais-linha > *:first-child { grid-column: 1 / -1 !important; }
 
-    /* ── CUSTOS E TEMPOS ─────────────────────────── */
-    [id^="custos-tempos-"] > div {
-      grid-template-columns: 1fr !important;
-    }
-    [id^="custos-tempos-"] > div > div {
-      border-right: none !important;
-      border-bottom: 1px solid #e0e0e0 !important;
-    }
-    [id^="custos-tempos-"] table {
-      font-size: 11px !important;
-    }
-    [id^="custos-tempos-"] th,
-    [id^="custos-tempos-"] td {
-      padding: 4px 8px !important;
-    }
+    /* Custos e Tempos — coluna única */
+    [id^="custos-tempos-"] > div { grid-template-columns: 1fr !important; }
+    [id^="custos-tempos-"] > div > div { border-right: none !important; border-bottom: 1px solid #e0e0e0 !important; }
+    [id^="custos-tempos-"] table { font-size: 11px !important; }
+    [id^="custos-tempos-"] th, [id^="custos-tempos-"] td { padding: 4px 6px !important; }
 
-    /* ── RODAPÉ FIXO ─────────────────────────────── */
+    /* Rodapé fixo do orçamento */
     .orc-rodape-fixo {
       flex-direction: column !important;
       padding: 8px 10px !important;
       gap: 6px !important;
+      display: flex !important;
+      flex-wrap: wrap !important;
     }
     .orc-rodape-campos {
       grid-template-columns: 1fr 1fr !important;
       width: 100% !important;
     }
-    /* Observações ocupa linha inteira */
-    .orc-rodape-campos > div:first-child {
-      grid-column: 1 / -1 !important;
-    }
-    /* Botões do rodapé em linha */
-    .orc-rodape-fixo > button,
-    .orc-rodape-fixo button {
-      flex: 1 !important;
-      padding: 9px 8px !important;
-      font-size: 12px !important;
-      white-space: nowrap !important;
-    }
-    /* Agrupa os botões do rodapé lado a lado */
-    .orc-rodape-fixo {
-      display: flex !important;
-      flex-wrap: wrap !important;
-    }
+    .orc-rodape-campos > div:first-child { grid-column: 1 / -1 !important; }
     .orc-rodape-btns-wrap {
       display: flex !important;
       gap: 6px !important;
       width: 100% !important;
     }
-  }
-
-  @media(max-width:768px) and (min-width:601px){
-    /* Tablet */
-    .acabamentos-grid {
-      grid-template-columns: repeat(3, 1fr) !important;
+    .orc-rodape-btns-wrap button, .orc-rodape-fixo button {
+      flex: 1 !important;
+      padding: 10px 6px !important;
+      font-size: 12px !important;
+      white-space: nowrap !important;
     }
-    .materiais-linha {
-      grid-template-columns: 2fr 1fr 1fr 1fr !important;
+
+    /* Simulador de preço */
+    #sim-resultado > div[style*="grid-template-columns:repeat"] {
+      grid-template-columns: 1fr 1fr !important;
+    }
+
+    /* ── MODAL DE MEDIÇÃO — mobile ──────────────────── */
+    #modal-medicao-ag .modal { border-radius: 16px 16px 0 0 !important; }
+    .med-tipo-btn, .med-acesso-btn {
+      padding: 6px 10px !important;
+      font-size: 12px !important;
     }
   }
 </style>
@@ -777,20 +807,14 @@ async function mostrarPedidoCliente(id) {
   }).join('');
   const croquiImgs = o.croqui||[];
   const localImgs = o.local||[];
-  const temFotosCliente = croquiImgs.length > 0 || localImgs.length > 0;
+  // Cliente vê só o croqui; equipe interna vê croqui + local
+  const temFotosCliente = croquiImgs.length > 0;
   const fotosClienteHTML = temFotosCliente ? `
     <div style="background:white;border-radius:16px;padding:24px;box-shadow:var(--shadow);margin-top:16px;">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:16px;">📐 Fotos do Pedido</div>
-      ${croquiImgs.length>0?`
-        <div style="font-size:12px;font-weight:600;color:var(--stone);margin-bottom:8px;">Croqui / Medição</div>
-        <div class="images-protected" style="margin-bottom:16px;">
-          ${croquiImgs.map(img=>`<div class="img-zoom-wrap" onclick="openLightbox('${img}')"><img src="${img}" oncontextmenu="return false;"></div>`).join('')}
-        </div>`:''}
-      ${localImgs.length>0?`
-        <div style="font-size:12px;font-weight:600;color:var(--stone);margin-bottom:8px;">Fotos do Local</div>
-        <div class="images-protected">
-          ${localImgs.map(img=>`<div class="img-zoom-wrap" onclick="openLightbox('${img}')"><img src="${img}" oncontextmenu="return false;"></div>`).join('')}
-        </div>`:''}
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:16px;">📐 Projeto / Croqui</div>
+      <div class="images-protected">
+        ${croquiImgs.map(img=>`<div class="img-zoom-wrap" onclick="openLightbox('${img}')"><img src="${img}" oncontextmenu="return false;"></div>`).join('')}
+      </div>
       <div class="no-download-notice" style="margin-top:10px;">🔒 Visualização apenas — toque para ampliar</div>
     </div>` : '';
 
@@ -1272,9 +1296,25 @@ function sendWhatsApp(o){sendWhatsAppComLink(o.id);}
 
 // ============ UPLOAD ============
 function handleUpload(e,type){
+  const MAX_PX=1200, QUALITY=0.75;
   Array.from(e.target.files).forEach(file=>{
     const reader=new FileReader();
-    reader.onload=ev=>{tempImages[type].push(ev.target.result);renderPreviews();};
+    reader.onload=ev=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width,h=img.height;
+        if(w>MAX_PX||h>MAX_PX){
+          if(w>h){h=Math.round(h*MAX_PX/w);w=MAX_PX;}
+          else{w=Math.round(w*MAX_PX/h);h=MAX_PX;}
+        }
+        const c=document.createElement('canvas');
+        c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        tempImages[type].push(c.toDataURL('image/jpeg',QUALITY));
+        renderPreviews();
+      };
+      img.src=ev.target.result;
+    };
     reader.readAsDataURL(file);
   });
   e.target.value='';
@@ -3229,16 +3269,47 @@ async function finalizarMedicao() {
     return;
   }
 
+  // Lê e comprime fotos (max 1200px, qualidade 0.75) antes de salvar
+  const lerFotosBase64 = (inputId) => new Promise(resolve => {
+    const inp = document.getElementById(inputId);
+    if (!inp || !inp.files || inp.files.length === 0) { resolve([]); return; }
+    const results = [];
+    let done = 0;
+    const MAX_PX = 1200;
+    const QUALITY = 0.75;
+    Array.from(inp.files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          // Redimensiona mantendo proporção
+          let w = img.width, h = img.height;
+          if (w > MAX_PX || h > MAX_PX) {
+            if (w > h) { h = Math.round(h * MAX_PX / w); w = MAX_PX; }
+            else       { w = Math.round(w * MAX_PX / h); h = MAX_PX; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          results.push(canvas.toDataURL('image/jpeg', QUALITY));
+          done++;
+          if (done === inp.files.length) resolve(results);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+
   // Cria pedido em "Aguardando Orçamento"
-  showLoading('Criando pedido...');
+  showLoading('Lendo fotos...');
   try {
+    const fotosCroqui = await lerFotosBase64('med-foto-croqui');
+    const fotosLocal  = await lerFotosBase64('med-foto-local');
+
     showLoading('Gerando ID...');
     const novoId = await nextId();
-    showLoading('Salvando no banco...');
-    const obsCompleta = [
-      acesso ? 'Acesso: ' + acesso : '',
-      obsFinal || ''
-    ].filter(Boolean).join(' | ');
+    showLoading('Salvando pedido...');
 
     const novoPedido = {
       id: novoId,
@@ -3249,8 +3320,10 @@ async function finalizarMedicao() {
       obs: obsFinal || '',
       acesso: acesso || '',
       endereco: [m.Endereco, m.Numero, m.Bairro, m.Complemento].filter(Boolean).join(', '),
+      croqui: fotosCroqui,
+      local: fotosLocal,
       history: [
-        { stage:'medicao', date: new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) },
+        { stage:'medicao',   date: new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) },
         { stage:'aguardando', date: new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) }
       ]
     };

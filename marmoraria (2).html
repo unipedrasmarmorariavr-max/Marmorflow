@@ -6573,28 +6573,18 @@ function calcDescontoGeral(custoTotal, tpp) {
 function salvarValorSimulado() {
   if (!orcamentoAtual) { showNotif('Nenhum orçamento aberto.', 'error'); return; }
 
-  // Pega o valor atual da simulação
-  // Modo "Pelo Total": sim-valor / Modo "Pela Margem": sim-margem-valor
-  const elValorTotal  = document.getElementById('sim-valor');
-  const elValorMargem = document.getElementById('sim-margem-valor');
-  const elSimMargem   = document.getElementById('sim-margem');
-
-  // Descobre qual modo está ativo
-  const modoTotal = document.querySelector('input[name="sim-modo"][value="total"]')?.checked;
+  // Pega o valor do resultado calculado (sim-r-valor) — funciona nos dois modos
+  const elResultado = document.getElementById('sim-r-valor');
+  const textoResultado = elResultado ? elResultado.textContent.trim() : '';
 
   let valorFinal = 0;
-  let margemFinal = 0;
-
-  if (modoTotal && elValorTotal) {
-    const v = elValorTotal.value.replace(/[^\d,]/g,'').replace(',','.');
-    valorFinal = parseFloat(v) || 0;
-  } else if (elValorMargem) {
-    const v = elValorMargem.value.replace(/[^\d,]/g,'').replace(',','.');
-    valorFinal = parseFloat(v) || 0;
+  if (textoResultado) {
+    // Remove R$, pontos de milhar e converte vírgula para ponto
+    valorFinal = parseFloat(textoResultado.replace(/R\$\s*/g,'').replace(/\./g,'').replace(',','.')) || 0;
   }
 
   if (valorFinal <= 0) {
-    showNotif('Digite um valor na calculadora antes de salvar.', 'error');
+    showNotif('Simule um valor primeiro antes de salvar.', 'error');
     return;
   }
 

@@ -3109,6 +3109,10 @@ async function abrirModalMedicao(id) {
         </div>
       </div>
       <div>
+        <label class="form-label">Cidade</label>
+        <input class="form-input" id="med-cidade" value="${m?.cidade||'Volta Redonda/RJ'}" placeholder="Volta Redonda/RJ">
+      </div>
+      <div>
         <label class="form-label">Observações</label>
         <input class="form-input" id="med-obs" value="${m?.obs||''}" placeholder="Ex: Apartamento 3º andar, portaria confirma...">
       </div>
@@ -3144,7 +3148,7 @@ async function salvarAgendaMedicao() {
     Numero: numero,
     Bairro: document.getElementById('med-bairro')?.value.trim()||'',
     Complemento: document.getElementById('med-complemento')?.value.trim()||'',
-    Cidade: 'Volta Redonda/RJ',
+    Cidade: document.getElementById('med-cidade')?.value.trim()||'Volta Redonda/RJ',
     Obs: document.getElementById('med-obs')?.value.trim()||'',
     Pedido_id: document.getElementById('med-pedido')?.value||'',
     Status: 'pendente',

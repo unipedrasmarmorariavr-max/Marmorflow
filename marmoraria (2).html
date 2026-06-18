@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>MarmorFlow — Gestão de Pedidos</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap');
   :root {
@@ -695,7 +695,16 @@
 const SUPABASE_URL = 'https://rentppmumsyttactanwa.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_5LXkt5cn2jlH_OWhKOSycQ_CZGiOLfv';
 var sb = null;
-function getSB() { if (!sb) { sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } return sb; }
+function getSB() {
+  if (!sb) {
+    if (typeof supabase === 'undefined') {
+      console.error('Supabase não carregado ainda');
+      return null;
+    }
+    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+  return sb;
+}
 
 const PINS = { dono:'1234', medidor:'2222', comercial:'3333', producao:'4444', financeiro:'5555' };
 const PROFILES = {
@@ -1384,7 +1393,10 @@ function entrar() {
 function ativarSessao(perfil) {
   if (!PROFILES[perfil]) return false;
   if (!sb) {
-    try { sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e) { alert('Erro banco: '+e.message); return false; }
+    try {
+      if (typeof supabase === 'undefined') throw new Error('Biblioteca não carregada. Recarregue a página (Ctrl+F5).');
+      sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    } catch(e) { alert('Erro banco: '+e.message); return false; }
   }
   currentUser = perfil;
   selectedProfile = perfil;
@@ -1452,7 +1464,7 @@ function ativarSessao(perfil) {
   return true;
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+function iniciarApp() {
   // Restaura sessão salva (evita login ao recarregar)
   var sessaoSalva = localStorage.getItem('mf_sessao');
   if (sessaoSalva && PROFILES[sessaoSalva]) {
@@ -1466,7 +1478,10 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   var pinEl = document.getElementById('pin-input');
   if (pinEl) pinEl.addEventListener('keydown', function(e){ if(e.key==='Enter') entrar(); });
-});
+}
+
+// window.load garante que CDN do Supabase carregou antes de restaurar sessão
+window.addEventListener('load', iniciarApp);
 
 
 // ============ DASHBOARD ============
@@ -2936,11 +2951,18 @@ function cardMedicao(m, isHoje, passada) {
     </div>
     <div style="font-size:18px;font-weight:800;color:var(--stone);margin-bottom:6px;">${m.Cliente||'—'}</div>
     <div style="font-size:14px;color:#555;margin-bottom:4px;">📍 ${enderecoCompleto||'Endereço não informado'}${m.Bairro?' · '+m.Bairro:''}</div>
+    ${m.Telefone?`<a href="tel:${m.Telefone}" style="display:inline-flex;align-items:center;gap:6px;font-size:14px;color:#006382;font-weight:600;margin-bottom:4px;text-decoration:none;">📞 ${m.Telefone}</a>`:''}
     ${m.Obs?`<div style="font-size:13px;color:#888;margin-bottom:12px;">💬 ${m.Obs}</div>`:'<div style="margin-bottom:12px;"></div>'}
-    <a href="${mapsUrl}" target="_blank"
-      style="display:flex;align-items:center;justify-content:center;gap:8px;background:#006382;color:white;text-decoration:none;padding:14px;border-radius:10px;font-size:15px;font-weight:700;margin-bottom:10px;">
-      🗺️ Abrir Navegação
-    </a>
+    <div style="display:grid;grid-template-columns:${m.Telefone?'1fr 1fr':'1fr'};gap:8px;margin-bottom:10px;">
+      <a href="${mapsUrl}" target="_blank"
+        style="display:flex;align-items:center;justify-content:center;gap:8px;background:#006382;color:white;text-decoration:none;padding:14px;border-radius:10px;font-size:15px;font-weight:700;">
+        🗺️ Navegar
+      </a>
+      ${m.Telefone?`<a href="https://wa.me/55${m.Telefone.replace(/\D/g,'')}" target="_blank"
+        style="display:flex;align-items:center;justify-content:center;gap:8px;background:#25D366;color:white;text-decoration:none;padding:14px;border-radius:10px;font-size:15px;font-weight:700;">
+        📱 WhatsApp
+      </a>`:''}
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
       <button onclick="concluirMedicao('${m.id}')"
         style="background:#2E7D32;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;">
@@ -3043,9 +3065,15 @@ async function abrirModalMedicao(id) {
           ${pedidosMedicao.map(o => `<option value="${o.id}" ${m?.pedidoId===o.id?'selected':''}>${o.id} — ${o.cliente}</option>`).join('')}
         </select>
       </div>
-      <div>
-        <label class="form-label">Cliente *</label>
-        <input class="form-input" id="med-cliente" value="${m?.cliente||''}" placeholder="Nome do cliente">
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;">
+        <div>
+          <label class="form-label">Cliente *</label>
+          <input class="form-input" id="med-cliente" value="${m?.cliente||''}" placeholder="Nome do cliente">
+        </div>
+        <div>
+          <label class="form-label">Celular</label>
+          <input class="form-input" id="med-telefone" type="tel" value="${m?.telefone||''}" placeholder="(24) 99999-9999">
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;">
         <div>
@@ -3108,6 +3136,7 @@ async function salvarAgendaMedicao() {
     Cliente: cliente,
     Data: data,
     Horario: horario,
+    Telefone: document.getElementById('med-telefone')?.value.trim()||'',
     Endereco: endereco,
     Numero: numero,
     Bairro: document.getElementById('med-bairro')?.value.trim()||'',

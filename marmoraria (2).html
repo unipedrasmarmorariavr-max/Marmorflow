@@ -6514,25 +6514,22 @@ function abrirDescontoGeral(custoTotal, totalGeral, margem, lucroTotal, llh) {
     </div>`;
 
   openModal('modal-desconto-geral');
-  // Guarda valores para uso externo
-  window._dgTotalAtual  = totalGeral;
-  window._dgCustoTotal  = custoTotal;
-  window._simUltimoValor  = 0;
-  window._simUltimaMargem = 0;
-  window._simUltimoLucro  = 0;
-  // Pré-preenche com a margem atual e calcula automaticamente
+  // Guarda valores atuais — usados se usuário clicar Salvar sem digitar nada
+  window._dgTotalAtual    = totalGeral;
+  window._dgCustoTotal    = custoTotal;
+  // Pré-popula com valores atuais do orçamento
+  window._simUltimoValor  = totalGeral;
+  window._simUltimaMargem = margem;
+  window._simUltimoLucro  = lucroTotal;
+  // Pré-preenche os campos após renderização
   setTimeout(() => {
     const tpp = orcamentoAtual?.itens?.reduce((s,it) => s+(it.calc?.tempoProdInterno||0), 0) || 1;
-    const elM = document.getElementById('dg-margem');
-    const elV = document.getElementById('dg-valor');
-    // Seleciona modo "Pela Margem" e preenche com a margem atual
     const radioMargem = document.querySelector('input[name="dg-modo"][value="margem"]');
-    if (radioMargem) { radioMargem.checked = true; }
-    if (elM) {
-      elM.value = margem.toFixed(1);
-      calcDescontoGeral(custoTotal, tpp);
-    }
-  }, 100);
+    if (radioMargem) radioMargem.checked = true;
+    const elM = document.getElementById('dg-margem');
+    if (elM) { elM.value = margem.toFixed(1); }
+    calcDescontoGeral(custoTotal, tpp);
+  }, 150);
 }
 
 function calcDescontoGeral(custoTotal, tpp) {

@@ -2861,16 +2861,19 @@ async function renderAgendaMedicao() {
 
   const todas = await getMedicoes();
   const medicoes = todas.sort((a,b) => {
-    if (a.Data !== b.Data) return a.Data.localeCompare(b.Data);
-    return (a.horario||'').localeCompare(b.horario||'');
+    const dA = a.Data||a.data||''; const dB = b.Data||b.data||'';
+    if (dA !== dB) return dA.localeCompare(dB);
+    return (a.Horario||a.horario||'').localeCompare(b.Horario||b.horario||'');
   });
-  const hoje = new Date().toISOString().substring(0,10);
+  // Data local (não UTC) — evita bug de fuso horário Brasil
+  const _hj = new Date();
+  const hoje = _hj.getFullYear()+'-'+String(_hj.getMonth()+1).padStart(2,'0')+'-'+String(_hj.getDate()).padStart(2,'0');
   const isPerfMedidor = currentUser === 'medidor';
   
   // Agrupa: hoje, futuras, passadas
-  const hojeList = medicoes.filter(m => m.Data === hoje);
-  const futuras = medicoes.filter(m => m.Data > hoje);
-  const passadas = medicoes.filter(m => m.Data < hoje);
+  const hojeList = medicoes.filter(m => (m.Data||m.data||'') === hoje);
+  const futuras  = medicoes.filter(m => (m.Data||m.data||'') > hoje);
+  const passadas = medicoes.filter(m => (m.Data||m.data||'') < hoje && m.Status !== 'concluido');
 
   el.innerHTML = `
   <div>

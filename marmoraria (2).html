@@ -3246,11 +3246,12 @@ async function finalizarMedicao() {
       peca: servico,
       stage: 'aguardando',
       origem: 'whatsapp',
-      observacoes: obsCompleta,
+      obs: obsFinal || '',
+      acesso: acesso || '',
       endereco: [m.Endereco, m.Numero, m.Bairro, m.Complemento].filter(Boolean).join(', '),
       history: [
-        { stage:'medicao', date: new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}), user: currentUser },
-        { stage:'aguardando', date: new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}), user: currentUser }
+        { stage:'medicao', date: new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) },
+        { stage:'aguardando', date: new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) }
       ]
     };
 

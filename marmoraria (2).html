@@ -842,9 +842,9 @@ async function loadOrders() {
   } catch(e) { _medicoes = []; }
 }
 async function nextId() {
-  const { data } = await getSB().from('pedidos').select('id');
-  if (!data||!data.length) return 'MRM-001';
-  const nums = data.map(o=>parseInt(o.id.replace('MRM-',''))).filter(n=>!isNaN(n));
+  // Usa os pedidos já carregados em memória — evita query extra ao Supabase
+  if (!orders||!orders.length) return 'MRM-001';
+  const nums = orders.map(o=>parseInt((o.id||'').replace('MRM-',''))).filter(n=>!isNaN(n));
   return 'MRM-'+String((nums.length?Math.max(...nums):0)+1).padStart(3,'0');
 }
 
@@ -3232,7 +3232,9 @@ async function finalizarMedicao() {
   // Cria pedido em "Aguardando Orçamento"
   showLoading('Criando pedido...');
   try {
+    showLoading('Gerando ID...');
     const novoId = await nextId();
+    showLoading('Salvando no banco...');
     const obsCompleta = [
       acesso ? 'Acesso: ' + acesso : '',
       obsFinal || ''

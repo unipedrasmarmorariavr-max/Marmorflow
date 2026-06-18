@@ -6603,35 +6603,13 @@ function calcDescontoGeral(custoTotal, tpp) {
 function salvarValorSimulado() {
   if (!orcamentoAtual) { showNotif('Nenhum orçamento aberto.', 'error'); return; }
 
-  // Lê direto dos campos da calculadora
-  const elDgValor  = document.getElementById('dg-r-valor');
-  const elDgMargem = document.getElementById('dg-r-margem');
-  const elDgLucro  = document.getElementById('dg-r-lucro');
-
-  // Tenta variável global primeiro, senão lê do DOM
-  let valorFinal  = window._simUltimoValor || 0;
-  let margemFinal = window._simUltimaMargem || 0;
-  let lucroFinal  = window._simUltimoLucro  || 0;
-
-  if (!valorFinal && elDgValor && elDgValor.textContent.trim()) {
-    valorFinal  = parseFloat((elDgValor.textContent||'0').replace(/R\$\s*/g,'').replace(/\./g,'').replace(',','.')) || 0;
-    margemFinal = parseFloat((elDgMargem?.textContent||'0').replace('%','').replace(',','.')) || 0;
-    lucroFinal  = parseFloat((elDgLucro?.textContent||'0').replace(/R\$\s*/g,'').replace(/[+]/g,'').replace(/\./g,'').replace(',','.')) || 0;
-  }
-
-  if (!valorFinal) {
-    // Tenta pegar do campo de input diretamente
-    const inpValor = document.getElementById('dg-valor');
-    if (inpValor && inpValor.value) {
-      valorFinal = parseFloat(inpValor.value.replace(',','.')) || 0;
-      const custoBruto = window._dgCustoTotal || 0;
-      lucroFinal = valorFinal - custoBruto;
-      margemFinal = valorFinal > 0 ? (lucroFinal/valorFinal*100) : 0;
-    }
-  }
+  // Pega o valor calculado pela calculadora (salvo em _simUltimoValor)
+  const valorFinal  = window._simUltimoValor  || 0;
+  const margemFinal = window._simUltimaMargem || 0;
+  const lucroFinal  = window._simUltimoLucro  || 0;
 
   if (valorFinal <= 0) {
-    showNotif('Digite e calcule um valor primeiro.', 'error');
+    showNotif('Abra a calculadora, simule um valor e clique em Usar.', 'error');
     return;
   }
 
@@ -6640,6 +6618,12 @@ function salvarValorSimulado() {
   orcamentoAtual.margemNegociada      = margemFinal;
   orcamentoAtual.lucroNegociado       = lucroFinal;
   orcamentoAtual.usandoValorNegociado = true;
+
+  // Salva no localStorage imediatamente
+  const orcsNow = getOrcamentos();
+  const idxNow = orcsNow.findIndex(o => o.id === orcamentoAtual.id);
+  if (idxNow >= 0) orcsNow[idxNow] = orcamentoAtual; else orcsNow.unshift(orcamentoAtual);
+  salvarOrcamentos(orcsNow);
 
   salvarOrcamentoPedido(true);
 

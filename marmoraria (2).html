@@ -1373,19 +1373,26 @@ function ativarSessao(perfil) {
   if (tabPortal) tabPortal.style.display = isDono ? 'block' : 'none';
   if (tabAgenda) tabAgenda.style.display = (isDono||isComercial||isProducao||isMedidor) ? 'block' : 'none';
   if (isFinanceiro) { showTab('financeiro'); return true; }
-  // Medidor abre direto na agenda de medições
-  if (isMedidor) {
-    localStorage.setItem('agenda_aba','medicao');
-    loadOrders().then(function() { showTab('agenda'); });
-    return true;
-  }
+  // Medidor: carrega pedidos E abre na agenda de medições
   loadOrders().then(function() {
     renderKanban();
-    // Restaura aba ativa (após renderKanban para não ser sobrescrita)
-    var abaAtiva = localStorage.getItem('mf_aba');
-    if (abaAtiva && abaAtiva !== 'kanban' && abaAtiva !== 'orcamento' &&
-        document.getElementById('panel-'+abaAtiva)) {
-      showTab(abaAtiva);
+    if (isMedidor) {
+      localStorage.setItem('agenda_aba','medicao');
+      var abaAnterior = localStorage.getItem('mf_aba');
+      // Se já estava em pedidos, mantém em pedidos
+      if (abaAnterior === 'kanban' || !abaAnterior) {
+        showTab('agenda');
+      } else if (document.getElementById('panel-'+abaAnterior)) {
+        showTab(abaAnterior);
+      } else {
+        showTab('agenda');
+      }
+    } else {
+      var abaAtiva = localStorage.getItem('mf_aba');
+      if (abaAtiva && abaAtiva !== 'kanban' && abaAtiva !== 'orcamento' &&
+          document.getElementById('panel-'+abaAtiva)) {
+        showTab(abaAtiva);
+      }
     }
   });
   return true;

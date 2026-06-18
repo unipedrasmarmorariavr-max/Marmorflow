@@ -3048,8 +3048,11 @@ async function salvarAgendaMedicao() {
 
   const editId = document.getElementById('med-edit-id')?.value;
   const dados = {
-    Cliente, Data, Horario,
-    Endereco, Numero,
+    Cliente: cliente,
+    Data: data,
+    Horario: horario,
+    Endereco: endereco,
+    Numero: numero,
     Bairro: document.getElementById('med-bairro')?.value.trim()||'',
     Complemento: document.getElementById('med-complemento')?.value.trim()||'',
     Cidade: 'Volta Redonda/RJ',

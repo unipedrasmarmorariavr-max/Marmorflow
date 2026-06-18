@@ -6567,6 +6567,11 @@ function calcDescontoGeral(custoTotal, tpp) {
   document.getElementById('dg-r-conclusao').style.background = bg;
   document.getElementById('dg-r-conclusao').style.color = cor;
   document.getElementById('dg-r-conclusao').textContent = status;
+
+  // Salva para salvarValorSimulado()
+  window._simUltimoValor  = valorCobrado;
+  window._simUltimaMargem = margemCalc;
+  window._simUltimoLucro  = lucro;
 }
 
 // Salva o valor simulado na calculadora como preço final do orçamento

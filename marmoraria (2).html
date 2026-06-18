@@ -2860,6 +2860,18 @@ async function renderAgendaMedicao() {
   el.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">Carregando...</div>';
 
   const todas = await getMedicoes();
+
+  // DEBUG TEMPORÁRIO — mostra o que veio do banco
+  if (!todas || todas.length === 0) {
+    el.innerHTML = `<div style="background:#fff3cd;border:2px solid #ffc107;border-radius:12px;padding:20px;margin:16px;">
+      <b>⚠️ Nenhuma medição retornada do banco.</b><br>
+      Total registros: ${todas?.length ?? 'null'}<br>
+      <small>Verifique se a tabela <b>medicoes</b> tem registros no Supabase.</small>
+    </div>`;
+    return;
+  }
+  // FIM DEBUG
+
   const medicoes = todas.sort((a,b) => {
     const dA = a.Data||a.data||''; const dB = b.Data||b.data||'';
     if (dA !== dB) return dA.localeCompare(dB);
@@ -6559,57 +6571,71 @@ function calcDescontoGeral(custoTotal, tpp) {
 
 // Salva o valor simulado na calculadora como preço final do orçamento
 function salvarValorSimulado() {
-  const elValor = document.getElementById('sim-valor');
-  const elMargem = document.getElementById('sim-margem');
-  const elLucro = document.getElementById('sim-lucro');
-  const elLLH = document.getElementById('sim-llh');
-  if (!elValor) return;
+  if (!orcamentoAtual) { showNotif('Nenhum orçamento aberto.', 'error'); return; }
 
-  const valorStr = elValor.value.replace(/R\$/g,'').replace(/\./g,'').replace(',','.').trim();
-  const valorFinal = parseFloat(valorStr) || 0;
+  // Pega o valor atual da simulação
+  // Modo "Pelo Total": sim-valor / Modo "Pela Margem": sim-margem-valor
+  const elValorTotal  = document.getElementById('sim-valor');
+  const elValorMargem = document.getElementById('sim-margem-valor');
+  const elSimMargem   = document.getElementById('sim-margem');
+
+  // Descobre qual modo está ativo
+  const modoTotal = document.querySelector('input[name="sim-modo"][value="total"]')?.checked;
+
+  let valorFinal = 0;
+  let margemFinal = 0;
+
+  if (modoTotal && elValorTotal) {
+    const v = elValorTotal.value.replace(/[^\d,]/g,'').replace(',','.');
+    valorFinal = parseFloat(v) || 0;
+  } else if (elValorMargem) {
+    const v = elValorMargem.value.replace(/[^\d,]/g,'').replace(',','.');
+    valorFinal = parseFloat(v) || 0;
+  }
+
   if (valorFinal <= 0) {
-    showNotif('Digite um valor antes de salvar.', 'error');
+    showNotif('Digite um valor na calculadora antes de salvar.', 'error');
     return;
   }
 
-  const margemStr = (elMargem?.value||'0').replace(',','.').trim();
-  const lucroStr  = (elLucro?.value||'0').replace(/R\$/g,'').replace(/\./g,'').replace(',','.').trim();
-  const llhStr    = (elLLH?.value||'0').replace(/R\$/g,'').replace(/\./g,'').replace(',','.').trim();
+  // Pega os valores calculados do resultado
+  const custoTotal = orcamentoAtual.itens.reduce((s,it) => s+(it.calc?.custoTotal||0), 0);
+  margemFinal = custoTotal > 0 ? ((valorFinal - custoTotal) / valorFinal * 100) : 0;
+  const lucroFinal = valorFinal - custoTotal;
 
-  // Salva no orcamentoAtual como preço negociado
-  if (!orcamentoAtual) return;
-  orcamentoAtual.valorNegociado      = valorFinal;
-  orcamentoAtual.margemNegociada     = parseFloat(margemStr) || 0;
-  orcamentoAtual.lucroNegociado      = parseFloat(lucroStr) || 0;
-  orcamentoAtual.llhNegociado        = parseFloat(llhStr) || 0;
+  // Salva no orcamentoAtual
+  orcamentoAtual.valorNegociado       = valorFinal;
+  orcamentoAtual.margemNegociada      = margemFinal;
+  orcamentoAtual.lucroNegociado       = lucroFinal;
   orcamentoAtual.usandoValorNegociado = true;
 
-  // Salva imediatamente no localStorage
-  salvarOrcamentoPedido(true); // true = silencioso (sem alert)
+  salvarOrcamentoPedido(true);
 
-  // Atualiza o header com os valores negociados
+  // Atualiza header
   const elHdrValor  = document.getElementById('hdr-valor');
   const elHdrMargem = document.getElementById('hdr-margem');
-  const elHdrLLH    = document.getElementById('hdr-llh');
+  const elHdrCusto  = document.getElementById('hdr-custo');
+  const margemWrap  = document.getElementById('hdr-margem-wrap');
+
   if (elHdrValor)  { elHdrValor.textContent = fmt(valorFinal); elHdrValor.style.color = '#FFD700'; }
-  if (elHdrMargem) {
-    elHdrMargem.textContent = orcamentoAtual.margemNegociada.toFixed(1) + '%';
-    const cor = orcamentoAtual.margemNegociada >= 30 ? '#2E7D32' : orcamentoAtual.margemNegociada >= 10 ? '#CC8800' : '#B85A4A';
-    document.getElementById('hdr-margem-wrap').style.background = cor;
+  if (elHdrMargem) { elHdrMargem.textContent = margemFinal.toFixed(1) + '%'; }
+  if (margemWrap)  {
+    margemWrap.style.background = margemFinal >= 30 ? '#2E7D32' : margemFinal >= 10 ? '#CC8800' : '#B85A4A';
   }
-  if (elHdrLLH)    { elHdrLLH.textContent = fmt(orcamentoAtual.llhNegociado) + '/h'; }
 
-  // Mostra confirmação na calculadora
-  const btnSalvar = document.getElementById('sim-btn-salvar');
-  const msgSalvo  = document.getElementById('sim-salvo-msg');
-  if (btnSalvar) { btnSalvar.style.background = '#1a6b1a'; btnSalvar.textContent = '✅ Salvo!'; }
-  if (msgSalvo)  { msgSalvo.style.display = 'block'; }
+  // Botão do rodapé → feedback visual
+  const btnFooter = document.getElementById('sim-btn-salvar-footer');
+  if (btnFooter) {
+    btnFooter.style.background = '#1a6b1a';
+    btnFooter.innerHTML = '✅ Valor salvo!';
+    setTimeout(() => {
+      btnFooter.style.background = '#2E7D32';
+      btnFooter.innerHTML = '💾 Usar este valor no orçamento';
+    }, 3000);
+  }
 
-  // Rola para o topo para o usuário ver o header atualizado
-  setTimeout(() => {
-    document.getElementById('orc-header-top')?.scrollIntoView({ behavior: 'smooth' });
-    showNotif('Valor de R$ ' + fmt(valorFinal) + ' salvo no orçamento!', 'success');
-  }, 300);
+  showNotif('✅ Valor R$ ' + fmt(valorFinal) + ' (margem ' + margemFinal.toFixed(1) + '%) salvo no orçamento!', 'success');
+  closeModal('modal-desconto-geral');
 }
 
 function simularPreco(custoTotal) {
@@ -7347,8 +7373,12 @@ function toggleOrigemOrc() {
       <button class="modal-close" onclick="closeModal('modal-desconto-geral')" style="color:white;opacity:0.7;">✕</button>
     </div>
     <div class="modal-body" id="body-desconto-geral" style="padding:20px;"></div>
-    <div class="modal-footer" style="justify-content:flex-end;">
+    <div class="modal-footer" style="justify-content:space-between;gap:10px;">
       <button class="btn-secondary" onclick="closeModal('modal-desconto-geral')">Fechar</button>
+      <button id="sim-btn-salvar-footer" onclick="salvarValorSimulado()"
+        style="background:#2E7D32;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;">
+        💾 Usar este valor no orçamento
+      </button>
     </div>
   </div>
 </div>

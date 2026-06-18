@@ -835,6 +835,11 @@ async function loadOrders() {
   hideLoading();
   if (error) { showNotif('Erro ao carregar','error'); return; }
   orders = data||[];
+  // Carrega cache de medições em paralelo
+  try {
+    const { data: meds } = await getSB().from('medicoes').select('*');
+    _medicoes = meds || [];
+  } catch(e) { _medicoes = []; }
 }
 async function nextId() {
   const { data } = await getSB().from('pedidos').select('id');
@@ -885,8 +890,8 @@ function createCard(o) {
   const p=PROFILES[currentUser];
   const showFechar = (p.canFechar && (o.stage==='medicao'||o.stage==='aguardando'||o.stage==='negociacao'));
 
-  // Verifica se tem medição agendada para este pedido
-  const medicoes = getMedicoes();
+  // Verifica se tem medição agendada para este pedido (usa cache)
+  const medicoes = _medicoes || [];
   const medicaoAgendada = o.stage==='medicao'
     ? medicoes.filter(m => m.pedidoId===o.id && m.status==='pendente').sort((a,b)=>a.data.localeCompare(b.data))
     : [];
@@ -2759,25 +2764,41 @@ function switchAgendaAba(aba) {
 }
 
 // ─── AGENDA DE MEDIÇÕES ───────────────────────────────────────────────────────
-function getMedicoes() {
-  try { return JSON.parse(localStorage.getItem('mf_medicoes')||'[]'); } catch(e){ return []; }
-}
-function salvarMedicoes(m) { localStorage.setItem('mf_medicoes', JSON.stringify(m)); }
+// Cache local das medições (sincronizado com Supabase)
+let _medicoes = null;
 
-function renderAgendaMedicao() {
+async function getMedicoes() {
+  try {
+    const { data } = await getSB().from('medicoes').select('*').order('Data', { ascending: true });
+    _medicoes = data || [];
+    return _medicoes;
+  } catch(e) {
+    // Fallback para localStorage se Supabase falhar
+    try { return JSON.parse(localStorage.getItem('mf_medicoes')||'[]'); } catch(e2){ return []; }
+  }
+}
+
+async function salvarMedicoes(lista) {
+  // Não usado mais — cada operação salva diretamente
+  _medicoes = lista;
+}
+
+async function renderAgendaMedicao() {
   const el = document.getElementById('painel-agenda-medicao');
   if (!el) return;
-  const medicoes = getMedicoes().sort((a,b) => {
-    if (a.data !== b.data) return a.data.localeCompare(b.data);
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">Carregando...</div>';
+  const todas = await getMedicoes();
+  const medicoes = todas.sort((a,b) => {
+    if (a.Data !== b.Data) return a.Data.localeCompare(b.Data);
     return (a.horario||'').localeCompare(b.horario||'');
   });
   const hoje = new Date().toISOString().substring(0,10);
   const isPerfMedidor = currentUser === 'medidor';
   
   // Agrupa: hoje, futuras, passadas
-  const hojeList = medicoes.filter(m => m.data === hoje);
-  const futuras = medicoes.filter(m => m.data > hoje);
-  const passadas = medicoes.filter(m => m.data < hoje);
+  const hojeList = medicoes.filter(m => m.Data === hoje);
+  const futuras = medicoes.filter(m => m.Data > hoje);
+  const passadas = medicoes.filter(m => m.Data < hoje);
 
   el.innerHTML = `
   <div>
@@ -2839,26 +2860,26 @@ function renderAgendaMedicao() {
 }
 
 function cardMedicao(m, isHoje, passada) {
-  const statusCor = m.status==='concluido'?'#2E7D32':m.status==='revisitar'?'#B85A4A':'#8B6914';
-  const statusLabel = m.status==='concluido'?'✅ Concluído':m.status==='revisitar'?'🔄 Revisitar':'⏳ Pendente';
-  const enderecoCompleto = [m.endereco, m.numero, m.complemento].filter(Boolean).join(', ');
-  const enderecoComBairro = [m.endereco, m.numero, m.complemento, m.bairro].filter(Boolean).join(', ');
-  const cidadeStr = m.cidade || 'Volta Redonda RJ';
+  const statusCor = m.Status==='concluido'?'#2E7D32':m.Status==='revisitar'?'#B85A4A':'#8B6914';
+  const statusLabel = m.Status==='concluido'?'✅ Concluído':m.Status==='revisitar'?'🔄 Revisitar':'⏳ Pendente';
+  const enderecoCompleto = [m.Endereco, m.Numero, m.Complemento].filter(Boolean).join(', ');
+  const enderecoComBairro = [m.Endereco, m.Numero, m.Complemento, m.Bairro].filter(Boolean).join(', ');
+  const cidadeStr = m.Cidade || 'Volta Redonda RJ';
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(enderecoComBairro+', '+cidadeStr)}`;
   const isPerfMedidor = currentUser === 'medidor';
 
   return `
-  <div style="border:1px solid ${isHoje&&m.status==='pendente'?'var(--gold)':'var(--cream-dark)'};border-radius:12px;padding:16px;margin-bottom:12px;background:${passada?'#fafafa':isHoje&&m.status==='pendente'?'white':'white'};${isHoje&&m.status==='pendente'?'box-shadow:0 2px 12px rgba(184,150,90,0.2);':''}">
+  <div style="border:1px solid ${isHoje&&m.Status==='pendente'?'var(--gold)':'var(--cream-dark)'};border-radius:12px;padding:16px;margin-bottom:12px;background:${passada?'#fafafa':isHoje&&m.Status==='pendente'?'white':'white'};${isHoje&&m.Status==='pendente'?'box-shadow:0 2px 12px rgba(184,150,90,0.2);':''}">
     
-    ${isPerfMedidor && isHoje && m.status==='pendente' ? `
+    ${isPerfMedidor && isHoje && m.Status==='pendente' ? `
     <!-- VIEW MOBILE MEDIDOR — HOJE -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <div style="background:var(--gold);color:white;padding:6px 16px;border-radius:20px;font-size:15px;font-weight:700;">🕐 ${m.horario||'Horário não definido'}</div>
+      <div style="background:var(--gold);color:white;padding:6px 16px;border-radius:20px;font-size:15px;font-weight:700;">🕐 ${m.Horario||'Horário não definido'}</div>
       <span style="background:${statusCor}22;color:${statusCor};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;">${statusLabel}</span>
     </div>
-    <div style="font-size:18px;font-weight:800;color:var(--stone);margin-bottom:6px;">${m.cliente||'—'}</div>
-    <div style="font-size:14px;color:#555;margin-bottom:4px;">📍 ${enderecoCompleto||'Endereço não informado'}${m.bairro?' · '+m.bairro:''}</div>
-    ${m.obs?`<div style="font-size:13px;color:#888;margin-bottom:12px;">💬 ${m.obs}</div>`:'<div style="margin-bottom:12px;"></div>'}
+    <div style="font-size:18px;font-weight:800;color:var(--stone);margin-bottom:6px;">${m.Cliente||'—'}</div>
+    <div style="font-size:14px;color:#555;margin-bottom:4px;">📍 ${enderecoCompleto||'Endereço não informado'}${m.Bairro?' · '+m.Bairro:''}</div>
+    ${m.Obs?`<div style="font-size:13px;color:#888;margin-bottom:12px;">💬 ${m.Obs}</div>`:'<div style="margin-bottom:12px;"></div>'}
     <a href="${mapsUrl}" target="_blank"
       style="display:flex;align-items:center;justify-content:center;gap:8px;background:#006382;color:white;text-decoration:none;padding:14px;border-radius:10px;font-size:15px;font-weight:700;margin-bottom:10px;">
       🗺️ Abrir Navegação
@@ -2877,13 +2898,13 @@ function cardMedicao(m, isHoje, passada) {
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
       <div style="flex:1;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
-          ${m.horario?`<span style="background:${isHoje?'var(--gold)':'var(--cream-dark)'};color:${isHoje?'white':'var(--stone)'};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">🕐 ${m.horario}</span>`:''}
-          <span style="font-size:11px;color:#888;">${m.data?m.data.substring(8,10)+'/'+m.data.substring(5,7)+'/'+m.data.substring(0,4):''}</span>
+          ${m.Horario?`<span style="background:${isHoje?'var(--gold)':'var(--cream-dark)'};color:${isHoje?'white':'var(--stone)'};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">🕐 ${m.Horario}</span>`:''}
+          <span style="font-size:11px;color:#888;">${m.Data?m.Data.substring(8,10)+'/'+m.Data.substring(5,7)+'/'+m.Data.substring(0,4):''}</span>
           <span style="background:${statusCor}22;color:${statusCor};padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;">${statusLabel}</span>
         </div>
-        <div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">${m.cliente||'—'}</div>
+        <div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">${m.Cliente||'—'}</div>
         <div style="font-size:13px;color:#555;">📍 ${enderecoComBairro||'Endereço não informado'}</div>
-        ${m.obs?`<div style="font-size:12px;color:#888;margin-top:4px;">💬 ${m.obs}</div>`:''}
+        ${m.Obs?`<div style="font-size:12px;color:#888;margin-top:4px;">💬 ${m.Obs}</div>`:''}
         ${m.motivoRevisita?`<div style="font-size:12px;color:#B85A4A;margin-top:4px;">🔄 ${m.motivoRevisita}</div>`:''}
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
@@ -2892,7 +2913,7 @@ function cardMedicao(m, isHoje, passada) {
           style="background:#006382;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:6px;">
           🗺️ Navegar
         </a>` : ''}
-        ${isPerfMedidor && m.status==='pendente' ? `
+        ${isPerfMedidor && m.Status==='pendente' ? `
         <button onclick="concluirMedicao('${m.id}')"
           style="background:#2E7D32;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
           ✅ Concluído
@@ -2915,13 +2936,13 @@ function cardMedicao(m, isHoje, passada) {
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
       <div style="flex:1;">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
-          ${isHoje&&m.horario?`<span style="background:var(--gold);color:white;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">🕐 ${m.horario}</span>`:''}
-          <span style="font-size:11px;color:#888;">${m.data?m.data.substring(8,10)+'/'+m.data.substring(5,7)+'/'+m.data.substring(0,4):''} ${m.horario&&!isHoje?'• '+m.horario:''}</span>
+          ${isHoje&&m.Horario?`<span style="background:var(--gold);color:white;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">🕐 ${m.Horario}</span>`:''}
+          <span style="font-size:11px;color:#888;">${m.Data?m.Data.substring(8,10)+'/'+m.Data.substring(5,7)+'/'+m.Data.substring(0,4):''} ${m.Horario&&!isHoje?'• '+m.Horario:''}</span>
           <span style="background:${statusCor}22;color:${statusCor};padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;">${statusLabel}</span>
         </div>
-        <div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">${m.cliente||'—'}</div>
+        <div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">${m.Cliente||'—'}</div>
         <div style="font-size:13px;color:#555;margin-bottom:4px;">📍 ${enderecoComBairro||'Endereço não informado'}</div>
-        ${m.obs?`<div style="font-size:12px;color:#888;font-style:italic;">💬 ${m.obs}</div>`:''}
+        ${m.Obs?`<div style="font-size:12px;color:#888;font-style:italic;">💬 ${m.Obs}</div>`:''}
         ${m.motivoRevisita?`<div style="font-size:12px;color:#B85A4A;margin-top:4px;">🔄 ${m.motivoRevisita}</div>`:''}
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
@@ -2930,7 +2951,7 @@ function cardMedicao(m, isHoje, passada) {
           style="background:#006382;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:6px;">
           🗺️ Navegar
         </a>` : ''}
-        ${isPerfMedidor && m.status === 'pendente' ? `
+        ${isPerfMedidor && m.Status === 'pendente' ? `
         <button onclick="concluirMedicao('${m.id}')"
           style="background:#2E7D32;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
           ✅ Concluído
@@ -3017,36 +3038,40 @@ function preencherClienteMedicao(pedidoId) {
   if (elEnd && !elEnd.value && order.enderecoObra) elEnd.value = order.enderecoObra;
 }
 
-function salvarAgendaMedicao() {
+async function salvarAgendaMedicao() {
   const cliente = document.getElementById('med-cliente')?.value.trim();
   const data = document.getElementById('med-data')?.value;
   const horario = document.getElementById('med-horario')?.value;
   const endereco = document.getElementById('med-endereco')?.value.trim();
   const numero = document.getElementById('med-numero')?.value.trim();
-  if (!cliente || !data || !endereco) { showNotif('Preencha cliente, data e endereço!', 'error'); return; }
+  if (!cliente || !data || !endereco) { showNotif('Preencha Cliente, data e endereço!', 'error'); return; }
 
-  const medicoes = getMedicoes();
   const editId = document.getElementById('med-edit-id')?.value;
   const dados = {
-    cliente, data, horario,
-    endereco, numero,
-    bairro: document.getElementById('med-bairro')?.value.trim(),
-    complemento: document.getElementById('med-complemento')?.value.trim(),
-    cidade: 'Volta Redonda/RJ',
-    obs: document.getElementById('med-obs')?.value.trim(),
-    pedidoId: document.getElementById('med-pedido')?.value||'',
-    status: 'pendente',
+    Cliente, Data, Horario,
+    Endereco, Numero,
+    Bairro: document.getElementById('med-bairro')?.value.trim()||'',
+    Complemento: document.getElementById('med-complemento')?.value.trim()||'',
+    Cidade: 'Volta Redonda/RJ',
+    Obs: document.getElementById('med-obs')?.value.trim()||'',
+    Pedido_id: document.getElementById('med-pedido')?.value||'',
+    Status: 'pendente',
+    Created_by: currentUser,
   };
-  if (editId) {
-    const idx = medicoes.findIndex(m => m.id === editId);
-    if (idx >= 0) medicoes[idx] = { ...medicoes[idx], ...dados };
-  } else {
-    medicoes.push({ id: 'MED-'+Date.now(), ...dados, criadoEm: new Date().toISOString() });
+
+  try {
+    if (editId) {
+      await getSB().from('medicoes').update(dados).eq('id', editId);
+    } else {
+      const novoId = 'MED-' + Date.now();
+      await getSB().from('medicoes').insert({ id: novoId, ...dados });
+    }
+    closeModal('modal-medicao-ag');
+    await renderAgendaMedicao();
+    showNotif('Medição agendada! ✓', 'success');
+  } catch(e) {
+    showNotif('Erro ao salvar: '+e.message, 'error');
   }
-  salvarMedicoes(medicoes);
-  closeModal('modal-medicao-ag');
-  renderAgendaMedicao();
-  showNotif('Medição agendada! ✓', 'success');
 }
 
 function concluirMedicao(id) {
@@ -3059,8 +3084,8 @@ function concluirMedicao(id) {
   document.getElementById('modal-body').innerHTML = `
     <input type="hidden" id="med-concluir-id" value="${id}">
     <div style="background:#f0fff4;border-radius:8px;padding:12px 16px;margin-bottom:16px;">
-      <div style="font-weight:700;color:var(--stone);">${m.cliente}</div>
-      <div style="font-size:12px;color:#888;">📍 ${[m.endereco,m.numero,m.bairro,m.complemento].filter(Boolean).join(', ')}</div>
+      <div style="font-weight:700;color:var(--stone);">${m.Cliente}</div>
+      <div style="font-size:12px;color:#888;">📍 ${[m.Endereco,m.Numero,m.Bairro,m.Complemento].filter(Boolean).join(', ')}</div>
     </div>
     <div style="display:grid;gap:14px;">
       <div>
@@ -3099,19 +3124,21 @@ async function finalizarMedicao() {
 
   if (!servico) { showNotif('Informe o que será feito!', 'error'); return; }
 
-  const medicoes = getMedicoes();
+  const medicoes = await getMedicoes();
   const idx = medicoes.findIndex(m => m.id === medId);
-  if (idx < 0) return;
+  if (idx < 0) { showNotif('Medição não encontrada!','error'); return; }
   const m = medicoes[idx];
 
   if (precisaRevisitar) {
-    // Marca para revisitar — não cria pedido ainda
-    medicoes[idx].status = 'revisitar';
-    medicoes[idx].motivoRevisita = obsFinal || 'Medidas a confirmar';
-    salvarMedicoes(medicoes);
-    closeModal('modal-detail');
-    renderAgendaMedicao();
-    showNotif('Marcado para revisitar', 'error');
+    try {
+      await getSB().from('medicoes').update({
+        Status: 'revisitar',
+        Motivo_revisita: obsFinal || 'Medidas a confirmar'
+      }).eq('id', medId);
+      closeModal('modal-detail');
+      await renderAgendaMedicao();
+      showNotif('Marcado para revisitar', 'error');
+    } catch(e) { showNotif('Erro: '+e.message,'error'); }
     return;
   }
 
@@ -3120,13 +3147,13 @@ async function finalizarMedicao() {
   const novoId = 'MRM-' + String(Math.floor(Math.random()*9000)+1000);
   const novoPedido = {
     id: novoId,
-    cliente: m.cliente,
+    Cliente: m.Cliente,
     peca: servico,
     stage: 'aguardando',
     origem: 'whatsapp',
     observacoes: obsFinal || '',
-    enderecoObra: [m.endereco, m.numero, m.bairro, m.complemento].filter(Boolean).join(', '),
-    created_by: currentUser,
+    enderecoObra: [m.Endereco, m.Numero, m.Bairro, m.Complemento].filter(Boolean).join(', '),
+    Created_by: currentUser,
     history: [{ stage:'medicao', date: new Date().toLocaleDateString('pt-BR'), user: currentUser }]
   };
 
@@ -3134,15 +3161,15 @@ async function finalizarMedicao() {
     const { data, error } = await getSB().from('pedidos').insert(novoPedido).select().single();
     if (!error && data) {
       orders.unshift(data);
-      // Marca medição como concluída e vincula ao pedido
-      medicoes[idx].status = 'concluido';
-      medicoes[idx].pedidoId = data.id;
-      medicoes[idx].servicoConcluido = servico;
-      salvarMedicoes(medicoes);
+      // Marca medição como concluída no Supabase
+      await getSB().from('medicoes').update({
+        Status: 'concluido',
+        Pedido_id: data.id,
+      }).eq('id', medId);
       hideLoading();
       closeModal('modal-detail');
       renderKanban();
-      renderAgendaMedicao();
+      await renderAgendaMedicao();
       showNotif('✅ Medição concluída! Pedido '+data.id+' criado em Aguardando Orçamento', 'success');
     }
   } catch(e) {
@@ -3151,25 +3178,26 @@ async function finalizarMedicao() {
   }
 }
 
-function solicitarRevisita(id) {
+async function solicitarRevisita(id) {
   const motivo = prompt('Motivo da revisita (opcional):');
-  if (motivo === null) return; // cancelou
-  const medicoes = getMedicoes();
-  const idx = medicoes.findIndex(m => m.id === id);
-  if (idx >= 0) {
-    medicoes[idx].status = 'revisitar';
-    medicoes[idx].motivoRevisita = motivo || 'Revisita necessária';
-  }
-  salvarMedicoes(medicoes);
-  renderAgendaMedicao();
-  showNotif('Marcado para revisitar', 'error');
+  if (motivo === null) return;
+  try {
+    await getSB().from('medicoes').update({
+      Status: 'revisitar',
+      Motivo_revisita: motivo || 'Revisita necessária'
+    }).eq('id', id);
+    await renderAgendaMedicao();
+    showNotif('Marcado para revisitar', 'error');
+  } catch(e) { showNotif('Erro: '+e.message,'error'); }
 }
 
-function excluirMedicao(id) {
+async function excluirMedicao(id) {
   if (!confirm('Excluir este agendamento?')) return;
-  salvarMedicoes(getMedicoes().filter(m => m.id !== id));
-  renderAgendaMedicao();
-  showNotif('Agendamento excluído', 'error');
+  try {
+    await getSB().from('medicoes').delete().eq('id', id);
+    await renderAgendaMedicao();
+    showNotif('Agendamento excluído', 'error');
+  } catch(e) { showNotif('Erro: '+e.message,'error'); }
 }
 
 // ─── AGENDA DE INSTALAÇÕES ────────────────────────────────────────────────────

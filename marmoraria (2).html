@@ -3095,7 +3095,7 @@ async function salvarAgendaMedicao() {
     if (editId) {
       await getSB().from('medicoes').update(dados).eq('id', editId);
     } else {
-      const novoId = 'MED-' + Date.now();
+      const novoId = Date.now(); // int8 compatível com coluna id do Supabase
       await getSB().from('medicoes').insert({ id: novoId, ...dados });
     }
     closeModal('modal-medicao-ag');

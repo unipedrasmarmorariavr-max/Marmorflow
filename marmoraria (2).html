@@ -2719,7 +2719,7 @@ function calcDataInstalacao(diasUteis) {
   return { data: dataDesejada, conflito: false };
 }
 
-function renderAgenda() {
+async function renderAgenda() {
   const el = document.getElementById('agenda-content');
   if (!el) return;
   const abaAtiva = localStorage.getItem('agenda_aba') || 'medicao';
@@ -2744,11 +2744,11 @@ function renderAgenda() {
     <div id="painel-agenda-instalacao" style="display:${abaAtiva==='instalacao'?'block':'none'}"></div>
   </div>`;
 
-  if (abaAtiva === 'medicao') renderAgendaMedicao();
+  if (abaAtiva === 'medicao') await renderAgendaMedicao();
   else renderAgendaInstalacao();
 }
 
-function switchAgendaAba(aba) {
+async function switchAgendaAba(aba) {
   localStorage.setItem('agenda_aba', aba);
   ['medicao','instalacao'].forEach(a => {
     const btn = document.getElementById('aba-'+a);
@@ -2759,7 +2759,7 @@ function switchAgendaAba(aba) {
     }
     if (panel) panel.style.display = a===aba ? 'block' : 'none';
   });
-  if (aba === 'medicao') renderAgendaMedicao();
+  if (aba === 'medicao') await renderAgendaMedicao();
   else renderAgendaInstalacao();
 }
 

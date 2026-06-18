@@ -3231,37 +3231,49 @@ async function finalizarMedicao() {
 
   // Cria pedido em "Aguardando Orçamento"
   showLoading('Criando pedido...');
-  const novoId = 'MRM-' + String(Math.floor(Math.random()*9000)+1000);
-  const novoPedido = {
-    id: novoId,
-    Cliente: m.Cliente,
-    peca: servico,
-    stage: 'aguardando',
-    origem: 'whatsapp',
-    observacoes: obsFinal || '',
-    enderecoObra: [m.Endereco, m.Numero, m.Bairro, m.Complemento].filter(Boolean).join(', '),
-    Created_by: currentUser,
-    history: [{ stage:'medicao', date: new Date().toLocaleDateString('pt-BR'), user: currentUser }]
-  };
-
   try {
+    const novoId = await nextId();
+    const obsCompleta = [
+      acesso ? 'Acesso: ' + acesso : '',
+      obsFinal || ''
+    ].filter(Boolean).join(' | ');
+
+    const novoPedido = {
+      id: novoId,
+      cliente: m.Cliente,
+      peca: servico,
+      stage: 'aguardando',
+      origem: 'whatsapp',
+      observacoes: obsCompleta,
+      endereco: [m.Endereco, m.Numero, m.Bairro, m.Complemento].filter(Boolean).join(', '),
+      history: [
+        { stage:'medicao', date: new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}), user: currentUser },
+        { stage:'aguardando', date: new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}), user: currentUser }
+      ]
+    };
+
     const { data, error } = await getSB().from('pedidos').insert(novoPedido).select().single();
-    if (!error && data) {
+    hideLoading();
+
+    if (error) {
+      showNotif('Erro ao criar pedido: ' + error.message, 'error');
+      return;
+    }
+
+    if (data) {
       orders.unshift(data);
-      // Marca medição como concluída no Supabase
       await getSB().from('medicoes').update({
         Status: 'concluido',
-        Pedido_id: data.id,
+        Pedido_id: String(data.id),
       }).eq('id', medId);
-      hideLoading();
       closeModal('modal-detail');
       renderKanban();
       await renderAgendaMedicao();
-      showNotif('✅ Medição concluída! Pedido '+data.id+' criado em Aguardando Orçamento', 'success');
+      showNotif('✅ Medição concluída! Pedido ' + data.id + ' criado.', 'success');
     }
   } catch(e) {
     hideLoading();
-    showNotif('Erro ao criar pedido: '+e.message, 'error');
+    showNotif('Erro: ' + e.message, 'error');
   }
 }
 

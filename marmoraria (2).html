@@ -5886,21 +5886,32 @@ function recalcularTelaOrc(orderId) {
 }
 
 function atualizarResumoHeader() {
-  const totalGeral = orcamentoAtual.itens.reduce((s,it) => s+(it.calc?.precoFinal||0), 0);
-  const custoTotal = orcamentoAtual.itens.reduce((s,it) => s+(it.calc?.custoTotal||0), 0);
-  const lucroTotal = orcamentoAtual.itens.reduce((s,it) => s+(it.calc?.lucroLiquido||0), 0);
-  const tpp = orcamentoAtual.itens.reduce((s,it) => s+(it.calc?.tempoProdTotal||0), 0);
-  const margem = totalGeral > 0 ? (lucroTotal/totalGeral*100) : 0;
-  const llh = tpp > 0 ? lucroTotal/tpp : 0;
-  const margemCor = margem >= 30 ? '#2E7D32' : margem >= 15 ? '#B8760A' : '#B85A4A';
-  const show = totalGeral > 0;
+  const totalCalculado = orcamentoAtual.itens.reduce((s,it) => s+(it.calc?.precoFinal||0), 0);
+  const custoTotal     = orcamentoAtual.itens.reduce((s,it) => s+(it.calc?.custoTotal||0), 0);
+  const tpp            = orcamentoAtual.itens.reduce((s,it) => s+(it.calc?.tempoProdTotal||0), 0);
+
+  // Se tem valor negociado salvo, usa ele no header
+  const usandoNeg  = orcamentoAtual.usandoValorNegociado && orcamentoAtual.valorNegociado > 0;
+  const totalGeral = usandoNeg ? orcamentoAtual.valorNegociado : totalCalculado;
+  const lucroTotal = totalGeral - custoTotal;
+  const margem     = totalGeral > 0 ? (lucroTotal / totalGeral * 100) : 0;
+  const llh        = tpp > 0 ? lucroTotal / tpp : 0;
+  const margemCor  = margem >= 30 ? '#2E7D32' : margem >= 15 ? '#B8760A' : '#B85A4A';
+  const show       = totalGeral > 0;
 
   ['hdr-custo-wrap','hdr-valor-wrap','hdr-margem-wrap','hdr-llh-wrap','hdr-btn-fechar'].forEach(id => {
     const el = document.getElementById(id); if (el) el.style.display = show ? '' : 'none';
   });
   const elC = document.getElementById('hdr-custo'); if (elC) elC.textContent = fmt(custoTotal);
-  const elV = document.getElementById('hdr-valor'); if (elV) elV.textContent = fmt(totalGeral);
-  const elM = document.getElementById('hdr-margem'); if (elM) { elM.textContent = margem.toFixed(1)+'%'; elM.parentElement.style.background = margemCor; }
+  const elV = document.getElementById('hdr-valor');
+  if (elV) {
+    elV.textContent = fmt(totalGeral);
+    // Dourado se for valor negociado, branco/padrão se for calculado
+    elV.style.color = usandoNeg ? '#FFD700' : '#FFD700';
+    if (usandoNeg) elV.title = 'Valor negociado (calculado: ' + fmt(totalCalculado) + ')';
+  }
+  const elM = document.getElementById('hdr-margem');
+  if (elM) { elM.textContent = margem.toFixed(1)+'%'; elM.parentElement.style.background = margemCor; }
   const elL = document.getElementById('hdr-llh'); if (elL) elL.textContent = fmt(llh);
 
   // Atualiza campo valor final rodapé

@@ -1404,7 +1404,7 @@ function ativarSessao(perfil) {
   var tabOrc = document.getElementById('tab-orcamento');
   if (tabOrc) tabOrc.style.display = 'none';
   var tabProd = document.getElementById('tab-produtos');
-  if (tabProd) tabProd.style.display = (currentUser === 'dono' || currentUser === 'comercial') ? '' : 'none';
+  if (tabProd) tabProd.style.display = (currentUser === 'dono' || currentUser === 'comercial' || currentUser === 'financeiro') ? '' : 'none';
   var tabCfg = document.getElementById('tab-configuracoes');
   if (tabCfg) tabCfg.style.display = (currentUser === 'dono') ? '' : 'none';
   var tabFin = document.getElementById('tab-financeiro');
@@ -1415,12 +1415,21 @@ function ativarSessao(perfil) {
   var isComercial = perfil==='comercial';
   var isProducao = perfil==='producao';
   var isMedidor = perfil==='medidor';
-  if (tabDash) tabDash.style.display = isDono ? 'block' : 'none';
-  if (tabMat) tabMat.style.display = isDono ? 'block' : 'none';
+  if (tabDash) tabDash.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
+  if (tabMat) tabMat.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
   if (tabFin) tabFin.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
-  if (tabPortal) tabPortal.style.display = isDono ? 'block' : 'none';
-  if (tabAgenda) tabAgenda.style.display = (isDono||isComercial||isProducao||isMedidor) ? 'block' : 'none';
-  if (isFinanceiro) { showTab('financeiro'); return true; }
+  if (tabPortal) tabPortal.style.display = (isDono||isComercial||isFinanceiro) ? 'block' : 'none';
+  if (tabAgenda) tabAgenda.style.display = (isDono||isComercial||isProducao||isMedidor||isFinanceiro) ? 'block' : 'none';
+  // Financeiro abre na aba financeiro por padrão, mas pode navegar em todas
+  if (isFinanceiro) {
+    var abaFin = localStorage.getItem('mf_aba');
+    if (!abaFin || abaFin === 'orcamento') abaFin = 'financeiro';
+    loadOrders().then(function() {
+      renderKanban();
+      showTab(abaFin);
+    });
+    return true;
+  }
   loadOrders().then(function() {
     renderKanban();
     // Restaura aba anterior para TODOS os perfis

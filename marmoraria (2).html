@@ -2769,11 +2769,16 @@ let _medicoes = null;
 
 async function getMedicoes() {
   try {
-    const { data } = await getSB().from('medicoes').select('*').order('Data', { ascending: true });
+    // Sem .order() remoto pois coluna 'Data' maiúscula pode falhar silenciosamente
+    // A ordenação é feita no JS após receber os dados
+    const { data, error } = await getSB().from('medicoes').select('*');
+    if (error) throw error;
     _medicoes = data || [];
     return _medicoes;
   } catch(e) {
-    // Fallback para localStorage se Supabase falhar
+    console.warn('getMedicoes fallback localStorage:', e.message);
+    // Se já tem cache em memória, usa ele
+    if (_medicoes && _medicoes.length > 0) return _medicoes;
     try { return JSON.parse(localStorage.getItem('mf_medicoes')||'[]'); } catch(e2){ return []; }
   }
 }
@@ -2970,8 +2975,8 @@ function cardMedicao(m, isHoje, passada) {
   </div>`;
 }
 
-function abrirModalMedicao(id) {
-  const medicoes = getMedicoes();
+async function abrirModalMedicao(id) {
+  const medicoes = await getMedicoes();
   const m = id ? medicoes.find(x => x.id === id) : null;
   const pedidosMedicao = orders.filter(o => o.stage === 'medicao' || o.stage === 'negociacao');
   
@@ -3077,8 +3082,8 @@ async function salvarAgendaMedicao() {
   }
 }
 
-function concluirMedicao(id) {
-  const medicoes = getMedicoes();
+async function concluirMedicao(id) {
+  const medicoes = await getMedicoes();
   const m = medicoes.find(x => x.id === id);
   if (!m) return;
 

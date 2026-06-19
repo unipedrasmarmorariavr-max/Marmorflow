@@ -846,6 +846,7 @@ async function mostrarPedidoCliente(id) {
 
 // ============ LOGIN ============
 function doLogout() {
+  pararAutoRefresh();
   currentUser=null; selectedProfile=null; perfilAtual=null;
   localStorage.removeItem('mf_sessao');
   localStorage.removeItem('mf_aba');
@@ -1460,6 +1461,12 @@ function ativarSessao(perfil) {
       localStorage.setItem('agenda_aba','medicao');
       showTab('agenda');
     }
+    // Restaura orçamento se estava aberto antes do reload
+    const orcAberto = localStorage.getItem('mf_orc_aberto');
+    if (orcAberto) {
+      setTimeout(() => abrirTelaOrcamentoPedido(orcAberto), 200);
+    }
+    iniciarAutoRefresh();
   });
   return true;
 }
@@ -1482,6 +1489,79 @@ function iniciarApp() {
 
 // window.load garante que CDN do Supabase carregou antes de restaurar sessão
 window.addEventListener('load', iniciarApp);
+
+// ── REALTIME — atualiza só quando há mudança no banco ────────────
+let _realtimeChannel = null;
+
+function iniciarAutoRefresh() {
+  if (_realtimeChannel) return;
+
+  _realtimeChannel = getSB()
+    .channel('marmorflow-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, async (payload) => {
+      // Atualiza os dados em memória sempre
+      await loadOrders();
+
+      // Se estiver dentro de um orçamento: atualiza dados por baixo sem tirar do orçamento
+      if (pedidoOrcAtual) {
+        // Só recalcula se não for o pedido que está sendo editado (evita conflito)
+        const mudouOutro = payload?.new?.id && payload.new.id !== pedidoOrcAtual;
+        if (mudouOutro) return; // outro pedido mudou, não precisa fazer nada na tela
+        return; // está no orçamento, não redireciona
+      }
+
+      // Se tiver modal aberto, não mexe na tela
+      if (document.querySelector('.modal-overlay.active')) return;
+
+      // Atualiza a aba visível
+      const abaAtiva = localStorage.getItem('mf_aba') || 'kanban';
+      if (abaAtiva === 'kanban' || !abaAtiva) {
+        renderKanban(document.getElementById('search-kanban')?.value || '');
+        mostrarNotifRefresh('📋 Pedidos atualizados');
+      } else if (abaAtiva === 'dashboard') {
+        renderDashboard();
+      } else if (abaAtiva === 'financeiro') {
+        if (typeof renderFinanceiro === 'function') renderFinanceiro();
+      }
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'medicoes' }, async () => {
+      await getMedicoes();
+      if (document.querySelector('.modal-overlay.active')) return;
+      if (pedidoOrcAtual) return;
+      const abaAtiva = localStorage.getItem('mf_aba') || 'kanban';
+      if (abaAtiva === 'agenda') {
+        renderAgendaMedicao();
+        mostrarNotifRefresh('📐 Agenda atualizada');
+      }
+      if (abaAtiva === 'kanban' || !abaAtiva) {
+        renderKanban(document.getElementById('search-kanban')?.value || '');
+      }
+    })
+    .subscribe();
+}
+
+function pararAutoRefresh() {
+  if (_realtimeChannel) {
+    getSB().removeChannel(_realtimeChannel);
+    _realtimeChannel = null;
+  }
+}
+
+// Notificação discreta de atualização (não atrapalha o fluxo)
+let _notifRefreshTimer = null;
+function mostrarNotifRefresh(msg) {
+  let el = document.getElementById('notif-refresh');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'notif-refresh';
+    el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);color:white;padding:6px 16px;border-radius:20px;font-size:12px;z-index:9999;transition:opacity .3s;pointer-events:none;';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.opacity = '1';
+  if (_notifRefreshTimer) clearTimeout(_notifRefreshTimer);
+  _notifRefreshTimer = setTimeout(() => { el.style.opacity = '0'; }, 2500);
+}
 
 
 // ============ DASHBOARD ============
@@ -4982,6 +5062,7 @@ function abrirTelaOrcamentoPedido(id) {
   const order = orders.find(o => o.id === id);
   if (!order) return;
   pedidoOrcAtual = id;
+  localStorage.setItem('mf_orc_aberto', id); // salva para restaurar após reload
 
   // Chave única = pedidoId + timestamp de criação do pedido
   // Garante que todo pedido novo começa do zero, mesmo com mesmo ID
@@ -5121,6 +5202,7 @@ function fecharTelaOrcamentoPedido() {
   document.getElementById('tab-kanban').classList.add('active');
   pedidoOrcAtual = null;
   orcamentoAtual = null; // Limpa memória ao sair — próximo pedido começa do zero
+  localStorage.removeItem('mf_orc_aberto');
 }
 
 function renderTelaOrcamentoPedido(order) {

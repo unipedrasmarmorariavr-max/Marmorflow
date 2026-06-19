@@ -5956,13 +5956,29 @@ async function salvarOrcamentoPedido(silencioso) {
     ? orcamentoAtual.valorNegociado
     : totalCalculado;
 
-  if (totalFinal > 0 && pedidoOrcAtual) {
+  if (pedidoOrcAtual) {
     const order = orders.find(o => o.id === pedidoOrcAtual);
     if (order) {
-      const valorStr = totalFinal.toFixed(2).replace('.',',');
-      await getSB().from('pedidos').update({valor: valorStr}).eq('id', pedidoOrcAtual);
-      order.valor = valorStr;
-      renderKanban(document.getElementById('search-kanban')?.value||'');
+      const updateData = {};
+      // Atualiza valor se calculado
+      if (totalFinal > 0) {
+        updateData.valor = totalFinal.toFixed(2).replace('.',',');
+        order.valor = updateData.valor;
+      }
+      // Atualiza vendedor se preenchido no orçamento
+      if (orcamentoAtual.vendedor) {
+        updateData.vendedor = orcamentoAtual.vendedor;
+        order.vendedor = orcamentoAtual.vendedor;
+      }
+      // Atualiza origem se preenchida
+      if (orcamentoAtual.origem) {
+        updateData.origem = orcamentoAtual.origem;
+        order.origem = orcamentoAtual.origem;
+      }
+      if (Object.keys(updateData).length > 0) {
+        await getSB().from('pedidos').update(updateData).eq('id', pedidoOrcAtual);
+        renderKanban(document.getElementById('search-kanban')?.value||'');
+      }
     }
   }
   if (!silencioso) showNotif('Orçamento salvo! ✓', 'success');

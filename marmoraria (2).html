@@ -1499,6 +1499,7 @@ function iniciarAutoRefresh() {
   _realtimeChannel = getSB()
     .channel('marmorflow-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, async (payload) => {
+      console.log('🔄 Realtime pedidos:', payload?.eventType, payload?.new?.id);
       // Atualiza os dados em memória sempre
       await loadOrders();
 
@@ -1537,14 +1538,37 @@ function iniciarAutoRefresh() {
         renderKanban(document.getElementById('search-kanban')?.value || '');
       }
     })
-    .subscribe();
+    .subscribe((status) => {
+      console.log('Realtime status:', status);
+    });
+
+  // Fallback: polling a cada 20s caso Realtime não funcione
+  _pollTimer = setInterval(async () => {
+    if (pedidoOrcAtual) return;
+    if (document.querySelector('.modal-overlay.active')) return;
+    if (!currentUser) return;
+    const antes = orders.map(o=>o.id+o.stage+o.valor).join();
+    await loadOrders();
+    const depois = orders.map(o=>o.id+o.stage+o.valor).join();
+    if (antes !== depois) {
+      // Houve mudança — atualiza a tela
+      const abaAtiva = localStorage.getItem('mf_aba') || 'kanban';
+      if (abaAtiva === 'kanban' || !abaAtiva) renderKanban(document.getElementById('search-kanban')?.value||'');
+      else if (abaAtiva === 'dashboard') renderDashboard();
+      else if (abaAtiva === 'financeiro' && typeof renderFinanceiro==='function') renderFinanceiro();
+      mostrarNotifRefresh('📋 Pedidos atualizados');
+    }
+  }, 20000);
 }
+
+let _pollTimer = null;
 
 function pararAutoRefresh() {
   if (_realtimeChannel) {
     getSB().removeChannel(_realtimeChannel);
     _realtimeChannel = null;
   }
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
 }
 
 // Notificação discreta de atualização (não atrapalha o fluxo)

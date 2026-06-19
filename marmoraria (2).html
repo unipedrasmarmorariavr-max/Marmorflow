@@ -1662,11 +1662,15 @@ function renderDashboard() {
   // ── Função para ranking ────────────────────────────────────────────────────
   const ranking = (lista, campo, titulo, emoji) => {
     const map = {};
+    const nomes = {}; // guarda o nome original formatado
     lista.forEach(o => {
-      const k = (o[campo]||'Não informado').trim() || 'Não informado';
-      if (!map[k]) map[k] = { qtd:0, valor:0 };
-      map[k].qtd++;
-      map[k].valor += parseValor(o);
+      const raw = (o[campo]||'').trim();
+      if (!raw) return; // ignora sem vendedor
+      const chave = normalizarChaveRanking(raw); // chave sem case
+      const nomeFormatado = normalizarNome(raw);  // exibe em Title Case
+      if (!map[chave]) { map[chave] = { qtd:0, valor:0 }; nomes[chave] = nomeFormatado; }
+      map[chave].qtd++;
+      map[chave].valor += parseValor(o);
     });
     const sorted = Object.entries(map).sort((a,b) => b[1].valor - a[1].valor).slice(0,8);
     const maxValor = sorted[0]?.[1]?.valor || 1;
@@ -1674,7 +1678,8 @@ function renderDashboard() {
     return `
     <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;">
       <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:16px;">${emoji} ${titulo}</div>
-      ${sorted.map(([nome, v], i) => `
+      ${sorted.length === 0 ? '<div style="color:#888;font-size:13px;text-align:center;padding:20px;">Sem dados no período</div>' : ''}
+      ${sorted.map(([chave, v], i) => { const nome = nomes[chave] || chave; return `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
         <div style="font-size:18px;min-width:28px;">${medalhas[i]||'#'+(i+1)}</div>
         <div style="flex:1;">
@@ -1687,8 +1692,7 @@ function renderDashboard() {
           </div>
           <div style="font-size:11px;color:var(--stone-light);margin-top:2px;">${fmt(v.valor)}</div>
         </div>
-      </div>`).join('')}
-      ${sorted.length === 0 ? '<div style="color:#888;font-size:13px;text-align:center;padding:20px;">Sem dados no período</div>' : ''}
+      </div>`; }).join('')}
     </div>`;
   };
 
@@ -2605,7 +2609,7 @@ async function renderFinanceiro() {
     <!-- PAINEL A RECEBER -->
     <div id="fin-painel-receber" style="display:${abaFin==='receber'?'block':'none'}">
       <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
-        <div style="background:#8B6914;color:white;padding:14px 20px;display:flex;justify-content:space-between;">
+        <div style="background:#8B6914;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
           <div style="font-size:14px;font-weight:700;">📋 A Receber — Pedidos Fechados</div>
           <div style="font-size:12px;opacity:.8;">${aReceber.length} pedido(s) · ${fmtV(totalAReceber)}</div>
         </div>
@@ -2613,43 +2617,104 @@ async function renderFinanceiro() {
         aReceber.map(o => {
           const valor = parseValor(o);
           const recebimentos = transacoes.filter(t => t.pedido_id === o.id && t.tipo === 'entrada');
-          const totalRecebido = recebimentos.reduce((s,t) => s+(parseFloat(t.valor)||0), 0);
+          const totalLiquido  = recebimentos.reduce((s,t) => s+(parseFloat(t.valor)||0), 0);
+          const totalBruto    = recebimentos.reduce((s,t) => s+(parseFloat(t.valor_bruto||t.valor)||0), 0);
+          const totalTaxas    = recebimentos.reduce((s,t) => s+(parseFloat(t.taxa_valor)||0), 0);
+          const totalRecebido = totalBruto; // para cálculo de saldo usa bruto (o que o cliente pagou)
           const saldoPedido = valor - totalRecebido;
           const statusCor = totalRecebido===0?'#8B6914':saldoPedido<=0?'#2E7D32':'#006382';
           const statusLabel = totalRecebido===0?'Pendente':saldoPedido<=0?'Recebido ✅':'Parcial';
           return `
-          <div style="padding:14px 20px;border-bottom:1px solid var(--cream-dark);">
-            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-              <div style="flex:1;min-width:200px;">
-                <div style="font-size:14px;font-weight:700;color:var(--stone);">${o.cliente||'—'}</div>
-                <div style="font-size:12px;color:#888;">${o.id} · ${o.peca||''}</div>
+          <div style="padding:16px 20px;border-bottom:1px solid var(--cream-dark);">
+            <!-- Linha 1: Cliente + valor + status -->
+            <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+              <div style="flex:1;min-width:180px;">
+                <div style="font-size:15px;font-weight:700;color:var(--stone);">${o.cliente||'—'}</div>
+                <div style="font-size:12px;color:#888;margin-top:2px;">${o.id} · ${o.peca||''}</div>
+                ${o.vendedor?`<div style="font-size:11px;color:#006382;margin-top:2px;">👤 ${o.vendedor}</div>`:''}
               </div>
-              <div style="text-align:right;min-width:110px;">
-                <div style="font-size:12px;color:#888;">Orçamento</div>
-                <div style="font-size:16px;font-weight:700;color:var(--stone);">${fmtV(valor)}</div>
+              <div style="text-align:right;">
+                <div style="font-size:11px;color:#888;">VALOR TOTAL</div>
+                <div style="font-size:18px;font-weight:800;color:var(--stone);">${fmtV(valor)}</div>
               </div>
-              ${totalRecebido>0?`
-              <div style="text-align:right;min-width:110px;">
-                <div style="font-size:12px;color:#888;">Recebido</div>
-                <div style="font-size:16px;font-weight:700;color:#2E7D32;">${fmtV(totalRecebido)}</div>
-              </div>
-              <div style="text-align:right;min-width:110px;">
-                <div style="font-size:12px;color:#888;">Falta</div>
-                <div style="font-size:16px;font-weight:700;color:${saldoPedido>0?'#B85A4A':'#2E7D32'};">${fmtV(Math.max(0,saldoPedido))}</div>
-              </div>`:''}
-              <div style="display:flex;align-items:center;gap:8px;">
-                <span style="background:${statusCor}22;color:${statusCor};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;">${statusLabel}</span>
-                ${saldoPedido>0?`<button onclick="abrirConfirmarRecebimento('${o.id}','${o.cliente}',${saldoPedido.toFixed(2)})"
-                  style="background:#2E7D32;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">✓ Receber</button>`:''}
-              </div>
+              <span style="background:${statusCor}22;color:${statusCor};padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;align-self:center;">${statusLabel}</span>
             </div>
-            ${recebimentos.length>0?`
-            <div style="margin-top:8px;padding:8px 12px;background:#f8f8f8;border-radius:8px;">
-              ${recebimentos.map(r=>`<div style="display:flex;justify-content:space-between;font-size:12px;color:#555;margin-bottom:2px;">
-                <span>${fmtDt(r.data)} · ${r.forma||''} · ${r.banco||''}</span>
-                <span style="font-weight:700;color:#2E7D32;">+${fmtV(r.valor)}</span>
-              </div>`).join('')}
+
+            <!-- Barra de progresso -->
+            ${valor>0?`
+            <div style="margin-bottom:10px;">
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:#888;margin-bottom:4px;">
+                <span>Recebido: <b style="color:#2E7D32;">${fmtV(totalRecebido)}</b></span>
+                <span>Falta: <b style="color:${saldoPedido>0?'#B85A4A':'#2E7D32'};">${fmtV(Math.max(0,saldoPedido))}</b></span>
+              </div>
+              <div style="background:#e0e0e0;border-radius:20px;height:8px;overflow:hidden;">
+                <div style="width:${Math.min(100,Math.round(totalRecebido/valor*100))}%;height:100%;background:${saldoPedido<=0?'#2E7D32':'#006382'};border-radius:20px;transition:width .3s;"></div>
+              </div>
+              <div style="font-size:10px;color:#888;margin-top:2px;text-align:right;">${Math.min(100,Math.round(totalRecebido/valor*100))}% recebido</div>
             </div>`:''}
+
+            <!-- Histórico de recebimentos -->
+            ${recebimentos.length>0?`
+            <div style="background:#f5fdf5;border-radius:8px;padding:8px 12px;margin-bottom:10px;">
+              <div style="font-size:11px;font-weight:600;color:#2E7D32;margin-bottom:4px;">💰 Recebimentos registrados</div>
+              ${recebimentos.map(r=>{
+                const bruto   = parseFloat(r.valor_bruto||r.valor)||0;
+                const liquido = parseFloat(r.valor)||0;
+                const taxa    = parseFloat(r.taxa_valor)||0;
+                const parc    = parseInt(r.parcelas)||1;
+                return `
+              <div style="border-bottom:1px solid #e8f5e8;padding:6px 0;margin-bottom:4px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;">
+                  <span>📅 ${fmtDt(r.data)} · <b>${r.forma||'—'}</b>${r.banco?' · '+r.banco:''}${parc>1?' · '+parc+'x':''}</span>
+                  <div style="text-align:right;">
+                    <div style="font-weight:700;color:#2E7D32;">+${fmtV(bruto)} bruto</div>
+                    ${taxa>0?`<div style="font-size:11px;color:#B85A4A;">- ${fmtV(taxa)} taxa → <b>${fmtV(liquido)} líquido</b></div>`:''}
+                  </div>
+                </div>
+              </div>`; }).join('')}
+              ${totalTaxas>0?`<div style="font-size:11px;color:#B85A4A;text-align:right;padding-top:4px;border-top:1px solid #ddd;">Total em taxas: <b>- ${fmtV(totalTaxas)}</b> · Líquido na conta: <b style="color:#2E7D32;">${fmtV(totalLiquido)}</b></div>`:''}
+            </div>`:''}
+
+            <!-- Parcelas previstas -->
+            ${(() => {
+              const parcelasPrev = (o.parcelas_previstas||[]);
+              if (parcelasPrev.length > 0) {
+                const hoje = new Date().toISOString().substring(0,10);
+                return `<div style="margin-bottom:10px;">
+                  <div style="font-size:11px;font-weight:700;color:#8B6914;margin-bottom:6px;">📅 CONDIÇÕES DE PAGAMENTO</div>
+                  ${parcelasPrev.map((p,i) => {
+                    const vencida = p.data && p.data < hoje && !p.pago;
+                    const cor = p.pago ? '#2E7D32' : vencida ? '#B85A4A' : '#006382';
+                    return `<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:${p.pago?'#f0fff4':vencida?'#fff5f5':'#f8f8f8'};border-radius:8px;margin-bottom:4px;border-left:3px solid ${cor};">
+                      <div style="flex:1;">
+                        <span style="font-size:12px;font-weight:700;color:${cor};">${p.descricao||'Parcela '+(i+1)}</span>
+                        ${p.data?`<span style="font-size:11px;color:#888;margin-left:6px;">📅 ${fmtDt(p.data)}</span>`:''}
+                      </div>
+                      <span style="font-size:13px;font-weight:700;color:${cor};">${fmtV(p.valor)}</span>
+                      ${!p.pago?`<button onclick="darBaixaParcela('${o.id}',${i},${p.valor},'${o.cliente}')"
+                        style="background:${cor};color:white;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;">
+                        💵 Baixa
+                      </button>`:`<span style="font-size:11px;color:#2E7D32;font-weight:600;">✅ Pago</span>`}
+                    </div>`;
+                  }).join('')}
+                </div>`;
+              }
+              return '';
+            })()}
+
+            <!-- Botões de ação -->
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              ${saldoPedido>0?`
+              <button onclick="abrirDefinirParcelas('${o.id}','${o.cliente}',${valor},${saldoPedido.toFixed(2)})"
+                style="flex:1;background:#8B6914;color:white;border:none;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">
+                📅 Definir Condições
+              </button>
+              <button onclick="abrirConfirmarRecebimento('${o.id}','${o.cliente}',${saldoPedido.toFixed(2)})"
+                style="flex:1;background:#2E7D32;color:white;border:none;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">
+                💵 Registrar Entrada
+              </button>`:`
+              <div style="text-align:center;font-size:13px;color:#2E7D32;font-weight:600;width:100%;">✅ Totalmente recebido!</div>`}
+            </div>
           </div>`;
         }).join('')}
       </div>
@@ -2749,73 +2814,288 @@ function abrirConfirmarRecebimento(pedidoId, cliente, valorEsperado) {
     </div>
     <div style="display:grid;gap:14px;">
       <div>
-        <label class="form-label">Valor Real Recebido (R$) *</label>
+        <label class="form-label">💵 VALOR QUE ENTROU AGORA (R$) *</label>
         <input class="form-input" id="rec-valor" type="number" step="0.01"
           value="${valorEsperado.toFixed(2)}"
-          style="font-size:20px;font-weight:700;border:2px solid #2E7D32;"
+          style="font-size:22px;font-weight:800;border:2px solid #2E7D32;text-align:center;"
+          oninput="atualizarLiquidoRecebimento()"
           placeholder="0,00">
-        <div style="font-size:11px;color:#888;margin-top:4px;">💡 Ajuste se houve taxa de cartão, desconto ou parcelamento</div>
+        <div style="font-size:11px;color:#888;margin-top:4px;">💡 Coloque só o que caiu na conta agora. Se parcelado, registre cada entrada separado.</div>
       </div>
       <div>
-        <label class="form-label">Forma de Pagamento *</label>
-        <select class="form-select" id="rec-forma">
-          <option value="">Selecione...</option>
-          <option value="Pix">Pix</option>
-          <option value="Dinheiro">Dinheiro</option>
-          <option value="Cartão Débito">Cartão Débito</option>
-          <option value="Cartão Crédito">Cartão Crédito</option>
-          <option value="Transferência">Transferência</option>
-          <option value="Boleto">Boleto</option>
-          <option value="Parcelado">Parcelado</option>
-        </select>
+        <label class="form-label">FORMA DE PAGAMENTO *</label>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px;" id="rec-formas-grid">
+          ${['Pix','Dinheiro','Transferência','Cartão Débito','Cartão Crédito','Boleto','Cheque','Outro'].map(f=>`
+          <label class="rec-forma-btn" style="display:flex;align-items:center;gap:6px;background:#f5f5f5;border:2px solid #ddd;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:12px;font-weight:600;">
+            <input type="radio" name="rec-forma-radio" value="${f}" style="accent-color:#2E7D32;"> ${f}
+          </label>`).join('')}
+        </div>
+      </div>
+      <div id="rec-parcelas-wrap" style="display:none;">
+        <label class="form-label">Nº DE PARCELAS</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input class="form-input" id="rec-parcelas" type="number" min="1" max="48" value="1"
+            style="width:80px;text-align:center;font-size:18px;font-weight:700;"
+            oninput="atualizarValorParcela(${valorEsperado.toFixed(2)})">
+          <div>
+            <div style="font-size:12px;color:#888;">Valor por parcela:</div>
+            <div style="font-size:16px;font-weight:700;color:#006382;" id="rec-val-parcela">R$ ${valorEsperado.toFixed(2).replace('.',',')}</div>
+          </div>
+        </div>
       </div>
       <div>
-        <label class="form-label">Banco *</label>
+        <label class="form-label">BANCO *</label>
         <select class="form-select" id="rec-banco">
           <option value="">Selecione...</option>
           ${bancos.map(b => `<option value="${b.nome}">${b.nome}</option>`).join('')}
         </select>
       </div>
       <div>
-        <label class="form-label">Data do Recebimento *</label>
+        <label class="form-label">DATA DO RECEBIMENTO *</label>
         <input class="form-input" id="rec-data" type="date" value="${new Date().toISOString().substring(0,10)}">
       </div>
+      <!-- Taxa bancária -->
+      <div style="background:#fff8e7;border-radius:10px;padding:12px 14px;">
+        <label class="form-label" style="color:#8B6914;">💳 TAXA BANCÁRIA / DESCONTO (%)</label>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:6px;">
+          <input class="form-input" id="rec-taxa" type="number" step="0.01" min="0" max="100" value="0"
+            style="width:100px;text-align:center;font-size:18px;font-weight:700;"
+            oninput="atualizarLiquidoRecebimento()">
+          <div style="flex:1;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:2px;">
+              <span>Valor bruto:</span>
+              <span id="rec-bruto-txt" style="font-weight:600;">—</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:#B85A4A;margin-bottom:2px;">
+              <span>Taxa:</span>
+              <span id="rec-taxa-txt" style="font-weight:600;">R$ 0,00</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:14px;color:#2E7D32;border-top:1px solid #ddd;padding-top:4px;margin-top:4px;">
+              <span><b>Líquido na conta:</b></span>
+              <span id="rec-liquido-txt" style="font-weight:800;">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div>
-        <label class="form-label">Observação</label>
-        <input class="form-input" id="rec-obs" placeholder="Ex: 2x no cartão, taxa 2.5%...">
+        <label class="form-label">OBSERVAÇÃO</label>
+        <input class="form-input" id="rec-obs" placeholder="Ex: 3x crédito, taxa 2.5%, entrada de 500...">
       </div>
     </div>`;
-  openModal('modal-recebimento');
+
+  // Interatividade dos botões de forma de pagamento
+  setTimeout(() => {
+    atualizarLiquidoRecebimento(); // inicializa os cálculos
+    document.querySelectorAll('input[name="rec-forma-radio"]').forEach(rb => {
+      rb.addEventListener('change', function() {
+        document.querySelectorAll('.rec-forma-btn').forEach(l => { l.style.borderColor='#ddd'; l.style.background='#f5f5f5'; });
+        this.closest('label').style.borderColor='#2E7D32';
+        this.closest('label').style.background='#f0fff4';
+        const pw = document.getElementById('rec-parcelas-wrap');
+        if (pw) pw.style.display = this.value==='Cartão Crédito' ? 'block' : 'none';
+      });
+    });
+  }, 100);
+
+    openModal('modal-recebimento');
+}
+
+// ─── CONDIÇÕES DE PAGAMENTO / PARCELAS PREVISTAS ──────────────────────────
+
+function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
+  document.getElementById('detail-title').textContent = '📅 Condições de Pagamento';
+  document.getElementById('detail-body').innerHTML = `
+    <input type="hidden" id="parc-pedido-id" value="${pedidoId}">
+    <div style="background:#fff8e7;border-radius:8px;padding:12px;margin-bottom:14px;">
+      <div style="font-weight:700;color:var(--stone);">${cliente} — ${pedidoId}</div>
+      <div style="font-size:13px;color:#888;">Valor total: <b>${fmtV(valorTotal)}</b> · Falta receber: <b style="color:#B85A4A;">${fmtV(saldo)}</b></div>
+    </div>
+
+    <!-- Modelos prontos -->
+    <div style="margin-bottom:14px;">
+      <label class="form-label">MODELO RÁPIDO</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
+        <button onclick="aplicarModeloParcelas(${saldo},[[50,'Entrada'],[50,'Entrega']])"
+          style="background:#f0f0f0;border:2px solid #ddd;border-radius:8px;padding:10px;cursor:pointer;font-size:12px;font-weight:600;">
+          50% Entrada<br>50% Entrega
+        </button>
+        <button onclick="aplicarModeloParcelas(${saldo},[[100,'À Vista']])"
+          style="background:#f0f0f0;border:2px solid #ddd;border-radius:8px;padding:10px;cursor:pointer;font-size:12px;font-weight:600;">
+          100% À Vista
+        </button>
+        <button onclick="aplicarModeloParcelas(${saldo},[[30,'Entrada'],[70,'Entrega']])"
+          style="background:#f0f0f0;border:2px solid #ddd;border-radius:8px;padding:10px;cursor:pointer;font-size:12px;font-weight:600;">
+          30% Entrada<br>70% Entrega
+        </button>
+        <button onclick="aplicarModeloParcelas(${saldo},[[33,'Entrada'],[33,'Execução'],[34,'Entrega']])"
+          style="background:#f0f0f0;border:2px solid #ddd;border-radius:8px;padding:10px;cursor:pointer;font-size:12px;font-weight:600;">
+          33%/33%/34%<br>3 etapas
+        </button>
+      </div>
+    </div>
+
+    <!-- Parcelas customizadas -->
+    <div>
+      <label class="form-label">PARCELAS PREVISTAS</label>
+      <div id="parc-lista" style="margin-top:6px;"></div>
+      <button onclick="adicionarLinhaParcela(${saldo})"
+        style="background:#006382;color:white;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:8px;width:100%;">
+        + Adicionar Parcela
+      </button>
+    </div>`;
+
+  document.getElementById('detail-footer').innerHTML = `
+    <button class="btn-secondary" onclick="closeModal('modal-detail')">Cancelar</button>
+    <button onclick="salvarCondicoesPagamento()"
+      style="background:#2E7D32;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">
+      💾 Salvar Condições
+    </button>`;
+  openModal('modal-detail');
+  adicionarLinhaParcela(saldo); // começa com uma linha
+}
+
+function aplicarModeloParcelas(total, modelo) {
+  const lista = document.getElementById('parc-lista');
+  if (!lista) return;
+  lista.innerHTML = '';
+  modelo.forEach(([pct, desc]) => {
+    const val = (total * pct / 100).toFixed(2);
+    adicionarLinhaParcela(total, desc, val);
+  });
+}
+
+function adicionarLinhaParcela(total, descricao='', valor='') {
+  const lista = document.getElementById('parc-lista');
+  if (!lista) return;
+  const idx = lista.children.length;
+  const div = document.createElement('div');
+  div.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center;';
+  div.innerHTML = `
+    <input class="form-input" placeholder="Descrição (ex: Entrada)" value="${descricao}" style="font-size:13px;padding:7px 10px;">
+    <input class="form-input" type="number" placeholder="Valor R$" value="${valor}" step="0.01" style="font-size:13px;padding:7px 10px;">
+    <input class="form-input" type="date" style="font-size:13px;padding:7px 10px;">
+    <button onclick="this.closest('div').remove()"
+      style="background:#dc3545;color:white;border:none;padding:7px 10px;border-radius:6px;cursor:pointer;">✕</button>`;
+  lista.appendChild(div);
+}
+
+async function salvarCondicoesPagamento() {
+  const pedidoId = document.getElementById('parc-pedido-id')?.value;
+  const linhas = document.getElementById('parc-lista')?.children;
+  if (!linhas || !pedidoId) return;
+
+  const parcelas = Array.from(linhas).map(row => {
+    const inputs = row.querySelectorAll('input');
+    return {
+      descricao: inputs[0]?.value.trim() || 'Parcela',
+      valor: parseFloat(inputs[1]?.value) || 0,
+      data: inputs[2]?.value || '',
+      pago: false
+    };
+  }).filter(p => p.valor > 0);
+
+  if (parcelas.length === 0) { showNotif('Adicione ao menos uma parcela!', 'error'); return; }
+
+  showLoading('Salvando...');
+  const { error } = await getSB().from('pedidos').update({ parcelas_previstas: parcelas }).eq('id', pedidoId);
+  hideLoading();
+
+  if (error) { showNotif('Erro: ' + error.message, 'error'); return; }
+
+  // Atualiza em memória
+  const order = orders.find(o => o.id === pedidoId);
+  if (order) order.parcelas_previstas = parcelas;
+
+  closeModal('modal-detail');
+  renderFinanceiro();
+  showNotif('Condições de pagamento salvas! ✓', 'success');
+}
+
+async function darBaixaParcela(pedidoId, parcelaIdx, valor, cliente) {
+  abrirConfirmarRecebimento(pedidoId, cliente, valor);
+  // Marca a parcela como paga após confirmar
+  window._baixaParcela = { pedidoId, parcelaIdx };
+}
+
+function atualizarValorParcela(total) {
+  const n = parseInt(document.getElementById('rec-parcelas')?.value)||1;
+  const parcela = total / n;
+  const el = document.getElementById('rec-val-parcela');
+  if (el) el.textContent = 'R$ ' + parcela.toFixed(2).replace('.',',');
+  atualizarLiquidoRecebimento();
+}
+
+function atualizarLiquidoRecebimento() {
+  const bruto  = parseFloat(document.getElementById('rec-valor')?.value)||0;
+  const taxa   = parseFloat(document.getElementById('rec-taxa')?.value)||0;
+  const taxaVal = bruto * taxa / 100;
+  const liquido = bruto - taxaVal;
+
+  const fmtR = v => 'R$ ' + v.toFixed(2).replace('.',',');
+  const elBruto   = document.getElementById('rec-bruto-txt');
+  const elTaxa    = document.getElementById('rec-taxa-txt');
+  const elLiquido = document.getElementById('rec-liquido-txt');
+
+  if (elBruto)   elBruto.textContent   = fmtR(bruto);
+  if (elTaxa)    elTaxa.textContent    = '- ' + fmtR(taxaVal);
+  if (elLiquido) elLiquido.textContent = fmtR(liquido);
 }
 
 async function confirmarRecebimento() {
   const pedidoId = document.getElementById('rec-pedido-id')?.value;
-  const valor = parseFloat(document.getElementById('rec-valor')?.value)||0;
-  const forma = document.getElementById('rec-forma')?.value;
-  const banco = document.getElementById('rec-banco')?.value;
-  const data = document.getElementById('rec-data')?.value;
-  const obs = document.getElementById('rec-obs')?.value.trim();
+  const valorBruto = parseFloat(document.getElementById('rec-valor')?.value)||0;
+  const taxa    = parseFloat(document.getElementById('rec-taxa')?.value)||0;
+  const taxaVal = valorBruto * taxa / 100;
+  const valorLiquido = valorBruto - taxaVal;
+  const forma   = document.querySelector('input[name="rec-forma-radio"]:checked')?.value || '';
+  const banco   = document.getElementById('rec-banco')?.value;
+  const data    = document.getElementById('rec-data')?.value;
+  const obs     = document.getElementById('rec-obs')?.value.trim();
+  const parcelas = parseInt(document.getElementById('rec-parcelas')?.value)||1;
 
-  if (!valor || valor <= 0) { showNotif('Informe o valor recebido!', 'error'); return; }
+  if (!valorBruto || valorBruto <= 0) { showNotif('Informe o valor recebido!', 'error'); return; }
   if (!forma) { showNotif('Selecione a forma de pagamento!', 'error'); return; }
   if (!banco) { showNotif('Selecione o banco!', 'error'); return; }
   if (!data) { showNotif('Informe a data!', 'error'); return; }
 
   const order = orders.find(o => o.id === pedidoId);
+  const obsCompleta = [
+    obs,
+    taxa > 0 ? `Taxa ${taxa}% = R$ ${taxaVal.toFixed(2).replace('.',',')}` : '',
+    forma === 'Cartão Crédito' && parcelas > 1 ? `${parcelas}x de R$ ${(valorBruto/parcelas).toFixed(2).replace('.',',')}` : ''
+  ].filter(Boolean).join(' | ');
+
   showLoading('Salvando...');
   await getSB().from('transacoes').insert({
     tipo: 'entrada',
-    valor,
+    valor: valorLiquido,        // líquido (após taxa) é o que entra na conta
+    valor_bruto: valorBruto,    // bruto (o que o cliente pagou)
+    taxa_percentual: taxa,
+    taxa_valor: taxaVal,
+    parcelas: forma === 'Cartão Crédito' ? parcelas : 1,
     descricao: `Recebimento — ${order?.cliente||pedidoId}`,
     data,
     banco,
     forma,
-    observacao: obs,
+    observacao: obsCompleta,
     pedido_id: pedidoId,
     created_by: currentUser
   });
   hideLoading();
   closeModal('modal-recebimento');
+
+  // Se veio de uma baixa de parcela, marca como paga
+  if (window._baixaParcela) {
+    const { pedidoId: pid, parcelaIdx } = window._baixaParcela;
+    window._baixaParcela = null;
+    const order = orders.find(o => o.id === pid);
+    if (order && order.parcelas_previstas && order.parcelas_previstas[parcelaIdx]) {
+      order.parcelas_previstas[parcelaIdx].pago = true;
+      await getSB().from('pedidos').update({ parcelas_previstas: order.parcelas_previstas }).eq('id', pid);
+    }
+  }
+
   renderFinanceiro();
   showNotif('Recebimento confirmado! ✓', 'success');
 }
@@ -7475,12 +7755,17 @@ function salvarTodosTempos() {
 // ─── NORMALIZAÇÃO DE NOMES ───────────────────────────────────────────────────
 function normalizarNome(nome) {
   if (!nome) return '';
-  // Remove acentos, converte para Title Case, normaliza espaços
+  // Normaliza para Title Case consistente (Denise, DENISE, denise → Denise)
   return nome.trim()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
     .replace(/\s+/g, ' ')
-    .replace(/\w/g, c => c.toUpperCase());
+    .replace(/(?:^|\s)\S/g, c => c.toUpperCase());
+}
+
+// Para comparação no ranking — ignora maiúsculas/minúsculas e espaços extras
+function normalizarChaveRanking(nome) {
+  if (!nome) return 'nao informado';
+  return nome.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 function nomesSaoIguais(a, b) {

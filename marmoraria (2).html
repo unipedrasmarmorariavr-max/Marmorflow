@@ -242,11 +242,6 @@
     .agenda-tabs button { font-size: 13px !important; padding: 8px 14px !important; }
     #painel-agenda-medicao, #painel-agenda-instalacao { padding: 0 !important; }
 
-    /* Cards de medição */
-    [style*="display:grid"][style*="align-items:center"][style*="gap:12px"] {
-      display: flex !important; flex-direction: column !important; align-items: stretch !important;
-    }
-
     /* ── DASHBOARD ──────────────────────────────────── */
     #panel-dashboard { padding: 10px !important; }
     .dashboard-cards { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
@@ -314,16 +309,12 @@
 
     /* Cabeçalho do orçamento - 1 coluna */
     #orc-campos-header { grid-template-columns: 1fr !important; }
-    #orc-campos-linha2 { grid-template-columns: 1fr 1fr !important; }
-    #orc-campos-linha2 > div:nth-child(3),
-    #orc-campos-linha2 > div:nth-child(4) { grid-column: 1 / -1 !important; }
+    #orc-campos-linha2 { grid-template-columns: 1fr !important; }
+    #orc-campos-linha4 { grid-template-columns: 1fr !important; }
 
-    /* Item do orçamento */
-    [style*="grid-template-columns:1fr 1.5fr 1fr auto"] {
+    /* Item do orçamento — cabeçalho (Nome/Ambiente/Tipo entrega/...) */
+    .item-orcamento-grid {
       grid-template-columns: 1fr 1fr !important;
-    }
-    [style*="grid-template-columns:1fr 1.5fr 1fr auto"] > div:last-child {
-      grid-column: 1 / -1 !important;
     }
 
     /* Peça a Peça */
@@ -334,13 +325,20 @@
     [id^="pecas-lista-"] input { font-size: 13px !important; padding: 5px 6px !important; }
 
     /* Campos de acabamento — 2 colunas */
-    .acabamentos-grid,
-    [style*="grid-template-columns:repeat(5"] {
+    .acabamentos-grid {
       grid-template-columns: 1fr 1fr !important;
     }
 
     /* Custos adicionais — 2 colunas */
     .custos-adicionais-grid { grid-template-columns: 1fr 1fr !important; }
+
+    /* Calendário da agenda — mantém 5 colunas (dias úteis), só encolhe */
+    .agenda-cal-grid { gap: 4px !important; }
+    .agenda-cal-grid > div { min-height: 56px !important; padding: 6px !important; font-size: 10px !important; }
+    .agenda-cal-grid > div div { font-size: 9px !important; }
+
+    /* Cards resumo do financeiro — 2 colunas em vez de 5 */
+    #fin-cards-resumo { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
 
     /* Materiais linha */
     .materiais-linha { grid-template-columns: 1fr 1fr !important; gap: 6px !important; }
@@ -2544,7 +2542,7 @@ async function renderFinanceiro() {
     </div>
 
     <!-- CARDS RESUMO -->
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;">
+    <div id="fin-cards-resumo" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;">
       <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid #2E7D32;">
         <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Entradas</div>
         <div style="font-size:20px;font-weight:800;color:#2E7D32;">${fmtV(totalEntradas)}</div>
@@ -3864,11 +3862,11 @@ function renderAgendaInstalacao() {
     </div>
 
     <div style="background:white;border-radius:16px;padding:20px;box-shadow:var(--shadow);margin-bottom:20px;">
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">
+      <div class="agenda-cal-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">
         ${diasSemana.map(d=>`<div style="text-align:center;font-size:11px;font-weight:700;color:var(--stone-light);text-transform:uppercase;">${d}</div>`).join('')}
       </div>
       ${semanas.map(sem => `
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px;">
+      <div class="agenda-cal-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px;">
         ${sem.map(dia => {
           const dd = new Date(dia.data+'T12:00:00');
           const isHoje = dateToStr(dd) === dateToStr(new Date());
@@ -5649,7 +5647,7 @@ function renderTelaOrcamentoPedido(order) {
         </div>
 
         <!-- Linha 4: Profissional · Responsável -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div id="orc-campos-linha4" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
             <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">PROFISSIONAL DO PROJETO <span style="font-size:9px;color:#999;font-weight:400;">(arquiteto, designer...)</span></label>
             <input class="form-input" value="${orc.profissional||order.origemNome||''}"
@@ -5902,7 +5900,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
     <!-- Cabeçalho do item -->
     <div style="background:#f8f8f8;border-bottom:1px solid #e0e0e0;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
       <div style="font-size:13px;font-weight:700;color:#333;min-width:60px;">ITEM ${idx+1}</div>
-      <div style="flex:1;display:grid;grid-template-columns:1.5fr 1.5fr 1fr 2fr;gap:8px;align-items:center;">
+      <div class="item-orcamento-grid" style="flex:1;display:grid;grid-template-columns:1.5fr 1.5fr 1fr 2fr;gap:8px;align-items:center;">
         <div><label style="font-size:10px;color:#666;">Nome do Item *</label>
           <input class="form-input" style="padding:6px 10px;" value="${item.nome||''}" placeholder="bancada, pia..."
             oninput="orcamentoAtual.itens[${idx}].nome=this.value"></div>

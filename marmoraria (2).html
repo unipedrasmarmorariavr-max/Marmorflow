@@ -7186,23 +7186,45 @@ function orcTab(event, orderId) {
 // ABA PRODUTOS — cadastro de chapas igual ao Marmoprice
 // ═══════════════════════════════════════════════════════════════════════════
 
+let _buscaProdutoTexto = '';
+
 function renderProdutos() {
   const el = document.getElementById('produtos-content');
   if (!el) return;
-  const pedras = getPedrasCadastradas();
+  const todasPedras = getPedrasCadastradas();
   const grupos = GRUPOS_DIFICULDADE;
+
+  const termo = (_buscaProdutoTexto||'').trim().toLowerCase();
+  const pedras = termo
+    ? todasPedras.filter(p => (p.nome||'').toLowerCase().includes(termo))
+    : todasPedras;
+
+  const semResultado = termo && pedras.length === 0;
 
   el.innerHTML = `
   <div style="padding:24px;max-width:1100px;margin:0 auto;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
-      <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);">🪨 Produtos / Chapas <span style="font-size:14px;color:#888;font-family:sans-serif;font-weight:400;">(${pedras.length} chapas)</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+      <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);">🪨 Produtos / Chapas <span style="font-size:14px;color:#888;font-family:sans-serif;font-weight:400;">(${todasPedras.length} chapas)</span></div>
       <button onclick="abrirFormProduto()" style="background:var(--gold);color:white;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">+ Adicionar Nova Chapa</button>
     </div>
+
+    <div style="position:relative;margin-bottom:20px;">
+      <input type="text" id="busca-produto-input" value="${(_buscaProdutoTexto||'').replace(/"/g,'&quot;')}" oninput="buscarProduto(this.value)" placeholder="🔍 Procurar produto pelo nome da pedra..." style="width:100%;padding:13px 16px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;">
+      ${termo ? `<button onclick="buscarProduto('')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:#999;font-size:18px;cursor:pointer;">✕</button>` : ''}
+    </div>
+
+    ${semResultado ? `
+    <div style="background:#FFF8E8;border:1px solid #F0D89A;border-radius:12px;padding:24px;text-align:center;margin-bottom:20px;">
+      <div style="font-size:15px;color:#5A4A2A;margin-bottom:4px;">Nenhuma pedra encontrada com <strong>"${_buscaProdutoTexto}"</strong></div>
+      <div style="font-size:13px;color:#8A7A5A;margin-bottom:16px;">Essa pedra ainda não está cadastrada no sistema.</div>
+      <button onclick="abrirFormProduto(null, '${_buscaProdutoTexto.replace(/'/g,"\\'")}')" style="background:var(--gold);color:white;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">+ Cadastrar "${_buscaProdutoTexto}"</button>
+    </div>` : ''}
+
     <div style="background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);overflow:hidden;">
       <div style="display:grid;grid-template-columns:2.5fr 1fr 1fr 1fr 2fr 100px;gap:8px;padding:10px 16px;background:var(--stone);color:white;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">
         <div>Nome</div><div>Custo/m²</div><div>Quebra</div><div>Margem</div><div>Grupo</div><div>Ações</div>
       </div>
-      ${pedras.length === 0
+      ${pedras.length === 0 && !semResultado
         ? `<div style="padding:40px;text-align:center;color:#999;font-size:14px;">Nenhuma chapa cadastrada. Faça login para carregar as chapas automaticamente.</div>`
         : pedras.map(p => {
             const grupo = grupos.find(g => g.id === p.grupoId);
@@ -7221,9 +7243,17 @@ function renderProdutos() {
       }
     </div>
   </div>`;
+
+  const inputEl = document.getElementById('busca-produto-input');
+  if (inputEl) { const v=inputEl.value; inputEl.focus(); inputEl.setSelectionRange(v.length, v.length); }
 }
 
-function abrirFormProduto(id) {
+function buscarProduto(texto) {
+  _buscaProdutoTexto = texto;
+  renderProdutos();
+}
+
+function abrirFormProduto(id, nomeSugerido) {
   const pedras = getPedrasCadastradas();
   const p = id ? pedras.find(x => x.id === id) : null;
   const isPadrao = id && PEDRAS_PADRAO_MARMOPRICE.some(x => x.id === id);
@@ -7233,7 +7263,7 @@ function abrirFormProduto(id) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="form-group" style="grid-column:1/-1;">
         <label class="form-label">Nome da Chapa *</label>
-        <input class="form-input" id="prod-nome" value="${p?.nome||''}" placeholder="Ex: GRANITO PRETO SÃO GABRIEL">
+        <input class="form-input" id="prod-nome" value="${p?.nome||nomeSugerido||''}" placeholder="Ex: GRANITO PRETO SÃO GABRIEL">
       </div>
       <div class="form-group">
         <label class="form-label">Custo por m² (R$) *</label>

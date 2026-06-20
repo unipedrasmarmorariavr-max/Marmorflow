@@ -2946,11 +2946,12 @@ function abrirConfirmarRecebimento(pedidoId, cliente, valorEsperado) {
 // ─── CONDIÇÕES DE PAGAMENTO / PARCELAS PREVISTAS ──────────────────────────
 
 function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
+  const _fmt = v => 'R$ '+(v||0).toFixed(2).replace('.',',');
   document.getElementById('body-modal-condicoes').innerHTML = `
     <input type="hidden" id="parc-pedido-id" value="${pedidoId}">
     <div style="background:#fff8e7;border-radius:8px;padding:12px;margin-bottom:14px;">
       <div style="font-weight:700;color:var(--stone);">${cliente} — ${pedidoId}</div>
-      <div style="font-size:13px;color:#888;">Valor total: <b>${fmtV(valorTotal)}</b> · Falta receber: <b style="color:#B85A4A;">${fmtV(saldo)}</b></div>
+      <div style="font-size:13px;color:#888;">Valor total: <b>${_fmt(valorTotal)}</b> · Falta receber: <b style="color:#B85A4A;">${_fmt(saldo)}</b></div>
     </div>
 
     <!-- Modelos prontos -->

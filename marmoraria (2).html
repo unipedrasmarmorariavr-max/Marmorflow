@@ -695,6 +695,21 @@
   </div>
 </div>
 
+<!-- MODAL CONDIÇÕES DE PAGAMENTO -->
+<div class="modal-overlay" id="modal-condicoes">
+  <div class="modal" style="max-width:540px;width:100%;">
+    <div class="modal-header">
+      <div class="modal-title">📅 Condições de Pagamento</div>
+      <button class="modal-close" onclick="closeModal('modal-condicoes')">✕</button>
+    </div>
+    <div class="modal-body" id="body-modal-condicoes"></div>
+    <div class="modal-footer" id="footer-modal-condicoes">
+      <button class="btn-secondary" onclick="closeModal('modal-condicoes')">Cancelar</button>
+      <button onclick="salvarCondicoesPagamento()" style="background:#2E7D32;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">💾 Salvar Condições</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL RECEBIMENTO -->
 <div class="modal-overlay" id="modal-recebimento">
   <div class="modal" style="max-width:520px;width:100%;">
@@ -2931,12 +2946,7 @@ function abrirConfirmarRecebimento(pedidoId, cliente, valorEsperado) {
 // ─── CONDIÇÕES DE PAGAMENTO / PARCELAS PREVISTAS ──────────────────────────
 
 function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
-  // Usar modal-recebimento para definir condições (evita conflito com modal-detail do kanban)
-  const modalEl = document.getElementById('modal-recebimento');
-  if (modalEl) {
-    modalEl.querySelector('.modal-title') && (modalEl.querySelector('.modal-title').textContent = '📅 Condições de Pagamento');
-  }
-  document.getElementById('body-modal-recebimento').innerHTML = `
+  document.getElementById('body-modal-condicoes').innerHTML = `
     <input type="hidden" id="parc-pedido-id" value="${pedidoId}">
     <div style="background:#fff8e7;border-radius:8px;padding:12px;margin-bottom:14px;">
       <div style="font-weight:700;color:var(--stone);">${cliente} — ${pedidoId}</div>
@@ -2976,13 +2986,7 @@ function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
       </button>
     </div>`;
 
-  document.getElementById('footer-modal-recebimento').innerHTML = `
-    <button class="btn-secondary" onclick="closeModal('modal-recebimento')">Cancelar</button>
-    <button onclick="salvarCondicoesPagamento()"
-      style="background:#2E7D32;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">
-      💾 Salvar Condições
-    </button>`;
-  openModal('modal-recebimento');
+  openModal('modal-condicoes');
   adicionarLinhaParcela(saldo);
 }
 
@@ -3038,7 +3042,7 @@ async function salvarCondicoesPagamento() {
   const order = orders.find(o => o.id === pedidoId);
   if (order) order.parcelas_previstas = parcelas;
 
-  closeModal('modal-detail');
+  closeModal('modal-condicoes');
   renderFinanceiro();
   showNotif('Condições de pagamento salvas! ✓', 'success');
 }

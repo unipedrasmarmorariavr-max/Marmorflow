@@ -2931,8 +2931,12 @@ function abrirConfirmarRecebimento(pedidoId, cliente, valorEsperado) {
 // ─── CONDIÇÕES DE PAGAMENTO / PARCELAS PREVISTAS ──────────────────────────
 
 function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
-  document.getElementById('detail-title').textContent = '📅 Condições de Pagamento';
-  document.getElementById('detail-body').innerHTML = `
+  // Usar modal-recebimento para definir condições (evita conflito com modal-detail do kanban)
+  const modalEl = document.getElementById('modal-recebimento');
+  if (modalEl) {
+    modalEl.querySelector('.modal-title') && (modalEl.querySelector('.modal-title').textContent = '📅 Condições de Pagamento');
+  }
+  document.getElementById('body-modal-recebimento').innerHTML = `
     <input type="hidden" id="parc-pedido-id" value="${pedidoId}">
     <div style="background:#fff8e7;border-radius:8px;padding:12px;margin-bottom:14px;">
       <div style="font-weight:700;color:var(--stone);">${cliente} — ${pedidoId}</div>
@@ -2972,14 +2976,14 @@ function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
       </button>
     </div>`;
 
-  document.getElementById('detail-footer').innerHTML = `
-    <button class="btn-secondary" onclick="closeModal('modal-detail')">Cancelar</button>
+  document.getElementById('footer-modal-recebimento').innerHTML = `
+    <button class="btn-secondary" onclick="closeModal('modal-recebimento')">Cancelar</button>
     <button onclick="salvarCondicoesPagamento()"
       style="background:#2E7D32;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">
       💾 Salvar Condições
     </button>`;
-  openModal('modal-detail');
-  adicionarLinhaParcela(saldo); // começa com uma linha
+  openModal('modal-recebimento');
+  adicionarLinhaParcela(saldo);
 }
 
 function aplicarModeloParcelas(total, modelo) {
@@ -3083,7 +3087,6 @@ async function confirmarRecebimento() {
 
   if (!valorBruto || valorBruto <= 0) { showNotif('Informe o valor recebido!', 'error'); return; }
   if (!forma) { showNotif('Selecione a forma de pagamento!', 'error'); return; }
-  if (!banco) { showNotif('Selecione o banco!', 'error'); return; }
   if (!data) { showNotif('Informe a data!', 'error'); return; }
 
   const order = orders.find(o => o.id === pedidoId);
@@ -3094,22 +3097,25 @@ async function confirmarRecebimento() {
   ].filter(Boolean).join(' | ');
 
   showLoading('Salvando...');
-  await getSB().from('transacoes').insert({
+  const insertData = {
     tipo: 'entrada',
-    valor: valorLiquido,        // líquido (após taxa) é o que entra na conta
-    valor_bruto: valorBruto,    // bruto (o que o cliente pagou)
-    taxa_percentual: taxa,
-    taxa_valor: taxaVal,
-    parcelas: forma === 'Cartão Crédito' ? parcelas : 1,
+    valor: valorLiquido,
     descricao: `Recebimento — ${order?.cliente||pedidoId}`,
     data,
-    banco,
+    banco: banco || '',
     forma,
     observacao: obsCompleta,
     pedido_id: pedidoId,
     created_by: currentUser
-  });
+  };
+  // Adiciona campos extras se existirem (podem não estar na tabela ainda)
+  if (valorBruto !== valorLiquido) insertData.valor_bruto = valorBruto;
+  if (taxa > 0) { insertData.taxa_percentual = taxa; insertData.taxa_valor = taxaVal; }
+  if (forma === 'Cartão Crédito' && parcelas > 1) insertData.parcelas = parcelas;
+
+  const { error: errIns } = await getSB().from('transacoes').insert(insertData);
   hideLoading();
+  if (errIns) { showNotif('Erro ao salvar: ' + errIns.message, 'error'); return; }
   closeModal('modal-recebimento');
 
   // Se veio de uma baixa de parcela, marca como paga

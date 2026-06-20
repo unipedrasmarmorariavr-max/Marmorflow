@@ -2958,6 +2958,15 @@ function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
     <div style="margin-bottom:14px;">
       <label class="form-label">MODELO RÁPIDO</label>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
+
+        <button onclick="aplicarModeloEntradaMaisCartao(${saldo}, 0.3, 9)"
+          style="background:#006382;color:white;border:2px solid #006382;border-radius:8px;padding:10px;cursor:pointer;font-size:12px;font-weight:600;">
+          ⭐ 30% Pix<br>+ 9x Cartão
+        </button>
+        <button onclick="aplicarModeloEntradaMaisCartao(${saldo}, 0.5, 9)"
+          style="background:#006382;color:white;border:2px solid #006382;border-radius:8px;padding:10px;cursor:pointer;font-size:12px;font-weight:600;">
+          ⭐ 50% Pix<br>+ 9x Cartão
+        </button>
         <button onclick="aplicarModeloParcelas(${saldo},[[50,'Entrada'],[50,'Entrega']])"
           style="background:#f0f0f0;border:2px solid #ddd;border-radius:8px;padding:10px;cursor:pointer;font-size:12px;font-weight:600;">
           50% Entrada<br>50% Entrega
@@ -2972,7 +2981,31 @@ function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
         </button>
         <button onclick="aplicarModeloParcelas(${saldo},[[33,'Entrada'],[33,'Execução'],[34,'Entrega']])"
           style="background:#f0f0f0;border:2px solid #ddd;border-radius:8px;padding:10px;cursor:pointer;font-size:12px;font-weight:600;">
-          33%/33%/34%<br>3 etapas
+          33%/33%/34%
+        </button>
+      </div>
+
+      <!-- Entrada customizada + parcelas cartão -->
+      <div style="background:#f0f8ff;border-radius:8px;padding:12px;margin-top:10px;border:1px solid #cce4f0;">
+        <div style="font-size:12px;font-weight:700;color:#006382;margin-bottom:10px;">⚡ Entrada Pix + Cartão Crédito (personalizado)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <div style="font-size:11px;color:#888;margin-bottom:3px;">Valor da entrada (R$)</div>
+            <input type="number" id="modelo-entrada-val" placeholder="Ex: 300,00" step="0.01"
+              style="width:100%;padding:7px;border:1px solid #ddd;border-radius:6px;font-size:14px;font-weight:700;"
+              oninput="calcularRestanteCartao(${saldo})">
+          </div>
+          <div>
+            <div style="font-size:11px;color:#888;margin-bottom:3px;">Nº de parcelas cartão</div>
+            <input type="number" id="modelo-parcelas-n" value="9" min="1" max="48"
+              style="width:100%;padding:7px;border:1px solid #ddd;border-radius:6px;font-size:14px;font-weight:700;"
+              oninput="calcularRestanteCartao(${saldo})">
+          </div>
+        </div>
+        <div id="modelo-preview" style="font-size:12px;color:#555;margin-bottom:8px;padding:6px 8px;background:white;border-radius:6px;"></div>
+        <button onclick="aplicarModeloEntradaValor(${saldo})"
+          style="background:#006382;color:white;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;">
+          ✅ Aplicar este modelo
         </button>
       </div>
     </div>
@@ -2991,6 +3024,52 @@ function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
   adicionarLinhaParcela(saldo);
 }
 
+function calcularRestanteCartao(total) {
+  const entrada = parseFloat(document.getElementById('modelo-entrada-val')?.value) || 0;
+  const n = parseInt(document.getElementById('modelo-parcelas-n')?.value) || 9;
+  const restante = total - entrada;
+  const parcela = restante > 0 ? restante / n : 0;
+  const prev = document.getElementById('modelo-preview');
+  if (!prev) return;
+  const _f = v => 'R$ ' + v.toFixed(2).replace('.',',');
+  if (entrada <= 0) { prev.textContent = ''; return; }
+  prev.innerHTML = `📱 Entrada Pix: <b>${_f(entrada)}</b> &nbsp;+&nbsp; 💳 ${n}x de <b>${_f(parcela)}</b> no cartão &nbsp;=&nbsp; Total: <b>${_f(entrada + restante)}</b>`;
+}
+
+function aplicarModeloEntradaValor(total) {
+  const entrada = parseFloat(document.getElementById('modelo-entrada-val')?.value) || 0;
+  const n = parseInt(document.getElementById('modelo-parcelas-n')?.value) || 9;
+  if (entrada <= 0) { alert('Informe o valor da entrada!'); return; }
+  const restante = total - entrada;
+  const parcela = restante / n;
+  const _fmt = v => v.toFixed(2).replace('.',',');
+  const lista = document.getElementById('parc-lista');
+  if (!lista) return;
+  lista.innerHTML = '';
+  adicionarLinhaParcela(total, 'Entrada Pix', _fmt(entrada), '', 'Pix');
+  for (let i = 1; i <= n; i++) {
+    adicionarLinhaParcela(total, `Parcela ${i}/${n} Cartão`, _fmt(parcela), '', 'Cartão Crédito');
+  }
+}
+
+function aplicarModeloEntradaMaisCartao(total, pctEntrada, nParcelas) {
+  const lista = document.getElementById('parc-lista');
+  if (!lista) return;
+  lista.innerHTML = '';
+  const valEntrada = total * pctEntrada;
+  const valRestante = total - valEntrada;
+  const valParcela = valRestante / nParcelas;
+  const _fmt = v => v.toFixed(2).replace('.',',');
+
+  // Linha entrada Pix
+  adicionarLinhaParcela(total, `Entrada Pix (${Math.round(pctEntrada*100)}%)`, _fmt(valEntrada), '', 'Pix');
+
+  // Linhas do cartão
+  for (let i = 1; i <= nParcelas; i++) {
+    adicionarLinhaParcela(total, `Parcela ${i}/${nParcelas} Cartão`, _fmt(valParcela), '', 'Cartão Crédito');
+  }
+}
+
 function aplicarModeloParcelas(total, modelo) {
   const lista = document.getElementById('parc-lista');
   if (!lista) return;
@@ -3001,18 +3080,17 @@ function aplicarModeloParcelas(total, modelo) {
   });
 }
 
-function adicionarLinhaParcela(total, descricao='', valor='') {
+function adicionarLinhaParcela(total, descricao='', valor='', data='', forma='') {
   const lista = document.getElementById('parc-lista');
   if (!lista) return;
-  const idx = lista.children.length;
   const div = document.createElement('div');
-  div.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center;';
+  div.style.cssText = 'display:grid;grid-template-columns:1.5fr 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center;';
   div.innerHTML = `
-    <input class="form-input" placeholder="Descrição (ex: Entrada)" value="${descricao}" style="font-size:13px;padding:7px 10px;">
-    <input class="form-input" type="number" placeholder="Valor R$" value="${valor}" step="0.01" style="font-size:13px;padding:7px 10px;">
-    <input class="form-input" type="date" style="font-size:13px;padding:7px 10px;">
+    <input class="form-input" placeholder="Descrição" value="${descricao}" style="font-size:12px;padding:6px 8px;">
+    <input class="form-input" type="number" placeholder="Valor" value="${valor}" step="0.01" style="font-size:12px;padding:6px 8px;">
+    <input class="form-input" type="date" value="${data}" style="font-size:12px;padding:6px 8px;">
     <button onclick="this.closest('div').remove()"
-      style="background:#dc3545;color:white;border:none;padding:7px 10px;border-radius:6px;cursor:pointer;">✕</button>`;
+      style="background:#dc3545;color:white;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">✕</button>`;
   lista.appendChild(div);
 }
 

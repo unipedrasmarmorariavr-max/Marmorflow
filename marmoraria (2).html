@@ -2949,75 +2949,197 @@ function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
   const _fmt = v => 'R$ '+(v||0).toFixed(2).replace('.',',');
   document.getElementById('body-modal-condicoes').innerHTML = `
     <input type="hidden" id="parc-pedido-id" value="${pedidoId}">
-    <div style="background:#fff8e7;border-radius:8px;padding:12px;margin-bottom:14px;">
+    <input type="hidden" id="parc-saldo" value="${saldo}">
+
+    <!-- Info do pedido -->
+    <div style="background:#fff8e7;border-radius:8px;padding:12px;margin-bottom:16px;">
       <div style="font-weight:700;color:var(--stone);">${cliente} — ${pedidoId}</div>
-      <div style="font-size:13px;color:#888;">Valor total: <b>${_fmt(valorTotal)}</b> · Falta receber: <b style="color:#B85A4A;">${_fmt(saldo)}</b></div>
+      <div style="font-size:13px;color:#888;margin-top:2px;">Total: <b>${_fmt(valorTotal)}</b> · A receber: <b style="color:#B85A4A;">${_fmt(saldo)}</b></div>
     </div>
 
-    <!-- Modelos prontos -->
-    <div style="margin-bottom:14px;">
-      <label class="form-label">ESCOLHA O MODELO</label>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;">
-        <button onclick="aplicarModeloParcelas(${saldo},[[100,'À Vista']])"
-          style="background:#f5f5f5;border:2px solid #ddd;border-radius:10px;padding:12px 8px;cursor:pointer;font-size:12px;font-weight:700;transition:all .2s;"
-          onmouseover="this.style.borderColor='#006382';this.style.background='#e8f4f8'"
-          onmouseout="this.style.borderColor='#ddd';this.style.background='#f5f5f5'">
-          💰<br>100%<br>À Vista
-        </button>
-        <button onclick="aplicarModeloParcelas(${saldo},[[50,'Entrada 50%'],[50,'Entrega 50%']])"
-          style="background:#f5f5f5;border:2px solid #ddd;border-radius:10px;padding:12px 8px;cursor:pointer;font-size:12px;font-weight:700;transition:all .2s;"
-          onmouseover="this.style.borderColor='#006382';this.style.background='#e8f4f8'"
-          onmouseout="this.style.borderColor='#ddd';this.style.background='#f5f5f5'">
-          ✌️<br>50% + 50%<br>Entrada/Entrega
-        </button>
-        <button onclick="mostrarEntradaParcelas()"
-          style="background:#006382;color:white;border:2px solid #006382;border-radius:10px;padding:12px 8px;cursor:pointer;font-size:12px;font-weight:700;">
-          💳<br>Entrada<br>+ Parcelas
-        </button>
-      </div>
+    <!-- FORMA DE PAGAMENTO -->
+    <div style="margin-bottom:16px;">
+      <label class="form-label">FORMA DE PAGAMENTO</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
 
-      <!-- Entrada + Parcelas (aparece ao clicar) -->
-      <div id="modelo-entrada-parcelas" style="display:none;background:#f0f8ff;border-radius:10px;padding:14px;margin-top:10px;border:1px solid #cce4f0;">
-        <div style="font-size:13px;font-weight:700;color:#006382;margin-bottom:10px;">💳 Entrada + Parcelas no Cartão</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <div>
-            <div style="font-size:11px;color:#888;margin-bottom:4px;">Valor da entrada (R$)</div>
-            <input type="number" id="modelo-entrada-val" placeholder="Ex: 300,00" step="0.01"
-              style="width:100%;padding:8px;border:2px solid #ddd;border-radius:8px;font-size:15px;font-weight:700;"
-              oninput="calcularRestanteCartao(${saldo})">
-          </div>
-          <div>
-            <div style="font-size:11px;color:#888;margin-bottom:4px;">Nº de parcelas</div>
-            <input type="number" id="modelo-parcelas-n" value="9" min="1" max="48"
-              style="width:100%;padding:8px;border:2px solid #ddd;border-radius:8px;font-size:15px;font-weight:700;"
-              oninput="calcularRestanteCartao(${saldo})">
+        <!-- À VISTA -->
+        <div style="border:2px solid #ddd;border-radius:12px;padding:14px;cursor:pointer;" id="bloco-avista"
+          onclick="selecionarForma('avista')">
+          <div style="font-size:14px;font-weight:700;margin-bottom:10px;">💰 À Vista</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
+              <input type="radio" name="cond-tipo" value="100avista" onchange="montarParcelas(${saldo})"> 100% de uma vez
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
+              <input type="radio" name="cond-tipo" value="5050" onchange="montarParcelas(${saldo})"> 50% entrada + 50% entrega
+            </label>
           </div>
         </div>
-        <div id="modelo-preview" style="font-size:13px;color:#333;padding:8px 10px;background:white;border-radius:8px;margin-bottom:10px;min-height:28px;"></div>
-        <button onclick="aplicarModeloEntradaValor(${saldo})"
-          style="background:#2E7D32;color:white;border:none;padding:10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;">
-          ✅ Aplicar
-        </button>
+
+        <!-- PARCELADO -->
+        <div style="border:2px solid #ddd;border-radius:12px;padding:14px;cursor:pointer;" id="bloco-parcelado"
+          onclick="selecionarForma('parcelado')">
+          <div style="font-size:14px;font-weight:700;margin-bottom:10px;">💳 Parcelado</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
+              <input type="radio" name="cond-tipo" value="entrada+parcelas" onchange="montarParcelas(${saldo})"> Com entrada + parcelas
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
+              <input type="radio" name="cond-tipo" value="soparcelado" onchange="montarParcelas(${saldo})"> Só parcelado
+            </label>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Parcelas customizadas -->
-    <div>
+    <!-- CAMPOS DINÂMICOS -->
+    <div id="cond-campos" style="margin-bottom:14px;"></div>
+
+    <!-- PARCELAS GERADAS -->
+    <div id="parc-lista-wrap" style="display:none;">
       <label class="form-label">PARCELAS PREVISTAS</label>
-      <div id="parc-lista" style="margin-top:6px;"></div>
-      <button onclick="adicionarLinhaParcela(${saldo})"
-        style="background:#006382;color:white;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:8px;width:100%;">
-        + Adicionar Parcela
-      </button>
+      <div id="parc-lista" style="margin-top:8px;"></div>
     </div>`;
 
   openModal('modal-condicoes');
-  adicionarLinhaParcela(saldo);
 }
 
 function mostrarEntradaParcelas() {
   const el = document.getElementById('modelo-entrada-parcelas');
   if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function selecionarForma(tipo) {
+  // Destaca o bloco selecionado
+  ['avista','parcelado'].forEach(t => {
+    const el = document.getElementById('bloco-'+t);
+    if (el) el.style.borderColor = t === tipo ? '#006382' : '#ddd';
+  });
+}
+
+function montarParcelas(saldo) {
+  const tipo = document.querySelector('input[name="cond-tipo"]:checked')?.value;
+  const campos = document.getElementById('cond-campos');
+  const listaWrap = document.getElementById('parc-lista-wrap');
+  const lista = document.getElementById('parc-lista');
+  if (!campos || !lista) return;
+
+  const _fmt = v => v.toFixed(2).replace('.',',');
+  const hoje = new Date();
+  const fmtData = (d) => {
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  };
+
+  campos.innerHTML = '';
+  lista.innerHTML = '';
+
+  if (tipo === '100avista') {
+    listaWrap.style.display = 'block';
+    campos.innerHTML = `
+      <div><label class="form-label">DATA DO PAGAMENTO</label>
+      <input class="form-input" type="date" id="cond-data1" value="${fmtData(hoje)}"></div>`;
+    adicionarLinhaParcela(saldo, 'À Vista', _fmt(saldo), fmtData(hoje));
+
+  } else if (tipo === '5050') {
+    listaWrap.style.display = 'block';
+    const v = saldo/2;
+    const d2 = new Date(hoje); d2.setDate(d2.getDate()+15);
+    campos.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div><label class="form-label">DATA DA ENTRADA</label>
+        <input class="form-input" type="date" id="cond-data1" value="${fmtData(hoje)}"></div>
+        <div><label class="form-label">DATA DA ENTREGA</label>
+        <input class="form-input" type="date" id="cond-data2" value="${fmtData(d2)}"></div>
+      </div>`;
+    adicionarLinhaParcela(saldo, 'Entrada 50%', _fmt(v), fmtData(hoje));
+    adicionarLinhaParcela(saldo, 'Entrega 50%', _fmt(v), fmtData(d2));
+
+  } else if (tipo === 'entrada+parcelas') {
+    campos.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+        <div><label class="form-label">VALOR ENTRADA (R$)</label>
+        <input class="form-input" type="number" id="cond-entrada-val" placeholder="Ex: 300" step="0.01"
+          style="font-size:15px;font-weight:700;" oninput="previewEntradaParcelas(${saldo})"></div>
+        <div><label class="form-label">Nº PARCELAS</label>
+        <input class="form-input" type="number" id="cond-n-parcelas" value="9" min="1" max="48"
+          style="font-size:15px;font-weight:700;" oninput="previewEntradaParcelas(${saldo})"></div>
+        <div><label class="form-label">DATA ENTRADA</label>
+        <input class="form-input" type="date" id="cond-data-entrada" value="${fmtData(hoje)}"></div>
+      </div>
+      <div id="cond-preview-ep" style="margin-top:8px;padding:8px 10px;background:#f0fff4;border-radius:8px;font-size:13px;color:#2E7D32;font-weight:600;display:none;"></div>
+      <button onclick="gerarLinhasEntradaParcelas(${saldo})"
+        style="background:#006382;color:white;border:none;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;margin-top:10px;">
+        ✅ Gerar parcelas
+      </button>`;
+    listaWrap.style.display = 'none';
+
+  } else if (tipo === 'soparcelado') {
+    campos.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div><label class="form-label">Nº PARCELAS</label>
+        <input class="form-input" type="number" id="cond-n-parcelas" value="10" min="1" max="48"
+          style="font-size:15px;font-weight:700;" oninput="previewSoParcelado(${saldo})"></div>
+        <div><label class="form-label">DATA 1ª PARCELA</label>
+        <input class="form-input" type="date" id="cond-data-entrada" value="${fmtData(hoje)}"></div>
+      </div>
+      <div id="cond-preview-sp" style="margin-top:8px;padding:8px 10px;background:#f0f8ff;border-radius:8px;font-size:13px;color:#006382;font-weight:600;"></div>
+      <button onclick="gerarLinhasSoParcelado(${saldo})"
+        style="background:#006382;color:white;border:none;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;margin-top:10px;">
+        ✅ Gerar parcelas
+      </button>`;
+    previewSoParcelado(saldo);
+    listaWrap.style.display = 'none';
+  }
+}
+
+function previewEntradaParcelas(saldo) {
+  const entrada = parseFloat(document.getElementById('cond-entrada-val')?.value)||0;
+  const n = parseInt(document.getElementById('cond-n-parcelas')?.value)||1;
+  const restante = saldo - entrada;
+  const parcela = restante > 0 ? restante/n : 0;
+  const prev = document.getElementById('cond-preview-ep');
+  if (!prev) return;
+  if (entrada > 0) {
+    prev.style.display = 'block';
+    prev.textContent = `📱 Entrada: R$ ${entrada.toFixed(2).replace('.',',')} + 💳 ${n}x de R$ ${parcela.toFixed(2).replace('.',',')}`;
+  }
+}
+
+function previewSoParcelado(saldo) {
+  const n = parseInt(document.getElementById('cond-n-parcelas')?.value)||1;
+  const parcela = saldo/n;
+  const prev = document.getElementById('cond-preview-sp');
+  if (prev) prev.textContent = `💳 ${n}x de R$ ${parcela.toFixed(2).replace('.',',')}`;
+}
+
+function gerarLinhasEntradaParcelas(saldo) {
+  const entrada = parseFloat(document.getElementById('cond-entrada-val')?.value)||0;
+  const n = parseInt(document.getElementById('cond-n-parcelas')?.value)||1;
+  const dataEntrada = document.getElementById('cond-data-entrada')?.value || '';
+  if (entrada <= 0) { showNotif('Informe o valor da entrada!','error'); return; }
+  const restante = saldo - entrada;
+  const parcela = restante/n;
+  const lista = document.getElementById('parc-lista');
+  if (!lista) return;
+  lista.innerHTML = '';
+  adicionarLinhaParcela(saldo, 'Entrada Pix', entrada.toFixed(2).replace('.',','), dataEntrada);
+  for (let i=1; i<=n; i++) {
+    adicionarLinhaParcela(saldo, `Parcela ${i}/${n}`, parcela.toFixed(2).replace('.',','), '');
+  }
+  document.getElementById('parc-lista-wrap').style.display = 'block';
+}
+
+function gerarLinhasSoParcelado(saldo) {
+  const n = parseInt(document.getElementById('cond-n-parcelas')?.value)||1;
+  const data1 = document.getElementById('cond-data-entrada')?.value || '';
+  const parcela = saldo/n;
+  const lista = document.getElementById('parc-lista');
+  if (!lista) return;
+  lista.innerHTML = '';
+  for (let i=1; i<=n; i++) {
+    adicionarLinhaParcela(saldo, `Parcela ${i}/${n}`, parcela.toFixed(2).replace('.',','), '');
+  }
+  document.getElementById('parc-lista-wrap').style.display = 'block';
 }
 
 function calcularRestanteCartao(total) {

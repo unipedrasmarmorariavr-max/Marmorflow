@@ -695,6 +695,21 @@
   </div>
 </div>
 
+<!-- MODAL RECEBIMENTO -->
+<div class="modal-overlay" id="modal-recebimento">
+  <div class="modal" style="max-width:520px;width:100%;">
+    <div class="modal-header">
+      <div class="modal-title">💵 Registrar Recebimento</div>
+      <button class="modal-close" onclick="closeModal('modal-recebimento')">✕</button>
+    </div>
+    <div class="modal-body" id="body-modal-recebimento"></div>
+    <div class="modal-footer" id="footer-modal-recebimento">
+      <button class="btn-secondary" onclick="closeModal('modal-recebimento')">Cancelar</button>
+      <button onclick="confirmarRecebimento()" style="background:#2E7D32;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">✅ Confirmar Recebimento</button>
+    </div>
+  </div>
+</div>
+
 <!-- LIGHTBOX -->
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
   <button class="lightbox-close" onclick="closeLightbox()">✕</button>

@@ -2956,56 +2956,47 @@ function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
 
     <!-- Modelos prontos -->
     <div style="margin-bottom:14px;">
-      <label class="form-label">MODELO RÁPIDO</label>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
-
-        <button onclick="aplicarModeloEntradaMaisCartao(${saldo}, 0.3, 9)"
-          style="background:#006382;color:white;border:2px solid #006382;border-radius:8px;padding:10px;cursor:pointer;font-size:12px;font-weight:600;">
-          ⭐ 30% Pix<br>+ 9x Cartão
-        </button>
-        <button onclick="aplicarModeloEntradaMaisCartao(${saldo}, 0.5, 9)"
-          style="background:#006382;color:white;border:2px solid #006382;border-radius:8px;padding:10px;cursor:pointer;font-size:12px;font-weight:600;">
-          ⭐ 50% Pix<br>+ 9x Cartão
-        </button>
-        <button onclick="aplicarModeloParcelas(${saldo},[[50,'Entrada'],[50,'Entrega']])"
-          style="background:#f0f0f0;border:2px solid #ddd;border-radius:8px;padding:10px;cursor:pointer;font-size:12px;font-weight:600;">
-          50% Entrada<br>50% Entrega
-        </button>
+      <label class="form-label">ESCOLHA O MODELO</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;">
         <button onclick="aplicarModeloParcelas(${saldo},[[100,'À Vista']])"
-          style="background:#f0f0f0;border:2px solid #ddd;border-radius:8px;padding:10px;cursor:pointer;font-size:12px;font-weight:600;">
-          100% À Vista
+          style="background:#f5f5f5;border:2px solid #ddd;border-radius:10px;padding:12px 8px;cursor:pointer;font-size:12px;font-weight:700;transition:all .2s;"
+          onmouseover="this.style.borderColor='#006382';this.style.background='#e8f4f8'"
+          onmouseout="this.style.borderColor='#ddd';this.style.background='#f5f5f5'">
+          💰<br>100%<br>À Vista
         </button>
-        <button onclick="aplicarModeloParcelas(${saldo},[[30,'Entrada'],[70,'Entrega']])"
-          style="background:#f0f0f0;border:2px solid #ddd;border-radius:8px;padding:10px;cursor:pointer;font-size:12px;font-weight:600;">
-          30% Entrada<br>70% Entrega
+        <button onclick="aplicarModeloParcelas(${saldo},[[50,'Entrada 50%'],[50,'Entrega 50%']])"
+          style="background:#f5f5f5;border:2px solid #ddd;border-radius:10px;padding:12px 8px;cursor:pointer;font-size:12px;font-weight:700;transition:all .2s;"
+          onmouseover="this.style.borderColor='#006382';this.style.background='#e8f4f8'"
+          onmouseout="this.style.borderColor='#ddd';this.style.background='#f5f5f5'">
+          ✌️<br>50% + 50%<br>Entrada/Entrega
         </button>
-        <button onclick="aplicarModeloParcelas(${saldo},[[33,'Entrada'],[33,'Execução'],[34,'Entrega']])"
-          style="background:#f0f0f0;border:2px solid #ddd;border-radius:8px;padding:10px;cursor:pointer;font-size:12px;font-weight:600;">
-          33%/33%/34%
+        <button onclick="mostrarEntradaParcelas()"
+          style="background:#006382;color:white;border:2px solid #006382;border-radius:10px;padding:12px 8px;cursor:pointer;font-size:12px;font-weight:700;">
+          💳<br>Entrada<br>+ Parcelas
         </button>
       </div>
 
-      <!-- Entrada customizada + parcelas cartão -->
-      <div style="background:#f0f8ff;border-radius:8px;padding:12px;margin-top:10px;border:1px solid #cce4f0;">
-        <div style="font-size:12px;font-weight:700;color:#006382;margin-bottom:10px;">⚡ Entrada Pix + Cartão Crédito (personalizado)</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+      <!-- Entrada + Parcelas (aparece ao clicar) -->
+      <div id="modelo-entrada-parcelas" style="display:none;background:#f0f8ff;border-radius:10px;padding:14px;margin-top:10px;border:1px solid #cce4f0;">
+        <div style="font-size:13px;font-weight:700;color:#006382;margin-bottom:10px;">💳 Entrada + Parcelas no Cartão</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
           <div>
-            <div style="font-size:11px;color:#888;margin-bottom:3px;">Valor da entrada (R$)</div>
+            <div style="font-size:11px;color:#888;margin-bottom:4px;">Valor da entrada (R$)</div>
             <input type="number" id="modelo-entrada-val" placeholder="Ex: 300,00" step="0.01"
-              style="width:100%;padding:7px;border:1px solid #ddd;border-radius:6px;font-size:14px;font-weight:700;"
+              style="width:100%;padding:8px;border:2px solid #ddd;border-radius:8px;font-size:15px;font-weight:700;"
               oninput="calcularRestanteCartao(${saldo})">
           </div>
           <div>
-            <div style="font-size:11px;color:#888;margin-bottom:3px;">Nº de parcelas cartão</div>
+            <div style="font-size:11px;color:#888;margin-bottom:4px;">Nº de parcelas</div>
             <input type="number" id="modelo-parcelas-n" value="9" min="1" max="48"
-              style="width:100%;padding:7px;border:1px solid #ddd;border-radius:6px;font-size:14px;font-weight:700;"
+              style="width:100%;padding:8px;border:2px solid #ddd;border-radius:8px;font-size:15px;font-weight:700;"
               oninput="calcularRestanteCartao(${saldo})">
           </div>
         </div>
-        <div id="modelo-preview" style="font-size:12px;color:#555;margin-bottom:8px;padding:6px 8px;background:white;border-radius:6px;"></div>
+        <div id="modelo-preview" style="font-size:13px;color:#333;padding:8px 10px;background:white;border-radius:8px;margin-bottom:10px;min-height:28px;"></div>
         <button onclick="aplicarModeloEntradaValor(${saldo})"
-          style="background:#006382;color:white;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;">
-          ✅ Aplicar este modelo
+          style="background:#2E7D32;color:white;border:none;padding:10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;">
+          ✅ Aplicar
         </button>
       </div>
     </div>
@@ -3022,6 +3013,11 @@ function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
 
   openModal('modal-condicoes');
   adicionarLinhaParcela(saldo);
+}
+
+function mostrarEntradaParcelas() {
+  const el = document.getElementById('modelo-entrada-parcelas');
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
 function calcularRestanteCartao(total) {

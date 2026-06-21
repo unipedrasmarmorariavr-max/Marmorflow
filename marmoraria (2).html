@@ -1217,8 +1217,21 @@ async function drop(e,stage) {
   if (!order||order.stage===stage) return;
   const p=PROFILES[currentUser];
   if (!p.canMoveAll) {
-    if (currentUser==='producao'&&!['corte','acabamento','pronto','entregue'].includes(stage)){showNotif('Produção: apenas etapas de produção','error');return;}
     if (currentUser==='medidor'&&!['medicao','aguardando','negociacao'].includes(stage)){showNotif('Medidor: apenas Medição e Aguardando Orçamento','error');return;}
+    if (currentUser==='producao') {
+      // Produção só pode mover dentro das etapas de produção E só para frente
+      const etapasProd = ['corte','acabamento','pronto','entregue'];
+      if (!etapasProd.includes(stage)) {
+        showNotif('Produção: não pode voltar para etapas anteriores ao corte!','error');
+        return;
+      }
+      const idxAtual = etapasProd.indexOf(order.stage);
+      const idxDestino = etapasProd.indexOf(stage);
+      if (idxDestino < idxAtual) {
+        showNotif('Produção: só pode avançar as etapas, não voltar!','error');
+        return;
+      }
+    }
   }
   const history=order.history||[];
   const hoje=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});

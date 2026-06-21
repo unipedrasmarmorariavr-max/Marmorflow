@@ -1574,7 +1574,7 @@ function iniciarAutoRefresh() {
       const abaAtiva = localStorage.getItem('mf_aba') || 'kanban';
       if (abaAtiva === 'kanban' || !abaAtiva) {
         renderKanban(document.getElementById('search-kanban')?.value || '');
-        mostrarNotifRefresh('📋 Pedidos atualizados');
+  
       } else if (abaAtiva === 'dashboard') {
         renderDashboard();
       } else if (abaAtiva === 'financeiro') {
@@ -1588,7 +1588,7 @@ function iniciarAutoRefresh() {
       const abaAtiva = localStorage.getItem('mf_aba') || 'kanban';
       if (abaAtiva === 'agenda') {
         renderAgendaMedicao();
-        mostrarNotifRefresh('📐 Agenda atualizada');
+  
       }
       if (abaAtiva === 'kanban' || !abaAtiva) {
         renderKanban(document.getElementById('search-kanban')?.value || '');
@@ -1627,21 +1627,7 @@ function pararAutoRefresh() {
   if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
 }
 
-// Notificação discreta de atualização (não atrapalha o fluxo)
-let _notifRefreshTimer = null;
-function mostrarNotifRefresh(msg) {
-  let el = document.getElementById('notif-refresh');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'notif-refresh';
-    el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);color:white;padding:6px 16px;border-radius:20px;font-size:12px;z-index:9999;transition:opacity .3s;pointer-events:none;';
-    document.body.appendChild(el);
-  }
-  el.textContent = msg;
-  el.style.opacity = '1';
-  if (_notifRefreshTimer) clearTimeout(_notifRefreshTimer);
-  _notifRefreshTimer = setTimeout(() => { el.style.opacity = '0'; }, 2500);
-}
+
 
 
 // ============ DASHBOARD ============

@@ -4939,7 +4939,67 @@ function abrirModalConfirmarData(id) {
     const radios = document.querySelectorAll('input[name="levigado_origem"]');
     radios.forEach(r => r.checked = (r.value === 'levigado'));
   }
+  // Popular itens do orçamento para seleção
+  const orc = getOrcamentos().find(o => o.id === id);
+  const blocoItens = document.getElementById('bloco-itens-aprovados');
+  const listaItens = document.getElementById('lista-itens-fechamento');
+
+  if (orc && orc.itens && orc.itens.length > 0 && blocoItens && listaItens) {
+    blocoItens.style.display = 'block';
+    listaItens.innerHTML = '';
+
+    orc.itens.forEach((item, idx) => {
+      const valorItem = item.calc?.precoFinal || 0;
+      const fmt = v => 'R$ ' + v.toFixed(2).replace('.',',');
+      const div = document.createElement('div');
+      div.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;background:white;border:2px solid #ddd;border-radius:8px;cursor:pointer;';
+      div.innerHTML = `
+        <input type="checkbox" checked id="item-aprov-${idx}" 
+          style="width:18px;height:18px;accent-color:var(--green);cursor:pointer;"
+          onchange="atualizarTotalItens('${id}')">
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:700;">${item.peca || 'Item '+(idx+1)}</div>
+          <div style="font-size:11px;color:#888;">${item.pedra||''} ${item.acabamento?' · '+item.acabamento:''}</div>
+        </div>
+        <div style="font-size:14px;font-weight:700;color:var(--green);">${fmt(valorItem)}</div>`;
+      div.onclick = (e) => {
+        if (e.target.type !== 'checkbox') {
+          const cb = div.querySelector('input[type="checkbox"]');
+          cb.checked = !cb.checked;
+          div.style.borderColor = cb.checked ? 'var(--green)' : '#ddd';
+          div.style.background = cb.checked ? '#f0fff4' : 'white';
+          atualizarTotalItens(id);
+        } else {
+          div.style.borderColor = e.target.checked ? 'var(--green)' : '#ddd';
+          div.style.background = e.target.checked ? '#f0fff4' : 'white';
+        }
+      };
+      div.style.borderColor = 'var(--green)';
+      div.style.background = '#f0fff4';
+      listaItens.appendChild(div);
+    });
+
+    // Salvar referência ao orçamento para usar no fechamento
+    window._orcFechamento = orc;
+    atualizarTotalItens(id);
+  } else {
+    if (blocoItens) blocoItens.style.display = 'none';
+    window._orcFechamento = null;
+  }
+
   openModal('modal-confirmar-data');
+}
+
+function atualizarTotalItens(id) {
+  const orc = window._orcFechamento;
+  if (!orc) return;
+  let total = 0;
+  orc.itens.forEach((item, idx) => {
+    const cb = document.getElementById('item-aprov-'+idx);
+    if (cb && cb.checked) total += item.calc?.precoFinal || 0;
+  });
+  const el = document.getElementById('total-itens-aprovados');
+  if (el) el.textContent = 'R$ ' + total.toFixed(2).replace('.',',');
 }
 
 function selecionarDataSugerida(data, el) {
@@ -4999,6 +5059,21 @@ async function confirmarFechamentoComData() {
   const history = order.history || [];
   history.push({stage:'fechado', date:hoje});
 
+  // Coletar itens aprovados
+  const itensAprovados = [];
+  let valorAprovado = null;
+  if (window._orcFechamento) {
+    window._orcFechamento.itens.forEach((item, idx) => {
+      const cb = document.getElementById('item-aprov-'+idx);
+      if (cb && cb.checked) itensAprovados.push(item);
+    });
+    if (itensAprovados.length > 0 && itensAprovados.length < window._orcFechamento.itens.length) {
+      // Só alguns itens aprovados — calcular novo valor
+      valorAprovado = itensAprovados.reduce((s,it) => s+(it.calc?.precoFinal||0), 0)
+                                    .toFixed(2).replace('.',',');
+    }
+  }
+
   // Gerar número sequencial de pedido fechado (PF-001, PF-002...)
   const pedidosFechados = orders.filter(o => o.num_pedido_fechado);
   const nums = pedidosFechados.map(o => parseInt((o.num_pedido_fechado||'').replace('PF-',''))).filter(n=>!isNaN(n));
@@ -5012,9 +5087,16 @@ async function confirmarFechamentoComData() {
   const acabamentoFinal = acabRadioFinal || order.acabamento || '';
   const levOrigem = (document.querySelector('input[name="levigado_origem"]:checked')||{}).value||'levigado';
   const levigadoDoPolicdo = (acabamentoFinal === 'Levigado' && levOrigem === 'polido');
-  const { error } = await getSB().from('pedidos')
-    .update({ stage:'fechado', history, dataentrega: dataEscolhida, material: materialFinal, acabamento: acabamentoFinal, levigado_do_polido: levigadoDoPolicdo, num_pedido_fechado: numPedidoFechado })
-    .eq('id', id);
+  const updateData = { 
+    stage:'fechado', history, dataentrega: dataEscolhida, 
+    material: materialFinal, acabamento: acabamentoFinal, 
+    levigado_do_polido: levigadoDoPolicdo, 
+    num_pedido_fechado: numPedidoFechado
+  };
+  if (itensAprovados.length > 0) updateData.itens_aprovados = itensAprovados;
+  if (valorAprovado) updateData.valor = valorAprovado;
+
+  const { error } = await getSB().from('pedidos').update(updateData).eq('id', id);
 
   if (error) { hideLoading(); showNotif('Erro: ' + error.message, 'error'); return; }
 
@@ -8800,7 +8882,19 @@ function toggleOrigemOrc() {
     <div class="modal-body">
       <div style="background:var(--green-light);border-radius:10px;padding:14px;margin-bottom:16px;border-left:3px solid var(--green);">
         <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:4px;">✅ Cliente confirmou o pedido!</div>
-        <div style="font-size:12px;color:var(--stone-light);">Escolha a data de instalação. Só dias úteis livres são mostrados.</div>
+        <div style="font-size:12px;color:var(--stone-light);">Selecione os itens aprovados e a data de instalação.</div>
+      </div>
+
+      <!-- ITENS APROVADOS -->
+      <div id="bloco-itens-aprovados" style="margin-bottom:20px;display:none;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:10px;">
+          ☑ Itens Aprovados pelo Cliente
+        </div>
+        <div id="lista-itens-fechamento" style="display:flex;flex-direction:column;gap:6px;"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding:10px 14px;background:#f8f8f8;border-radius:8px;">
+          <span style="font-size:13px;font-weight:600;color:var(--stone);">Total aprovado:</span>
+          <span id="total-itens-aprovados" style="font-size:16px;font-weight:800;color:var(--green);">R$ 0,00</span>
+        </div>
       </div>
 
       <!-- Sugestões de datas -->

@@ -2296,6 +2296,25 @@ function getContasPagar() {
 }
 function salvarContasPagar(c) { localStorage.setItem('mf_contas_pagar', JSON.stringify(c)); }
 
+function toggleParcelasCP() {
+  const tipo = document.getElementById('cp-recorrencia')?.value;
+  const wrap = document.getElementById('cp-parcelas-wrap');
+  if (wrap) wrap.style.display = tipo === 'parcelado' ? 'block' : 'none';
+}
+
+function previewParcelasCP() {
+  const n = parseInt(document.getElementById('cp-n-parcelas')?.value)||0;
+  const vp = parseFloat(document.getElementById('cp-valor-parcela')?.value)||0;
+  const prev = document.getElementById('cp-parcelas-preview');
+  if (!prev) return;
+  if (n > 0 && vp > 0) {
+    const total = n * vp;
+    prev.textContent = `${n}x de R$ ${vp.toFixed(2).replace('.',',')} = Total R$ ${total.toFixed(2).replace('.',',')}`;
+  } else {
+    prev.textContent = '';
+  }
+}
+
 function abrirModalContaPagar(id) {
   const contas = getContasPagar();
   const c = id ? contas.find(x => x.id === id) : null;
@@ -2335,12 +2354,37 @@ function abrirModalContaPagar(id) {
         </select>
       </div>
       <div>
-        <label class="form-label">Recorrência</label>
-        <select class="form-select" id="cp-recorrencia">
-          <option value="unica" ${(!c||c.recorrencia==='unica')?'selected':''}>Única</option>
-          <option value="mensal" ${c?.recorrencia==='mensal'?'selected':''}>Mensal</option>
+        <label class="form-label">TIPO DE PAGAMENTO</label>
+        <select class="form-select" id="cp-recorrencia" onchange="toggleParcelasCP()">
+          <option value="unica" ${(!c||c.recorrencia==='unica')?'selected':''}>Única (pagamento único)</option>
+          <option value="parcelado" ${c?.recorrencia==='parcelado'?'selected':''}>Parcelado (ex: 61x)</option>
+          <option value="mensal" ${c?.recorrencia==='mensal'?'selected':''}>Recorrente (todo mês)</option>
         </select>
       </div>
+
+      <!-- Parcelas — aparece só quando Parcelado -->
+      <div id="cp-parcelas-wrap" style="display:${c?.recorrencia==='parcelado'?'block':'none'};background:#f0f8ff;border-radius:10px;padding:12px;border:1px solid #cce4f0;">
+        <div style="font-size:12px;font-weight:700;color:#006382;margin-bottom:10px;">📅 Detalhes do Parcelamento</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
+          <div>
+            <label class="form-label">Nº DE PARCELAS</label>
+            <input class="form-input" id="cp-n-parcelas" type="number" min="2" max="360"
+              value="${c?.n_parcelas||''}" placeholder="Ex: 61"
+              style="font-size:18px;font-weight:800;text-align:center;"
+              oninput="previewParcelasCP()">
+          </div>
+          <div>
+            <label class="form-label">VALOR DA PARCELA (R$)</label>
+            <input class="form-input" id="cp-valor-parcela" type="number" step="0.01"
+              value="${c?.valor_parcela||''}" placeholder="Ex: 213,66"
+              style="font-size:18px;font-weight:800;text-align:center;"
+              oninput="previewParcelasCP()">
+          </div>
+        </div>
+        <div id="cp-parcelas-preview" style="font-size:13px;color:#006382;font-weight:600;padding:8px;background:white;border-radius:6px;min-height:24px;"></div>
+        <div style="font-size:11px;color:#888;margin-top:6px;">💡 O sistema vai gerar as parcelas automaticamente mês a mês a partir da data de vencimento acima</div>
+      </div>
+
       <div>
         <label class="form-label">Observação</label>
         <input class="form-input" id="cp-obs" value="${c?.obs||''}" placeholder="Detalhes adicionais...">
@@ -2361,14 +2405,46 @@ function salvarContaPagar() {
   if (!descricao || !valor || !vencimento) { showNotif('Preencha descrição, valor e vencimento!', 'error'); return; }
   const contas = getContasPagar();
   const editId = document.getElementById('cp-edit-id')?.value;
+  const recorrencia = document.getElementById('cp-recorrencia')?.value||'unica';
+  const nParcelas   = parseInt(document.getElementById('cp-n-parcelas')?.value)||1;
+  const valParcela  = parseFloat(document.getElementById('cp-valor-parcela')?.value)||valor;
+
   const dados = {
     descricao, valor, vencimento,
     categoria: document.getElementById('cp-categoria')?.value||'',
     banco: document.getElementById('cp-banco')?.value||'',
-    recorrencia: document.getElementById('cp-recorrencia')?.value||'unica',
+    recorrencia,
+    n_parcelas: recorrencia === 'parcelado' ? nParcelas : 1,
+    valor_parcela: recorrencia === 'parcelado' ? valParcela : valor,
     obs: document.getElementById('cp-obs')?.value.trim(),
     status: 'pendente',
   };
+
+  // Se parcelado, gera todas as parcelas automaticamente
+  if (recorrencia === 'parcelado' && nParcelas > 1) {
+    const base = new Date(vencimento + 'T12:00:00');
+    for (let i = 0; i < nParcelas; i++) {
+      const d = new Date(base);
+      d.setMonth(d.getMonth() + i);
+      const dtStr = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      contas.push({
+        ...dados,
+        id: 'CP-' + Date.now() + '-' + i,
+        descricao: `${descricao} (${i+1}/${nParcelas})`,
+        valor: valParcela,
+        vencimento: dtStr,
+        recorrencia: 'unica',
+        n_parcelas: nParcelas,
+        parcela_atual: i+1,
+      });
+    }
+    salvarContasPagar(contas);
+    closeModal('modal-detail');
+    renderFinanceiro();
+    showNotif(`✅ ${nParcelas} parcelas criadas!`, 'success');
+    return;
+  }
+
   if (editId) {
     const idx = contas.findIndex(c => c.id === editId);
     if (idx >= 0) contas[idx] = { ...contas[idx], ...dados };

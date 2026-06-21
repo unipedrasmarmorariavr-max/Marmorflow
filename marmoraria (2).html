@@ -695,6 +695,20 @@
   </div>
 </div>
 
+<!-- MODAL GENÉRICO (Saída, Entrada manual, etc) -->
+<div class="modal-overlay" id="modal-geral">
+  <div class="modal" style="max-width:500px;width:100%;">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Modal</div>
+      <button class="modal-close" onclick="closeModal('modal-geral')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('modal-geral')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL CONDIÇÕES DE PAGAMENTO -->
 <div class="modal-overlay" id="modal-condicoes">
   <div class="modal" style="max-width:540px;width:100%;">
@@ -2286,8 +2300,8 @@ function abrirModalContaPagar(id) {
   const contas = getContasPagar();
   const c = id ? contas.find(x => x.id === id) : null;
   const bancos = getBancos();
-  document.getElementById('modal-title').textContent = c ? 'Editar Conta a Pagar' : '+ Nova Conta a Pagar';
-  document.getElementById('modal-body').innerHTML = `
+  document.getElementById('detail-title').textContent = c ? 'Editar Conta a Pagar' : '+ Nova Conta a Pagar';
+  document.getElementById('detail-body').innerHTML = `
     <input type="hidden" id="cp-edit-id" value="${id||''}">
     <div style="display:grid;gap:14px;">
       <div>
@@ -2332,7 +2346,7 @@ function abrirModalContaPagar(id) {
         <input class="form-input" id="cp-obs" value="${c?.obs||''}" placeholder="Detalhes adicionais...">
       </div>
     </div>`;
-  document.getElementById('modal-footer').innerHTML = `
+  document.getElementById('detail-footer').innerHTML = `
     <button class="btn-secondary" onclick="closeModal('modal-detail')">Cancelar</button>
     <button onclick="salvarContaPagar()" style="background:#B85A4A;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">
       💾 Salvar Conta
@@ -2397,7 +2411,7 @@ async function pagarConta(id) {
         </select>
       </div>
     </div>`;
-  document.getElementById('modal-footer').innerHTML = `
+  document.getElementById('detail-footer').innerHTML = `
     <button class="btn-secondary" onclick="closeModal('modal-detail')">Cancelar</button>
     <button onclick="confirmarPagamento()" style="background:#2E7D32;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">
       ✓ Confirmar Pagamento
@@ -2456,8 +2470,8 @@ function excluirContaPagar(id) {
 function abrirModalTransacao(tipo) {
   const isEntrada = tipo === 'entrada';
   const bancos = getBancos();
-  document.getElementById('modal-title').textContent = isEntrada ? '+ Nova Entrada' : '+ Nova Saída';
-  document.getElementById('modal-body').innerHTML = `
+  document.getElementById('detail-title').textContent = isEntrada ? '+ Nova Entrada' : '+ Nova Saída';
+  document.getElementById('detail-body').innerHTML = `
     <div style="display:grid;gap:14px;">
       <div>
         <label class="form-label">Valor (R$) *</label>

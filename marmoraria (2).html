@@ -1799,7 +1799,6 @@ function iniciarAutoRefresh() {
       if (abaAtiva === 'kanban' || !abaAtiva) renderKanban(document.getElementById('search-kanban')?.value||'');
       else if (abaAtiva === 'dashboard') renderDashboard();
       else if (abaAtiva === 'financeiro' && typeof renderFinanceiro==='function') renderFinanceiro();
-      mostrarNotifRefresh('📋 Pedidos atualizados');
     }
   }, 20000);
 }

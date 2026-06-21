@@ -1010,6 +1010,7 @@ function createCard(o) {
       <div class="card-actions">
         <button class="card-btn" onclick="openDetail('${o.id}')" title="Ver detalhes">👁</button>
         <button class="card-btn" onclick="copiarLinkCliente('${o.id}');event.stopPropagation()" title="Link cliente" style="color:#25D366;">🔗</button>
+        ${['corte','acabamento','pronto','entregue'].includes(o.stage)?`<button class="card-btn" onclick="abrirVerProjeto('${o.id}');event.stopPropagation()" title="Ver Projeto" style="color:#006382;">📐</button>`:''}
         ${showFechar?`<button class="card-btn" onclick="abrirFecharPedido('${o.id}');event.stopPropagation()" title="Adicionar dados comerciais" style="color:var(--green);font-size:13px;">💼</button>`:''}
         ${p.canEdit&&o.stage==='medicao'?`<button class="card-btn" onclick="openEditMedidor('${o.id}')" title="Editar">✏️</button>`:''}
         ${p.canDelete?`<button class="card-btn" onclick="deleteOrder('${o.id}')" title="Excluir">🗑</button>`:''}
@@ -1019,6 +1020,192 @@ function createCard(o) {
 }
 
 function filterKanban(){renderKanban(document.getElementById('search-kanban').value);}
+
+// ─── VER PROJETO / CROQUI ─────────────────────────────────────────────────
+async function abrirVerProjeto(id) {
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+
+  const podeEditar = ['corte'].includes(o.stage) && 
+    (currentUser === 'dono' || currentUser === 'comercial' || currentUser === 'producao');
+  const podeCroqui = ['corte'].includes(o.stage) && 
+    (currentUser === 'dono' || currentUser === 'medidor' || currentUser === 'producao');
+
+  const itensCliente = ['Cuba','Lixeira','Dispenser','Torneira','Tomada de Torre','Calha Úmida','Válvula'];
+  const itensSelecionados = o.itensCliente || [];
+
+  const croquiImgs = Array.isArray(o.croqui) ? o.croqui : (o.croqui ? [o.croqui] : []);
+  const localImgs  = Array.isArray(o.local)  ? o.local  : (o.local  ? [o.local]  : []);
+
+  document.getElementById('detail-title').textContent = '📐 Projeto — ' + o.cliente;
+  document.getElementById('detail-body').innerHTML = `
+    <div style="background:#f0f8ff;border-radius:8px;padding:10px 14px;margin-bottom:14px;">
+      <div style="font-weight:700;color:var(--stone);">${o.cliente} · ${o.id}</div>
+      <div style="font-size:12px;color:#888;">${o.peca||''} ${o.material?' · '+o.material:''}</div>
+      ${o.obs?`<div style="font-size:12px;color:#555;margin-top:4px;">📝 ${o.obs}</div>`:''}
+      ${o.acesso?`<div style="font-size:12px;color:#555;margin-top:2px;">🚪 Acesso: ${o.acesso}</div>`:''}
+    </div>
+
+    <!-- ITENS DO CLIENTE -->
+    <div style="margin-bottom:16px;">
+      <div style="font-size:12px;font-weight:700;color:var(--stone);text-transform:uppercase;margin-bottom:8px;">
+        📦 Itens deixados pelo cliente
+      </div>
+      ${podeEditar ? `
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;" id="itens-cliente-edit">
+        ${itensCliente.map(item => `
+          <label style="display:flex;align-items:center;gap:5px;background:${itensSelecionados.includes(item)?'#e8f4f8':'#f5f5f5'};border:2px solid ${itensSelecionados.includes(item)?'#006382':'#ddd'};border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600;">
+            <input type="checkbox" value="${item}" ${itensSelecionados.includes(item)?'checked':''} 
+              style="accent-color:#006382;" onchange="toggleItemCliente('${id}',this)"> ${item}
+          </label>`).join('')}
+      </div>
+      <input class="form-input" id="itens-obs-edit" value="${o.itensObs||''}" 
+        placeholder="Outros itens deixados pelo cliente..." style="font-size:13px;margin-bottom:6px;"
+        onchange="salvarItensCliente('${id}')">
+      ` : `
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${itensSelecionados.length > 0 
+          ? itensSelecionados.map(item=>`<span style="background:#e8f4f8;color:#006382;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;">${item}</span>`).join('')
+          : '<span style="font-size:13px;color:#888;">Nenhum item registrado</span>'}
+      </div>
+      ${o.itensObs?`<div style="font-size:12px;color:#555;margin-top:6px;">📝 ${o.itensObs}</div>`:''}
+      `}
+    </div>
+
+    <!-- CROQUI -->
+    <div style="margin-bottom:16px;">
+      <div style="font-size:12px;font-weight:700;color:var(--stone);text-transform:uppercase;margin-bottom:8px;">
+        📐 Croqui / Medidas
+      </div>
+      ${croquiImgs.length > 0 ? `
+        <div class="images-protected" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+          ${croquiImgs.map(img=>`<div class="img-zoom-wrap" onclick="openLightbox('${img}')">
+            <img src="${img}" style="width:100px;height:100px;object-fit:cover;border-radius:8px;border:2px solid #ddd;cursor:pointer;">
+          </div>`).join('')}
+        </div>` : `<div style="font-size:13px;color:#888;margin-bottom:8px;">Nenhum croqui adicionado ainda</div>`}
+      
+      ${podeCroqui ? `
+      <div style="border:2px dashed #006382;border-radius:8px;padding:10px;background:#f0f8ff;">
+        <div style="font-size:12px;color:#006382;font-weight:600;margin-bottom:6px;">📸 Atualizar croqui</div>
+        <input type="file" id="novo-croqui-input" accept="image/*" multiple
+          style="width:100%;font-size:12px;" onchange="previewNovoCroqui()">
+        <div id="novo-croqui-preview" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"></div>
+      </div>` : ''}
+    </div>
+
+    <!-- FOTO DO LOCAL (só equipe interna) -->
+    ${localImgs.length > 0 ? `
+    <div>
+      <div style="font-size:12px;font-weight:700;color:var(--stone);text-transform:uppercase;margin-bottom:8px;">
+        📸 Fotos do Local
+      </div>
+      <div class="images-protected" style="display:flex;flex-wrap:wrap;gap:8px;">
+        ${localImgs.map(img=>`<div class="img-zoom-wrap" onclick="openLightbox('${img}')">
+          <img src="${img}" style="width:100px;height:100px;object-fit:cover;border-radius:8px;border:2px solid #ddd;cursor:pointer;">
+        </div>`).join('')}
+      </div>
+    </div>` : ''}
+  `;
+
+  const footerBtns = [];
+  footerBtns.push(`<button class="btn-secondary" onclick="closeModal('modal-detail')">Fechar</button>`);
+  if (podeCroqui) {
+    footerBtns.push(`<button onclick="salvarNovoCroqui('${id}')" 
+      style="background:#006382;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">
+      💾 Salvar Croqui
+    </button>`);
+  }
+  if (podeEditar) {
+    footerBtns.push(`<button onclick="salvarItensCliente('${id}')" 
+      style="background:#2E7D32;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">
+      ✅ Salvar Itens
+    </button>`);
+  }
+  document.getElementById('detail-footer').innerHTML = footerBtns.join('');
+  openModal('modal-detail');
+}
+
+function previewNovoCroqui() {
+  const inp = document.getElementById('novo-croqui-input');
+  const prev = document.getElementById('novo-croqui-preview');
+  if (!inp || !prev) return;
+  prev.innerHTML = '';
+  Array.from(inp.files).forEach(f => {
+    const r = new FileReader();
+    r.onload = e => {
+      prev.innerHTML += `<img src="${e.target.result}" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:2px solid #006382;">`;
+    };
+    r.readAsDataURL(f);
+  });
+}
+
+async function salvarNovoCroqui(id) {
+  const inp = document.getElementById('novo-croqui-input');
+  if (!inp || !inp.files || inp.files.length === 0) {
+    showNotif('Selecione ao menos uma foto!', 'error'); return;
+  }
+  const MAX_PX = 1200, QUALITY = 0.75;
+  const lerCompress = file => new Promise(resolve => {
+    const r = new FileReader();
+    r.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > MAX_PX || h > MAX_PX) {
+          if (w > h) { h = Math.round(h*MAX_PX/w); w = MAX_PX; }
+          else { w = Math.round(w*MAX_PX/h); h = MAX_PX; }
+        }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', QUALITY));
+      };
+      img.src = e.target.result;
+    };
+    r.readAsDataURL(file);
+  });
+
+  showLoading('Salvando croqui...');
+  const novasFotos = await Promise.all(Array.from(inp.files).map(lerCompress));
+  const o = orders.find(x => x.id === id);
+  const fotosAntigas = Array.isArray(o?.croqui) ? o.croqui : (o?.croqui ? [o.croqui] : []);
+  const todasFotos = [...fotosAntigas, ...novasFotos];
+
+  const { error } = await getSB().from('pedidos').update({ croqui: todasFotos }).eq('id', id);
+  hideLoading();
+  if (error) { showNotif('Erro: ' + error.message, 'error'); return; }
+  if (o) o.croqui = todasFotos;
+  showNotif('✅ Croqui atualizado!', 'success');
+  abrirVerProjeto(id); // recarrega o modal
+}
+
+async function toggleItemCliente(id, checkbox) {
+  const label = checkbox.closest('label');
+  if (checkbox.checked) {
+    label.style.borderColor = '#006382';
+    label.style.background = '#e8f4f8';
+  } else {
+    label.style.borderColor = '#ddd';
+    label.style.background = '#f5f5f5';
+  }
+}
+
+async function salvarItensCliente(id) {
+  const checkboxes = document.querySelectorAll('#itens-cliente-edit input[type="checkbox"]');
+  const selecionados = Array.from(checkboxes).filter(c=>c.checked).map(c=>c.value);
+  const obs = document.getElementById('itens-obs-edit')?.value.trim() || '';
+
+  showLoading('Salvando...');
+  const { error } = await getSB().from('pedidos').update({ 
+    itensCliente: selecionados,
+    itensObs: obs
+  }).eq('id', id);
+  hideLoading();
+  if (error) { showNotif('Erro: ' + error.message, 'error'); return; }
+  const o = orders.find(x => x.id === id);
+  if (o) { o.itensCliente = selecionados; o.itensObs = obs; }
+  showNotif('✅ Itens salvos!', 'success');
+}
 
 // ============ DRAG & DROP ============
 function dragOver(e){e.preventDefault();e.currentTarget.classList.add('drag-over');}
@@ -3813,7 +4000,7 @@ async function renderAgendaMedicao() {
 
 function cardMedicao(m, isHoje, passada) {
   const statusCor = m.Status==='concluido'?'#2E7D32':m.Status==='revisitar'?'#B85A4A':'#8B6914';
-  const statusLabel = m.Status==='concluido'?'✅ Concluído':m.Status==='revisitar'?'🔄 Revisitar':'⏳ Pendente';
+  const statusLabel = m.Status==='concluido'?'✅ Concluído':m.Status==='revisitar'?'🔄 Aguarda Reagendamento':'⏳ Pendente';
   const enderecoCompleto = [m.Endereco, m.Numero, m.Complemento].filter(Boolean).join(', ');
   const enderecoComBairro = [m.Endereco, m.Numero, m.Complemento, m.Bairro].filter(Boolean).join(', ');
   const cidadeStr = m.Cidade || 'Volta Redonda RJ';
@@ -4276,15 +4463,22 @@ async function finalizarMedicao() {
 }
 
 async function solicitarRevisita(id) {
+  const medicoes = await getMedicoes();
+  const m = medicoes.find(x => String(x.id) === String(id));
+  if (!m) return;
+
+  // Pede motivo simples
   const motivo = prompt('Motivo da revisita (opcional):');
-  if (motivo === null) return;
+  if (motivo === null) return; // cancelou
+
   try {
     await getSB().from('medicoes').update({
       Status: 'revisitar',
-      Motivo_revisita: motivo || 'Revisita necessária'
+      Motivo_revisita: motivo || 'Medidas a confirmar'
     }).eq('id', id);
     await renderAgendaMedicao();
-    showNotif('Marcado para revisitar', 'error');
+    // Notifica que o comercial precisa reagendar
+    showNotif('🔄 Marcado para revisita! O comercial deve agendar a nova data.', 'success');
   } catch(e) { showNotif('Erro: '+e.message,'error'); }
 }
 

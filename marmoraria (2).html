@@ -2968,13 +2968,19 @@ function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
 
         <!-- À VISTA -->
         <div style="border:2px solid #ddd;border-radius:12px;padding:14px;" id="bloco-avista">
-          <div style="font-size:14px;font-weight:700;margin-bottom:10px;">💰 À Vista / Pix</div>
+          <div style="font-size:14px;font-weight:700;margin-bottom:10px;">💰 À Vista</div>
           <div style="display:flex;flex-direction:column;gap:8px;">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="100avista" onchange="montarParcelas(${saldo})"> 100% de uma vez
+              <input type="radio" name="cond-tipo" value="100pix" onchange="montarParcelas(${saldo})"> 💸 100% Pix
             </label>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="5050" onchange="montarParcelas(${saldo})"> 50% entrada + 50% entrega
+              <input type="radio" name="cond-tipo" value="100dinheiro" onchange="montarParcelas(${saldo})"> 💵 100% Dinheiro
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
+              <input type="radio" name="cond-tipo" value="100avista" onchange="montarParcelas(${saldo})"> 💰 100% (qualquer forma)
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
+              <input type="radio" name="cond-tipo" value="5050" onchange="montarParcelas(${saldo})"> ✌️ 50% entrada + 50% entrega
             </label>
           </div>
         </div>
@@ -3067,12 +3073,13 @@ function montarParcelas(saldo) {
   campos.innerHTML = '';
   lista.innerHTML = '';
 
-  if (tipo === '100avista') {
+  if (tipo === '100pix' || tipo === '100dinheiro' || tipo === '100avista') {
     listaWrap.style.display = 'block';
+    const formaLabel = tipo === '100pix' ? 'Pix' : tipo === '100dinheiro' ? 'Dinheiro' : 'À Vista';
     campos.innerHTML = `
-      <div><label class="form-label">DATA DO PAGAMENTO</label>
+      <div><label class="form-label">DATA DO PAGAMENTO <span style="color:#888;font-weight:400;">(opcional)</span></label>
       <input class="form-input" type="date" id="cond-data1" value="${fmtData(hoje)}"></div>`;
-    adicionarLinhaParcela(saldo, 'À Vista', _fmt(saldo), fmtData(hoje));
+    adicionarLinhaParcela(saldo, formaLabel + ' 100%', _fmt(saldo), fmtData(hoje));
 
   } else if (tipo === '5050') {
     listaWrap.style.display = 'block';

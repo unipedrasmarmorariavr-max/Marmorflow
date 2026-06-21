@@ -3466,6 +3466,7 @@ function abrirConfirmarRecebimento(pedidoId, cliente, valorEsperado) {
 
 function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
   const _fmt = v => 'R$ '+(v||0).toFixed(2).replace('.',',');
+  window._condSaldo = saldo; // salva globalmente para uso nos onchange
   document.getElementById('body-modal-condicoes').innerHTML = `
     <input type="hidden" id="parc-pedido-id" value="${pedidoId}">
     <input type="hidden" id="parc-saldo" value="${saldo}">
@@ -3486,16 +3487,16 @@ function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
           <div style="font-size:14px;font-weight:700;margin-bottom:10px;">💰 À Vista</div>
           <div style="display:flex;flex-direction:column;gap:8px;">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="100pix" onchange="montarParcelas(${saldo})"> 💸 100% Pix
+              <input type="radio" name="cond-tipo" value="100pix" onchange="montarParcelas(window._condSaldo)"> 💸 100% Pix
             </label>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="100dinheiro" onchange="montarParcelas(${saldo})"> 💵 100% Dinheiro
+              <input type="radio" name="cond-tipo" value="100dinheiro" onchange="montarParcelas(window._condSaldo)"> 💵 100% Dinheiro
             </label>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="100avista" onchange="montarParcelas(${saldo})"> 💰 100% (qualquer forma)
+              <input type="radio" name="cond-tipo" value="100avista" onchange="montarParcelas(window._condSaldo)"> 💰 100% (qualquer forma)
             </label>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="5050" onchange="montarParcelas(${saldo})"> ✌️ 50% entrada + 50% entrega
+              <input type="radio" name="cond-tipo" value="5050" onchange="montarParcelas(window._condSaldo)"> ✌️ 50% entrada + 50% entrega
             </label>
           </div>
         </div>
@@ -3505,16 +3506,16 @@ function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
           <div style="font-size:14px;font-weight:700;margin-bottom:10px;">💳 Parcelado</div>
           <div style="display:flex;flex-direction:column;gap:8px;">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="entrada+parcelas" onchange="montarParcelas(${saldo})"> Entrada + parcelas (com data)
+              <input type="radio" name="cond-tipo" value="entrada+parcelas" onchange="montarParcelas(window._condSaldo)"> Entrada + parcelas (com data)
             </label>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="entrada+antecipado" onchange="montarParcelas(${saldo})"> Entrada + parcelas antecipadas
+              <input type="radio" name="cond-tipo" value="entrada+antecipado" onchange="montarParcelas(window._condSaldo)"> Entrada + parcelas antecipadas
             </label>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="soparcelado" onchange="montarParcelas(${saldo})"> Só parcelado (com data)
+              <input type="radio" name="cond-tipo" value="soparcelado" onchange="montarParcelas(window._condSaldo)"> Só parcelado (com data)
             </label>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="antecipado" onchange="montarParcelas(${saldo})"> Só parcelado antecipado
+              <input type="radio" name="cond-tipo" value="antecipado" onchange="montarParcelas(window._condSaldo)"> Só parcelado antecipado
             </label>
           </div>
         </div>
@@ -3524,10 +3525,10 @@ function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
           <div style="font-size:14px;font-weight:700;margin-bottom:10px;">🧾 Boleto</div>
           <div style="display:flex;flex-direction:column;gap:8px;">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="boleto1" onchange="montarParcelas(${saldo})"> 1 boleto (valor total)
+              <input type="radio" name="cond-tipo" value="boleto1" onchange="montarParcelas(window._condSaldo)"> 1 boleto (valor total)
             </label>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="boletoparcelado" onchange="montarParcelas(${saldo})"> Boleto parcelado
+              <input type="radio" name="cond-tipo" value="boletoparcelado" onchange="montarParcelas(window._condSaldo)"> Boleto parcelado
             </label>
           </div>
         </div>
@@ -3537,10 +3538,10 @@ function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
           <div style="font-size:14px;font-weight:700;margin-bottom:10px;">📋 Outros</div>
           <div style="display:flex;flex-direction:column;gap:8px;">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="transferencia" onchange="montarParcelas(${saldo})"> Transferência
+              <input type="radio" name="cond-tipo" value="transferencia" onchange="montarParcelas(window._condSaldo)"> Transferência
             </label>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="combinado" onchange="montarParcelas(${saldo})"> A combinar
+              <input type="radio" name="cond-tipo" value="combinado" onchange="montarParcelas(window._condSaldo)"> A combinar
             </label>
           </div>
         </div>
@@ -3619,7 +3620,7 @@ function montarParcelas(saldo) {
         <div><label class="form-label">DATA <span style="color:#888;font-weight:400;">(opcional)</span></label>
         <input class="form-input" type="date" id="cond-data2" value="${fmtData(d2)}"></div>
       </div>
-      <button onclick="gerarLinhas5050(${saldo})"
+      <button onclick="gerarLinhas5050(window._condSaldo)"
         style="background:#2E7D32;color:white;border:none;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;margin-top:10px;">
         ✅ Gerar parcelas
       </button>`;
@@ -3630,15 +3631,15 @@ function montarParcelas(saldo) {
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
         <div><label class="form-label">VALOR ENTRADA (R$)</label>
         <input class="form-input" type="number" id="cond-entrada-val" placeholder="Ex: 300" step="0.01"
-          style="font-size:15px;font-weight:700;" oninput="previewEntradaParcelas(${saldo})"></div>
+          style="font-size:15px;font-weight:700;" oninput="previewEntradaParcelas(window._condSaldo)"></div>
         <div><label class="form-label">Nº PARCELAS</label>
         <input class="form-input" type="number" id="cond-n-parcelas" value="9" min="1" max="48"
-          style="font-size:15px;font-weight:700;" oninput="previewEntradaParcelas(${saldo})"></div>
+          style="font-size:15px;font-weight:700;" oninput="previewEntradaParcelas(window._condSaldo)"></div>
         <div><label class="form-label">DATA ENTRADA</label>
         <input class="form-input" type="date" id="cond-data-entrada" value="${fmtData(hoje)}"></div>
       </div>
       <div id="cond-preview-ep" style="margin-top:8px;padding:8px 10px;background:#f0fff4;border-radius:8px;font-size:13px;color:#2E7D32;font-weight:600;display:none;"></div>
-      <button onclick="gerarLinhasEntradaParcelas(${saldo})"
+      <button onclick="gerarLinhasEntradaParcelas(window._condSaldo)"
         style="background:#006382;color:white;border:none;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;margin-top:10px;">
         ✅ Gerar parcelas
       </button>`;
@@ -3649,12 +3650,12 @@ function montarParcelas(saldo) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div><label class="form-label">Nº PARCELAS</label>
         <input class="form-input" type="number" id="cond-n-parcelas" value="10" min="1" max="48"
-          style="font-size:15px;font-weight:700;" oninput="previewSoParcelado(${saldo})"></div>
+          style="font-size:15px;font-weight:700;" oninput="previewSoParcelado(window._condSaldo)"></div>
         <div><label class="form-label">DATA 1ª PARCELA <span style="color:#888;font-weight:400;">(opcional)</span></label>
         <input class="form-input" type="date" id="cond-data-entrada" value="${fmtData(hoje)}"></div>
       </div>
       <div id="cond-preview-sp" style="margin-top:8px;padding:8px 10px;background:#f0f8ff;border-radius:8px;font-size:13px;color:#006382;font-weight:600;"></div>
-      <button onclick="gerarLinhasSoParcelado(${saldo})"
+      <button onclick="gerarLinhasSoParcelado(window._condSaldo)"
         style="background:#006382;color:white;border:none;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;margin-top:10px;">
         ✅ Gerar parcelas
       </button>`;
@@ -3669,13 +3670,13 @@ function montarParcelas(saldo) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div><label class="form-label">VALOR DA ENTRADA (R$)</label>
         <input class="form-input" type="number" id="cond-entrada-val" placeholder="Ex: 300" step="0.01"
-          style="font-size:15px;font-weight:700;" oninput="previewEntradaParcelas(${saldo})"></div>
+          style="font-size:15px;font-weight:700;" oninput="previewEntradaParcelas(window._condSaldo)"></div>
         <div><label class="form-label">Nº PARCELAS ANTECIPADAS</label>
         <input class="form-input" type="number" id="cond-n-parcelas" value="9" min="1" max="48"
-          style="font-size:15px;font-weight:700;" oninput="previewEntradaParcelas(${saldo})"></div>
+          style="font-size:15px;font-weight:700;" oninput="previewEntradaParcelas(window._condSaldo)"></div>
       </div>
       <div id="cond-preview-ep" style="margin-top:8px;padding:8px 10px;background:#fff8e7;border-radius:8px;font-size:13px;color:#8B6914;font-weight:600;display:none;"></div>
-      <button onclick="gerarLinhasEntradaAntecipado(${saldo})"
+      <button onclick="gerarLinhasEntradaAntecipado(window._condSaldo)"
         style="background:#8B6914;color:white;border:none;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;margin-top:10px;">
         ✅ Gerar parcelas
       </button>`;
@@ -3688,10 +3689,10 @@ function montarParcelas(saldo) {
       </div>
       <div><label class="form-label">Nº PARCELAS (opcional)</label>
         <input class="form-input" type="number" id="cond-n-parcelas" value="1" min="1" max="48"
-          style="font-size:15px;font-weight:700;width:100px;" oninput="previewSoParcelado(${saldo})">
+          style="font-size:15px;font-weight:700;width:100px;" oninput="previewSoParcelado(window._condSaldo)">
       </div>
       <div id="cond-preview-sp" style="margin-top:8px;padding:8px 10px;background:#fff8e7;border-radius:8px;font-size:13px;color:#8B6914;font-weight:600;"></div>
-      <button onclick="gerarLinhasSoParcelado(${saldo})"
+      <button onclick="gerarLinhasSoParcelado(window._condSaldo)"
         style="background:#8B6914;color:white;border:none;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;margin-top:10px;">
         ✅ Gerar parcelas sem data
       </button>`;
@@ -3710,12 +3711,12 @@ function montarParcelas(saldo) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div><label class="form-label">Nº BOLETOS</label>
         <input class="form-input" type="number" id="cond-n-parcelas" value="3" min="1" max="24"
-          style="font-size:15px;font-weight:700;" oninput="previewSoParcelado(${saldo})"></div>
+          style="font-size:15px;font-weight:700;" oninput="previewSoParcelado(window._condSaldo)"></div>
         <div><label class="form-label">DATA 1º BOLETO <span style="color:#888;font-weight:400;">(opcional)</span></label>
         <input class="form-input" type="date" id="cond-data-entrada" value="${fmtData(hoje)}"></div>
       </div>
       <div id="cond-preview-sp" style="margin-top:8px;padding:8px 10px;background:#f0f8ff;border-radius:8px;font-size:13px;color:#006382;font-weight:600;"></div>
-      <button onclick="gerarLinhasSoParcelado(${saldo})"
+      <button onclick="gerarLinhasSoParcelado(window._condSaldo)"
         style="background:#006382;color:white;border:none;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;margin-top:10px;">
         ✅ Gerar boletos
       </button>`;

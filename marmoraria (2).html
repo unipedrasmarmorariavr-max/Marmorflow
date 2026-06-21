@@ -2984,13 +2984,16 @@ function abrirDefinirParcelas(pedidoId, cliente, valorTotal, saldo) {
           <div style="font-size:14px;font-weight:700;margin-bottom:10px;">💳 Parcelado</div>
           <div style="display:flex;flex-direction:column;gap:8px;">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="entrada+parcelas" onchange="montarParcelas(${saldo})"> Entrada + parcelas
+              <input type="radio" name="cond-tipo" value="entrada+parcelas" onchange="montarParcelas(${saldo})"> Entrada + parcelas (com data)
             </label>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="soparcelado" onchange="montarParcelas(${saldo})"> Só parcelado
+              <input type="radio" name="cond-tipo" value="entrada+antecipado" onchange="montarParcelas(${saldo})"> Entrada + parcelas antecipadas
             </label>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
-              <input type="radio" name="cond-tipo" value="antecipado" onchange="montarParcelas(${saldo})"> Antecipado (sem data)
+              <input type="radio" name="cond-tipo" value="soparcelado" onchange="montarParcelas(${saldo})"> Só parcelado (com data)
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
+              <input type="radio" name="cond-tipo" value="antecipado" onchange="montarParcelas(${saldo})"> Só parcelado antecipado
             </label>
           </div>
         </div>
@@ -3121,6 +3124,26 @@ function montarParcelas(saldo) {
     previewSoParcelado(saldo);
     listaWrap.style.display = 'none';
 
+  } else if (tipo === 'entrada+antecipado') {
+    campos.innerHTML = `
+      <div style="background:#fff8e7;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:12px;color:#8B6914;">
+        ⚡ Entrada registrada agora + parcelas antecipadas sem data definida
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div><label class="form-label">VALOR DA ENTRADA (R$)</label>
+        <input class="form-input" type="number" id="cond-entrada-val" placeholder="Ex: 300" step="0.01"
+          style="font-size:15px;font-weight:700;" oninput="previewEntradaParcelas(${saldo})"></div>
+        <div><label class="form-label">Nº PARCELAS ANTECIPADAS</label>
+        <input class="form-input" type="number" id="cond-n-parcelas" value="9" min="1" max="48"
+          style="font-size:15px;font-weight:700;" oninput="previewEntradaParcelas(${saldo})"></div>
+      </div>
+      <div id="cond-preview-ep" style="margin-top:8px;padding:8px 10px;background:#fff8e7;border-radius:8px;font-size:13px;color:#8B6914;font-weight:600;display:none;"></div>
+      <button onclick="gerarLinhasEntradaAntecipado(${saldo})"
+        style="background:#8B6914;color:white;border:none;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;margin-top:10px;">
+        ✅ Gerar parcelas
+      </button>`;
+    listaWrap.style.display = 'none';
+
   } else if (tipo === 'antecipado') {
     campos.innerHTML = `
       <div style="background:#fff8e7;border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;color:#8B6914;">
@@ -3190,6 +3213,24 @@ function previewSoParcelado(saldo) {
   const parcela = saldo/n;
   const prev = document.getElementById('cond-preview-sp');
   if (prev) prev.textContent = `💳 ${n}x de R$ ${parcela.toFixed(2).replace('.',',')}`;
+}
+
+function gerarLinhasEntradaAntecipado(saldo) {
+  const entrada = parseFloat(document.getElementById('cond-entrada-val')?.value)||0;
+  const n = parseInt(document.getElementById('cond-n-parcelas')?.value)||1;
+  if (entrada <= 0) { showNotif('Informe o valor da entrada!','error'); return; }
+  const restante = saldo - entrada;
+  const parcela = restante/n;
+  const lista = document.getElementById('parc-lista');
+  if (!lista) return;
+  lista.innerHTML = '';
+  const hoje = new Date();
+  const fmtData = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  adicionarLinhaParcela(saldo, 'Entrada', entrada.toFixed(2).replace('.',','), fmtData(hoje));
+  for (let i=1; i<=n; i++) {
+    adicionarLinhaParcela(saldo, `Antecipado ${i}/${n}`, parcela.toFixed(2).replace('.',','), '');
+  }
+  document.getElementById('parc-lista-wrap').style.display = 'block';
 }
 
 function gerarLinhasEntradaParcelas(saldo) {

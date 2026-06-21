@@ -2896,26 +2896,30 @@ function abrirConfirmarRecebimento(pedidoId, cliente, valorEsperado) {
         <label class="form-label">DATA DO RECEBIMENTO *</label>
         <input class="form-input" id="rec-data" type="date" value="${new Date().toISOString().substring(0,10)}">
       </div>
-      <!-- Taxa bancária -->
-      <div style="background:#fff8e7;border-radius:10px;padding:12px 14px;">
-        <label class="form-label" style="color:#8B6914;">💳 TAXA BANCÁRIA / DESCONTO (%)</label>
-        <div style="display:flex;gap:10px;align-items:center;margin-top:6px;">
-          <input class="form-input" id="rec-taxa" type="number" step="0.01" min="0" max="100" value="0"
-            style="width:100px;text-align:center;font-size:18px;font-weight:700;"
-            oninput="atualizarLiquidoRecebimento()">
-          <div style="flex:1;">
-            <div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:2px;">
-              <span>Valor bruto:</span>
-              <span id="rec-bruto-txt" style="font-weight:600;">—</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:12px;color:#B85A4A;margin-bottom:2px;">
-              <span>Taxa:</span>
-              <span id="rec-taxa-txt" style="font-weight:600;">R$ 0,00</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:14px;color:#2E7D32;border-top:1px solid #ddd;padding-top:4px;margin-top:4px;">
-              <span><b>Líquido na conta:</b></span>
-              <span id="rec-liquido-txt" style="font-weight:800;">—</span>
-            </div>
+      <!-- Valor líquido real -->
+      <div style="background:#f0fff4;border-radius:10px;padding:14px;">
+        <label class="form-label" style="color:#2E7D32;">💵 VALOR QUE CAIU NA CONTA (R$)</label>
+        <input class="form-input" id="rec-liquido-real" type="number" step="0.01" min="0"
+          style="font-size:22px;font-weight:800;border:2px solid #2E7D32;text-align:center;margin-top:6px;"
+          placeholder="0,00" oninput="atualizarLiquidoRecebimento()">
+
+        <!-- Análise automática -->
+        <div id="rec-analise" style="display:none;margin-top:12px;border-top:1px solid #c8ecd4;padding-top:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+            <span style="color:#888;">💰 Cobrado do cliente:</span>
+            <span id="rec-bruto-txt" style="font-weight:700;color:#333;">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+            <span style="color:#B85A4A;">📉 Taxa/Desconto:</span>
+            <span id="rec-taxa-txt" style="font-weight:700;color:#B85A4A;">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+            <span style="color:#888;">📊 Taxa %:</span>
+            <span id="rec-taxa-pct-txt" style="font-weight:700;color:#B85A4A;">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:15px;border-top:1px solid #c8ecd4;padding-top:8px;margin-top:4px;">
+            <span style="color:#2E7D32;font-weight:700;">✅ Líquido na conta:</span>
+            <span id="rec-liquido-txt" style="font-weight:800;color:#2E7D32;font-size:16px;">—</span>
           </div>
         </div>
       </div>
@@ -3335,27 +3339,40 @@ function atualizarValorParcela(total) {
 }
 
 function atualizarLiquidoRecebimento() {
-  const bruto  = parseFloat(document.getElementById('rec-valor')?.value)||0;
-  const taxa   = parseFloat(document.getElementById('rec-taxa')?.value)||0;
-  const taxaVal = bruto * taxa / 100;
-  const liquido = bruto - taxaVal;
-
+  const bruto   = parseFloat(document.getElementById('rec-valor')?.value)||0;
+  const liquido = parseFloat(document.getElementById('rec-liquido-real')?.value)||0;
   const fmtR = v => 'R$ ' + v.toFixed(2).replace('.',',');
-  const elBruto   = document.getElementById('rec-bruto-txt');
-  const elTaxa    = document.getElementById('rec-taxa-txt');
-  const elLiquido = document.getElementById('rec-liquido-txt');
 
-  if (elBruto)   elBruto.textContent   = fmtR(bruto);
-  if (elTaxa)    elTaxa.textContent    = '- ' + fmtR(taxaVal);
-  if (elLiquido) elLiquido.textContent = fmtR(liquido);
+  // Pré-preenche o líquido igual ao bruto se ainda não foi digitado
+  const elLiq = document.getElementById('rec-liquido-real');
+  if (elLiq && !elLiq.value && bruto > 0) {
+    elLiq.value = bruto.toFixed(2);
+  }
+
+  // Só mostra análise se digitou o líquido
+  const analise = document.getElementById('rec-analise');
+  if (!analise) return;
+
+  if (liquido > 0 && bruto > 0) {
+    const taxaVal = bruto - liquido;
+    const taxaPct = bruto > 0 ? (taxaVal / bruto * 100) : 0;
+
+    document.getElementById('rec-bruto-txt').textContent  = fmtR(bruto);
+    document.getElementById('rec-taxa-txt').textContent   = taxaVal > 0 ? '- ' + fmtR(taxaVal) : 'R$ 0,00';
+    document.getElementById('rec-taxa-pct-txt').textContent = taxaVal > 0 ? taxaPct.toFixed(2) + '%' : '0%';
+    document.getElementById('rec-liquido-txt').textContent = fmtR(liquido);
+    analise.style.display = 'block';
+  } else {
+    analise.style.display = 'none';
+  }
 }
 
 async function confirmarRecebimento() {
   const pedidoId = document.getElementById('rec-pedido-id')?.value;
-  const valorBruto = parseFloat(document.getElementById('rec-valor')?.value)||0;
-  const taxa    = parseFloat(document.getElementById('rec-taxa')?.value)||0;
-  const taxaVal = valorBruto * taxa / 100;
-  const valorLiquido = valorBruto - taxaVal;
+  const valorBruto   = parseFloat(document.getElementById('rec-valor')?.value)||0;
+  const valorLiquido = parseFloat(document.getElementById('rec-liquido-real')?.value)||valorBruto;
+  const taxaVal      = valorBruto - valorLiquido;
+  const taxa         = valorBruto > 0 ? (taxaVal/valorBruto*100) : 0;
   const forma   = document.querySelector('input[name="rec-forma-radio"]:checked')?.value || '';
   const banco   = document.getElementById('rec-banco')?.value;
   const data    = document.getElementById('rec-data')?.value;

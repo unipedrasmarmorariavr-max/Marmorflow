@@ -469,8 +469,8 @@
     <button class="tab-btn" onclick="showTab('agenda')" id="tab-agenda">📅 Agenda</button>
     <button class="tab-btn" onclick="showTab('materiais')" id="tab-materiais">🪨 Materiais</button>
     <button class="tab-btn" onclick="showTab('produtos')" id="tab-produtos" style="display:none;">🪨 Produtos</button>
-    <button class="tab-btn" onclick="showTab('dashboard')" id="tab-dashboard">📊 Dashboard</button>
     <button class="tab-btn" onclick="showTab('financeiro')" id="tab-financeiro">💰 Financeiro</button>
+    <button class="tab-btn" onclick="showTab('dashboard')" id="tab-dashboard" style="display:none;">📊 Dashboard</button>
     <button class="tab-btn" onclick="showTab('portal')" id="tab-portal">🔗 Link Cliente</button>
     <button class="tab-btn" onclick="showTab('configuracoes')" id="tab-configuracoes" style="display:none;">⚙️ Configurações</button>
   </div>
@@ -1671,7 +1671,7 @@ function ativarSessao(perfil) {
   var isComercial = perfil==='comercial';
   var isProducao = perfil==='producao';
   var isMedidor = perfil==='medidor';
-  if (tabDash) tabDash.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
+  if (tabDash) tabDash.style.display = isDono ? 'block' : 'none';
   if (tabMat) tabMat.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
   if (tabFin) tabFin.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
   if (tabPortal) tabPortal.style.display = (isDono||isComercial||isFinanceiro) ? 'block' : 'none';
@@ -1823,8 +1823,38 @@ const ORIGEM_LABELS = {
   arquiteto:'📐 Arquiteto', construtora:'🏗️ Construtora', indicacao:'🤝 Indicação', outro:'Outro'
 };
 
-function renderDashboard() {
+function renderDashboard(abaAtiva) {
   const el = document.getElementById('dashboard-content');
+  if (!el) return;
+
+  const abaDash = abaAtiva || localStorage.getItem('dash_aba') || 'comercial';
+
+  // Header com abas
+  el.innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--cream-dark);flex-wrap:wrap;">
+      ${[
+        ['comercial','💼 Comercial'],
+        ['producao','⚙️ Produção'],
+        ['financeiro','💰 Financeiro']
+      ].map(([id,label])=>`
+      <button onclick="renderDashboard('${id}')" 
+        style="padding:10px 20px;border:none;background:${abaDash===id?'var(--gold)':'var(--cream-dark)'};
+               color:${abaDash===id?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;
+               font-size:13px;font-weight:600;">
+        ${label}
+      </button>`).join('')}
+    </div>
+    <div id="dash-conteudo"></div>`;
+
+  localStorage.setItem('dash_aba', abaDash);
+
+  if (abaDash === 'comercial') renderDashComercial();
+  else if (abaDash === 'producao') renderDashProducao();
+  else if (abaDash === 'financeiro') renderDashFinanceiro();
+}
+
+function renderDashComercial() {
+  const el = document.getElementById('dash-conteudo');
   if (!el) return;
 
   // Pega filtro de período salvo
@@ -2038,6 +2068,190 @@ function renderDashboard() {
 
   </div>`;
 }
+function renderDashProducao() {
+  const el = document.getElementById('dash-conteudo');
+  if (!el) return;
+
+  const hoje = new Date();
+  const fmtV = v => 'R$ '+(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+
+  // Pedidos por etapa de produção
+  const emCorte     = orders.filter(o => o.stage==='corte' && !o.ref_fechado);
+  const emAcabamento= orders.filter(o => o.stage==='acabamento' && !o.ref_fechado);
+  const prontos     = orders.filter(o => o.stage==='pronto' && !o.ref_fechado);
+  const entregues   = orders.filter(o => o.stage==='entregue' && !o.ref_fechado);
+
+  // Pedidos atrasados (data entrega < hoje)
+  const hojeStr = hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
+  const atrasados = orders.filter(o => 
+    ['corte','acabamento','pronto'].includes(o.stage) && 
+    o.dataentrega && o.dataentrega < hojeStr && !o.ref_fechado
+  );
+
+  // Faturamento mês a mês (últimos 6 meses)
+  const meses = [];
+  for (let i=5; i>=0; i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+    const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const label = d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'});
+    const pedidosMes = orders.filter(o => 
+      ['fechado','corte','acabamento','pronto','entregue'].includes(o.stage) &&
+      !o.ref_fechado &&
+      (o.created_at||'').substring(0,7) === key
+    );
+    const total = pedidosMes.reduce((s,o) => s+(parseFloat((o.valor||'0').replace(',','.'))||0), 0);
+    meses.push({ label, total, n: pedidosMes.length });
+  }
+  const maxVal = Math.max(...meses.map(m=>m.total), 1);
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">
+      ${[
+        ['🔪','Em Corte', emCorte.length,'pedido(s)','#006382'],
+        ['✨','Acabamento', emAcabamento.length,'pedido(s)','#8B6914'],
+        ['✅','Prontos', prontos.length,'aguardando entrega','#2E7D32'],
+        ['⚠️','Atrasados', atrasados.length,'com prazo vencido','#B85A4A'],
+      ].map(([icon,label,val,sub,cor])=>`
+        <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid ${cor};">
+          <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;margin-bottom:6px;">${icon} ${label}</div>
+          <div style="font-size:28px;font-weight:900;color:${cor};">${val}</div>
+          <div style="font-size:11px;color:#888;">${sub}</div>
+        </div>`).join('')}
+    </div>
+
+    <!-- Gráfico de volume por mês -->
+    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;margin-bottom:20px;">
+      <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:16px;">📊 Pedidos Fechados — Últimos 6 Meses</div>
+      <div style="display:flex;align-items:flex-end;gap:12px;height:160px;">
+        ${meses.map(m=>`
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
+            <div style="font-size:11px;color:#888;font-weight:600;">${m.n > 0 ? m.n+'x' : ''}</div>
+            <div style="width:100%;background:${m.total>0?'var(--gold)':'#f0f0f0'};border-radius:6px 6px 0 0;
+                        height:${m.total>0?Math.max(20,Math.round(m.total/maxVal*120)):4}px;
+                        transition:height .3s;position:relative;" title="${fmtV(m.total)}">
+            </div>
+            <div style="font-size:10px;color:#888;">${m.label}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Lista atrasados -->
+    ${atrasados.length > 0 ? `
+    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
+      <div style="background:#B85A4A;color:white;padding:12px 18px;font-size:13px;font-weight:700;">
+        ⚠️ Pedidos com Prazo Vencido (${atrasados.length})
+      </div>
+      ${atrasados.map(o=>`
+        <div style="padding:10px 18px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:13px;font-weight:700;">${o.cliente}</div>
+            <div style="font-size:11px;color:#888;">${o.id} · ${o.peca||''} · ${o.stage}</div>
+          </div>
+          <div style="font-size:12px;color:#B85A4A;font-weight:700;">📅 ${o.dataentrega}</div>
+        </div>`).join('')}
+    </div>` : ''}
+  `;
+}
+
+async function renderDashFinanceiro() {
+  const el = document.getElementById('dash-conteudo');
+  if (!el) return;
+
+  el.innerHTML = '<div style="padding:40px;text-align:center;color:#888;">Carregando...</div>';
+
+  const fmtV = v => 'R$ '+(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  const hoje = new Date();
+
+  // Buscar transações dos últimos 6 meses
+  const { data: txAll } = await getSB().from('transacoes').select('*');
+  const transacoes = txAll || [];
+
+  // Montar dados por mês
+  const meses = [];
+  for (let i=5; i>=0; i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+    const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const label = d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'});
+    const txMes = transacoes.filter(t => (t.data||'').substring(0,7) === key);
+    const entradas = txMes.filter(t=>t.tipo==='entrada').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+    const saidas   = txMes.filter(t=>t.tipo==='saida').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+    meses.push({ label, key, entradas, saidas, resultado: entradas-saidas });
+  }
+
+  const maxVal = Math.max(...meses.map(m=>Math.max(m.entradas,m.saidas)), 1);
+
+  // Totais do mês atual
+  const mesAtual = meses[meses.length-1];
+
+  el.innerHTML = `
+    <!-- Cards resumo -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px;">
+      <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid #2E7D32;">
+        <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;margin-bottom:6px;">💰 Entradas (mês atual)</div>
+        <div style="font-size:24px;font-weight:900;color:#2E7D32;">${fmtV(mesAtual.entradas)}</div>
+      </div>
+      <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid #B85A4A;">
+        <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;margin-bottom:6px;">💸 Saídas (mês atual)</div>
+        <div style="font-size:24px;font-weight:900;color:#B85A4A;">${fmtV(mesAtual.saidas)}</div>
+      </div>
+      <div style="background:${mesAtual.resultado>=0?'#f0fff4':'#fff5f5'};border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid ${mesAtual.resultado>=0?'#2E7D32':'#B85A4A'};">
+        <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;margin-bottom:6px;">
+          ${mesAtual.resultado>=0?'✅ Resultado':'⚠️ Capital de Giro'}
+        </div>
+        <div style="font-size:24px;font-weight:900;color:${mesAtual.resultado>=0?'#2E7D32':'#B85A4A'};">
+          ${fmtV(Math.abs(mesAtual.resultado))}
+        </div>
+        <div style="font-size:11px;color:#888;">${mesAtual.resultado>=0?'Saldo positivo':'Necessário para cobrir'}</div>
+      </div>
+    </div>
+
+    <!-- Gráfico Entradas vs Saídas -->
+    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;margin-bottom:20px;">
+      <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:6px;">📊 Faturamento — Últimos 6 Meses</div>
+      <div style="display:flex;gap:16px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;"><span style="width:14px;height:14px;background:#2E7D32;border-radius:3px;display:inline-block;"></span>Entradas</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;"><span style="width:14px;height:14px;background:#B85A4A;border-radius:3px;display:inline-block;"></span>Saídas</div>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:8px;height:180px;">
+        ${meses.map(m=>`
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div style="width:100%;display:flex;gap:3px;align-items:flex-end;height:150px;">
+              <div style="flex:1;background:#2E7D32;border-radius:4px 4px 0 0;height:${Math.max(2,Math.round(m.entradas/maxVal*140))}px;" title="${fmtV(m.entradas)}"></div>
+              <div style="flex:1;background:#B85A4A;border-radius:4px 4px 0 0;height:${Math.max(2,Math.round(m.saidas/maxVal*140))}px;" title="${fmtV(m.saidas)}"></div>
+            </div>
+            <div style="font-size:10px;color:#888;text-align:center;">${m.label}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Faturamento por mês em tabela -->
+    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
+      <div style="background:var(--stone);color:white;padding:12px 18px;font-size:13px;font-weight:700;">📋 Resumo por Mês</div>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:#f8f8f8;">
+            <th style="padding:10px 16px;text-align:left;font-size:12px;color:#888;">Mês</th>
+            <th style="padding:10px 16px;text-align:right;font-size:12px;color:#2E7D32;">Entradas</th>
+            <th style="padding:10px 16px;text-align:right;font-size:12px;color:#B85A4A;">Saídas</th>
+            <th style="padding:10px 16px;text-align:right;font-size:12px;color:#555;">Resultado</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${meses.map(m=>`
+            <tr style="border-bottom:1px solid #f0f0f0;">
+              <td style="padding:10px 16px;font-size:13px;font-weight:600;">${m.label}</td>
+              <td style="padding:10px 16px;text-align:right;font-size:13px;color:#2E7D32;font-weight:700;">${fmtV(m.entradas)}</td>
+              <td style="padding:10px 16px;text-align:right;font-size:13px;color:#B85A4A;font-weight:700;">${fmtV(m.saidas)}</td>
+              <td style="padding:10px 16px;text-align:right;font-size:13px;font-weight:700;color:${m.resultado>=0?'#2E7D32':'#B85A4A'};">
+                ${m.resultado>=0?'+':''}${fmtV(m.resultado)}
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function card(icon,title,value,sub,bg,color) {
   return `<div style="background:${bg};border-radius:14px;padding:20px;">
     <div style="font-size:22px;margin-bottom:6px;">${icon}</div>
@@ -2876,6 +3090,45 @@ async function renderFinanceiro() {
         <div style="font-size:11px;color:${contasVencidas.length>0?'#B85A4A':'#888'};">${contasVencidas.length>0?'⚠️ '+contasVencidas.length+' vencida(s)':contasMes.length+' conta(s)'}</div>
       </div>
     </div>
+
+    <!-- CAPITAL DE GIRO -->
+    ${(() => {
+      const resultado = totalEntradas - totalSaidas;
+      const capitalNecessario = resultado < 0 ? Math.abs(resultado) : 0;
+      const corRes = resultado >= 0 ? '#2E7D32' : '#B85A4A';
+      return `
+      <div style="background:${resultado>=0?'#f0fff4':'#fff5f5'};border-radius:14px;padding:18px 24px;margin-bottom:20px;border:2px solid ${resultado>=0?'#2E7D32':'#B85A4A'};">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:${corRes};text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">
+              ${resultado>=0?'✅ Resultado do Mês':'⚠️ Capital de Giro Necessário'}
+            </div>
+            <div style="font-size:28px;font-weight:900;color:${corRes};">${fmtV(Math.abs(resultado))}</div>
+            <div style="font-size:12px;color:#888;margin-top:4px;">
+              ${resultado>=0
+                ? 'As entradas cobriram todas as saídas este mês'
+                : 'As saídas superaram as entradas — capital de giro necessário para cobrir'}
+            </div>
+          </div>
+          <div style="display:flex;gap:20px;flex-wrap:wrap;">
+            <div style="text-align:center;">
+              <div style="font-size:11px;color:#888;font-weight:600;">ENTRADAS</div>
+              <div style="font-size:18px;font-weight:800;color:#2E7D32;">${fmtV(totalEntradas)}</div>
+            </div>
+            <div style="font-size:24px;color:#ccc;align-self:center;">−</div>
+            <div style="text-align:center;">
+              <div style="font-size:11px;color:#888;font-weight:600;">SAÍDAS</div>
+              <div style="font-size:18px;font-weight:800;color:#B85A4A;">${fmtV(totalSaidas)}</div>
+            </div>
+            <div style="font-size:24px;color:#ccc;align-self:center;">=</div>
+            <div style="text-align:center;">
+              <div style="font-size:11px;color:#888;font-weight:600;">RESULTADO</div>
+              <div style="font-size:18px;font-weight:800;color:${corRes};">${resultado>=0?'+':''}${fmtV(resultado)}</div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    })()}
 
     <!-- TABS -->
     <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid var(--cream-dark);">

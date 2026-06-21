@@ -1001,7 +1001,7 @@ function createCard(o) {
     <div style="background:#fafafa;border:1px dashed #ccc;border-radius:6px;padding:5px 8px;margin-bottom:6px;font-size:11px;color:#888;">
       📐 Sem medição agendada
     </div>` : ''}
-    <div class="card-id">${o.id}</div>
+    <div class="card-id">${o.id}${o.num_pedido_fechado?` · <span style="color:var(--gold);font-weight:800;">${o.num_pedido_fechado}</span>`:''}</div>
     <div class="card-client">${o.cliente}</div>
     <div class="card-desc">${o.peca||''}${o.material?' · '+o.material:''}</div>
     ${(currentUser!=='producao'&&o.valor)?`<div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:4px;">R$ ${o.valor}</div>`:''}
@@ -4999,6 +4999,13 @@ async function confirmarFechamentoComData() {
   const history = order.history || [];
   history.push({stage:'fechado', date:hoje});
 
+  // Gerar número sequencial de pedido fechado (PF-001, PF-002...)
+  const pedidosFechados = orders.filter(o => o.num_pedido_fechado);
+  const nums = pedidosFechados.map(o => parseInt((o.num_pedido_fechado||'').replace('PF-',''))).filter(n=>!isNaN(n));
+  const BASE_INICIAL = 48650; // número inicial de vendas da Unipedras
+  const proximoNum = nums.length ? Math.max(...nums) + 1 : BASE_INICIAL;
+  const numPedidoFechado = 'PF-' + proximoNum;
+
   // Salva data + stage fechado no pedido original
   const materialFinal = document.getElementById('c-material') ? (document.getElementById('c-material').value.trim()||order.material) : order.material;
   const acabRadioFinal = (document.querySelector('input[name="acabamento"]:checked')||{}).value||'';
@@ -5006,7 +5013,7 @@ async function confirmarFechamentoComData() {
   const levOrigem = (document.querySelector('input[name="levigado_origem"]:checked')||{}).value||'levigado';
   const levigadoDoPolicdo = (acabamentoFinal === 'Levigado' && levOrigem === 'polido');
   const { error } = await getSB().from('pedidos')
-    .update({ stage:'fechado', history, dataentrega: dataEscolhida, material: materialFinal, acabamento: acabamentoFinal, levigado_do_polido: levigadoDoPolicdo })
+    .update({ stage:'fechado', history, dataentrega: dataEscolhida, material: materialFinal, acabamento: acabamentoFinal, levigado_do_polido: levigadoDoPolicdo, num_pedido_fechado: numPedidoFechado })
     .eq('id', id);
 
   if (error) { hideLoading(); showNotif('Erro: ' + error.message, 'error'); return; }

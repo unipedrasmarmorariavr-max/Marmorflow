@@ -2698,17 +2698,23 @@ function salvarContasPagar(c) { localStorage.setItem('mf_contas_pagar', JSON.str
 function toggleParcelasCP() {
   const tipo = document.getElementById('cp-recorrencia')?.value;
   const wrap = document.getElementById('cp-parcelas-wrap');
-  if (wrap) wrap.style.display = tipo === 'parcelado' ? 'block' : 'none';
+  const labelParcelas = document.getElementById('cp-label-parcelas');
+  if (wrap) wrap.style.display = (tipo === 'parcelado' || tipo === 'semanal') ? 'block' : 'none';
+  if (labelParcelas) {
+    labelParcelas.textContent = tipo === 'semanal' ? 'Nº DE SEMANAS' : 'Nº DE PARCELAS';
+  }
 }
 
 function previewParcelasCP() {
+  const tipo = document.getElementById('cp-recorrencia')?.value;
   const n = parseInt(document.getElementById('cp-n-parcelas')?.value)||0;
   const vp = parseFloat(document.getElementById('cp-valor-parcela')?.value)||0;
   const prev = document.getElementById('cp-parcelas-preview');
   if (!prev) return;
   if (n > 0 && vp > 0) {
     const total = n * vp;
-    prev.textContent = `${n}x de R$ ${vp.toFixed(2).replace('.',',')} = Total R$ ${total.toFixed(2).replace('.',',')}`;
+    const unidade = tipo === 'semanal' ? 'semana(s)' : 'parcela(s)';
+    prev.textContent = `${n}x ${unidade} de R$ ${vp.toFixed(2).replace('.',',')} = Total R$ ${total.toFixed(2).replace('.',',')}`;
   } else {
     prev.textContent = '';
   }
@@ -2756,7 +2762,8 @@ function abrirModalContaPagar(id) {
         <label class="form-label">TIPO DE PAGAMENTO</label>
         <select class="form-select" id="cp-recorrencia" onchange="toggleParcelasCP()">
           <option value="unica" ${(!c||c.recorrencia==='unica')?'selected':''}>Única (pagamento único)</option>
-          <option value="parcelado" ${c?.recorrencia==='parcelado'?'selected':''}>Parcelado (ex: 61x)</option>
+          <option value="parcelado" ${c?.recorrencia==='parcelado'?'selected':''}>Parcelado mensal (ex: 61x)</option>
+          <option value="semanal" ${c?.recorrencia==='semanal'?'selected':''}>Parcelado semanal (ex: 20 semanas)</option>
           <option value="mensal" ${c?.recorrencia==='mensal'?'selected':''}>Recorrente (todo mês)</option>
         </select>
       </div>
@@ -2766,7 +2773,7 @@ function abrirModalContaPagar(id) {
         <div style="font-size:12px;font-weight:700;color:#006382;margin-bottom:10px;">📅 Detalhes do Parcelamento</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
           <div>
-            <label class="form-label">Nº DE PARCELAS</label>
+            <label class="form-label" id="cp-label-parcelas">Nº DE PARCELAS</label>
             <input class="form-input" id="cp-n-parcelas" type="number" min="2" max="360"
               value="${c?.n_parcelas||''}" placeholder="Ex: 61"
               style="font-size:18px;font-weight:800;text-align:center;"
@@ -2819,12 +2826,16 @@ function salvarContaPagar() {
     status: 'pendente',
   };
 
-  // Se parcelado, gera todas as parcelas automaticamente
-  if (recorrencia === 'parcelado' && nParcelas > 1) {
+  // Se parcelado mensal ou semanal, gera todas as parcelas automaticamente
+  if ((recorrencia === 'parcelado' || recorrencia === 'semanal') && nParcelas > 1) {
     const base = new Date(vencimento + 'T12:00:00');
     for (let i = 0; i < nParcelas; i++) {
       const d = new Date(base);
-      d.setMonth(d.getMonth() + i);
+      if (recorrencia === 'semanal') {
+        d.setDate(d.getDate() + (i * 7)); // incrementa 7 dias por semana
+      } else {
+        d.setMonth(d.getMonth() + i); // incrementa 1 mês
+      }
       const dtStr = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
       contas.push({
         ...dados,

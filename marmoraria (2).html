@@ -2746,7 +2746,7 @@ function abrirModalContaPagar(id) {
         <label class="form-label">Categoria</label>
         <select class="form-select" id="cp-categoria">
           <option value="">Selecione...</option>
-          ${['Aluguel','Energia','Água','Telefone/Internet','Fornecedor','Impostos','Folha de Pagamento','Manutenção','Marketing','Combustível','Outros'].map(cat =>
+          ${['Aluguel','Energia','Água','Telefone/Internet','Fornecedor','Impostos','Folha de Pagamento','Manutenção','Marketing','Combustível','Dívida','Outros'].map(cat =>
             `<option value="${cat}" ${c?.categoria===cat?'selected':''}>${cat}</option>`
           ).join('')}
         </select>

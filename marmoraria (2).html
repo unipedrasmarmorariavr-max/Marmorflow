@@ -218,6 +218,11 @@
   /* ═══════════════════════════════════════════════════════
      MOBILE RESPONSIVO — todas as áreas do sistema
      ═══════════════════════════════════════════════════════ */
+  @keyframes pulse {
+    0%,100% { opacity:1; }
+    50% { opacity:0.6; }
+  }
+
   @media(max-width:768px){
 
     /* ── GERAL ──────────────────────────────────────── */
@@ -3324,12 +3329,17 @@ async function renderFinanceiro() {
           const hojeVence = c.vencimento === hoje;
           const diasVenc = Math.ceil((new Date(c.vencimento+'T12:00:00')-new Date())/(1000*60*60*24));
           return `
-          <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--cream-dark);background:${vencida?'#fff8f8':hojeVence?'#fffbf0':'white'};">
+          <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--cream-dark);
+            background:${vencida?'#fff8f8':hojeVence?'#fffde7':'white'};
+            border-left:${hojeVence?'4px solid #F59E0B':vencida?'4px solid #B85A4A':'4px solid transparent'};">
             <div style="flex:1;">
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
                 <span style="font-size:14px;font-weight:700;color:var(--stone);">${c.descricao}</span>
                 ${c.categoria?`<span style="font-size:11px;background:#f0f0f0;padding:2px 8px;border-radius:10px;color:#666;">${c.categoria}</span>`:''}
+                ${hojeVence?`<span style="font-size:11px;background:#F59E0B;color:white;padding:2px 8px;border-radius:10px;font-weight:700;animation:pulse 1s infinite;">🔔 VENCE HOJE</span>`:''}
+                ${vencida?`<span style="font-size:11px;background:#B85A4A;color:white;padding:2px 8px;border-radius:10px;font-weight:700;">⚠️ VENCIDA</span>`:''}
                 ${c.recorrencia==='mensal'?`<span style="font-size:10px;color:#006382;">🔄 Mensal</span>`:''}
+                ${c.recorrencia==='semanal'?`<span style="font-size:10px;color:#006382;">🔄 Semanal</span>`:''}
               </div>
               <div style="font-size:12px;color:${vencida?'#B85A4A':hojeVence?'#8B6914':'#888'};">
                 ${vencida?'⚠️ Venceu em ':hojeVence?'⏰ Vence hoje! ':'📅 Vence em '}

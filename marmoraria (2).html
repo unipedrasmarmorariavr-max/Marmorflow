@@ -4892,14 +4892,10 @@ function renderAgendaInstalacao() {
         </button>` : ''}
       </div>
       ${(() => {
-        const todas = [
-          ...ocupados.filter(o => o.data >= dateToStr(hoje)).map(o => ({
-            ...o, tipo: 'pedido'
-          })),
-          ...instalacoesExtras.filter(i => i.data >= dateToStr(hoje)).map(i => ({
-            ...i, tipo: 'manual'
-          }))
-        ].sort((a,b) => a.data.localeCompare(b.data));
+        // getDiasOcupados já inclui instalações manuais — usar direto
+        const todas = ocupados
+          .filter(o => o.data >= dateToStr(hoje))
+          .sort((a,b) => a.data.localeCompare(b.data));
 
         if (todas.length === 0) return '<div style="color:var(--stone-light);font-size:13px;">Nenhuma instalação agendada.</div>';
 

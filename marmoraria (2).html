@@ -4909,6 +4909,7 @@ function renderAgendaInstalacao() {
           const dias = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
           const corDia = diasR<=3?'#B85A4A':diasR<=7?'#B8760A':'#4A7C59';
           const btnResp = podeEditar ? '<button onclick="definirResponsavelInstalacao(\'' + (o.id||'') + '\',\'' + o.data + '\',\'' + o.tipo + '\')" style="background:#f0f0f0;border:1px solid #ddd;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;">👷 ' + (o.responsavel?'Trocar':'Definir') + ' responsável</button>' : '';
+        const btnExcluir = (podeEditar && o.tipo === 'manual') ? '<button onclick="excluirInstalacao(\'' + o.id + '\')" style="background:#FDEAEA;border:1px solid #B85A4A;color:#B85A4A;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;margin-left:4px;">🗑 Excluir</button>' : '';
         return '<div style="background:#f9f9f9;border-radius:10px;padding:12px 14px;margin-bottom:8px;border-left:3px solid '+corDia+';">'
           + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">'
           + '<div style="flex:1;">'
@@ -4920,7 +4921,7 @@ function renderAgendaInstalacao() {
           + '<div style="text-align:right;flex-shrink:0;">'
           + '<div style="font-size:14px;font-weight:700;color:'+corDia+';">'+dias[dd.getDay()]+', '+dd.getDate()+'/'+(dd.getMonth()+1)+'</div>'
           + '<div style="font-size:11px;color:#888;">'+(diasR===0?'Hoje':diasR===1?'Amanhã':diasR+' dias')+'</div>'
-          + btnResp
+          + btnResp + btnExcluir
           + '</div></div></div>';
         }).join('');
       })()}
@@ -5051,6 +5052,15 @@ function definirResponsavelInstalacao(pedidoId, data, tipo) {
       ✅ Salvar
     </button>`;
   openModal('modal-detail');
+}
+
+function excluirInstalacao(id) {
+  if (!confirm('Excluir esta instalação?')) return;
+  const inst = JSON.parse(localStorage.getItem('mf_instalacoes')||'[]');
+  const nova = inst.filter(i => i.id !== id);
+  localStorage.setItem('mf_instalacoes', JSON.stringify(nova));
+  renderAgendaInstalacao();
+  showNotif('Instalação excluída!', 'success');
 }
 
 async function salvarResponsavelInstalacao(pedidoId, data, tipo) {

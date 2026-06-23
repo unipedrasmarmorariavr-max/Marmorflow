@@ -4084,7 +4084,7 @@ function getDiasOcupados() {
   // Só aparece na agenda se estiver em Pedido Fechado ou em produção
   const stagesAgenda = ['fechado','corte','acabamento','pronto'];
   const vistos = new Set();
-  return orders
+  const doPedidos = orders
     .filter(o => {
       const temInstalacao = o.tipoentrega === 'entrega_instalacao' || o.tipoentrega === 'so_instalacao';
       const emProducao = stagesAgenda.includes(o.stage);
@@ -4097,7 +4097,22 @@ function getDiasOcupados() {
       vistos.add(chave);
       return true;
     })
-    .map(o => ({ data: (o.dataentrega||'').substring(0,10), id: o.id, cliente: o.cliente, peca: o.peca }));
+    .map(o => ({ data: (o.dataentrega||'').substring(0,10), id: o.id, cliente: o.cliente, peca: o.peca, tipo: 'pedido' }));
+
+  // Incluir instalações manuais cadastradas na agenda
+  const instalacoesExtras = JSON.parse(localStorage.getItem('mf_instalacoes') || '[]');
+  const doManuais = instalacoesExtras.map(i => ({
+    data: (i.data||'').substring(0,10),
+    id: i.id,
+    cliente: i.cliente,
+    peca: i.tipo_servico || '',
+    horario: i.horario || '',
+    responsavel: i.responsavel || '',
+    endereco: i.endereco || '',
+    tipo: 'manual'
+  }));
+
+  return [...doPedidos, ...doManuais];
 }
 
 function proximoDiaLivre(dataDesejada) {

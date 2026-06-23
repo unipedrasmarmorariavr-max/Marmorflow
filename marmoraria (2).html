@@ -1643,14 +1643,20 @@ function selPerfil(p) {
 function entrar() {
   var pin = document.getElementById('pin-input').value.trim();
   if (!pin) { alert('Digite o PIN!'); return; }
-  var perfil = null;
-  if (pin === '1234') perfil = 'dono';
-  else if (pin === '2222') perfil = 'medidor';
-  else if (pin === '3333') perfil = 'comercial';
-  else if (pin === '4444') perfil = 'producao';
-  else if (pin === '5555') perfil = 'financeiro';
-  else { alert('PIN incorreto!'); return; }
-  ativarSessao(perfil);
+
+  // Mapa de PIN → perfil
+  var pinMap = { '1234':'dono', '2222':'medidor', '3333':'comercial', '4444':'producao', '5555':'financeiro' };
+  var perfilDoPin = pinMap[pin];
+
+  if (!perfilDoPin) { alert('PIN incorreto!'); return; }
+
+  // Verificar se o perfil selecionado bate com o PIN
+  if (perfilAtual && perfilAtual !== perfilDoPin) {
+    alert('PIN incorreto para o perfil selecionado!');
+    return;
+  }
+
+  ativarSessao(perfilDoPin);
 }
 
 function ativarSessao(perfil) {

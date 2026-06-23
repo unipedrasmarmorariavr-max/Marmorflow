@@ -4893,24 +4893,20 @@ function renderAgendaInstalacao() {
           const diasR = Math.ceil((dd-hoje)/(1000*60*60*24));
           const dias = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
           const corDia = diasR<=3?'#B85A4A':diasR<=7?'#B8760A':'#4A7C59';
-          return \`<div style="background:#f9f9f9;border-radius:10px;padding:12px 14px;margin-bottom:8px;border-left:3px solid \${corDia};">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
-              <div style="flex:1;">
-                <div style="font-size:13px;font-weight:700;color:var(--stone);">\${o.cliente||o.descricao||'—'} \${o.id?'· '+o.id:''}</div>
-                <div style="font-size:11px;color:#888;">\${o.peca||o.tipo_servico||''} \${o.horario?'· '+o.horario:''}</div>
-                \${o.endereco?'<div style="font-size:11px;color:#888;">📍 '+o.endereco+'</div>':''}
-                \${o.responsavel?'<div style="font-size:12px;color:#006382;font-weight:600;margin-top:4px;">👷 '+o.responsavel+'</div>':''}
-              </div>
-              <div style="text-align:right;flex-shrink:0;">
-                <div style="font-size:14px;font-weight:700;color:\${corDia};">\${dias[dd.getDay()]}, \${dd.getDate()}/\${dd.getMonth()+1}</div>
-                <div style="font-size:11px;color:#888;">\${diasR===0?'Hoje':diasR===1?'Amanhã':diasR+' dias'}</div>
-                \${podeEditar ? \`<button onclick="definirResponsavelInstalacao('\${o.id||''}','\${o.data}','\${o.tipo}')"
-                  style="background:#f0f0f0;border:1px solid #ddd;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;">
-                  👷 \${o.responsavel?'Trocar':'Definir'} responsável
-                </button>\` : ''}
-              </div>
-            </div>
-          </div>\`;
+          const btnResp = podeEditar ? '<button onclick="definirResponsavelInstalacao(\'' + (o.id||'') + '\',\'' + o.data + '\',\'' + o.tipo + '\')" style="background:#f0f0f0;border:1px solid #ddd;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;">👷 ' + (o.responsavel?'Trocar':'Definir') + ' responsável</button>' : '';
+        return '<div style="background:#f9f9f9;border-radius:10px;padding:12px 14px;margin-bottom:8px;border-left:3px solid '+corDia+';">'
+          + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">'
+          + '<div style="flex:1;">'
+          + '<div style="font-size:13px;font-weight:700;color:var(--stone);">'+(o.cliente||o.descricao||'—')+(o.id?' · '+o.id:'')+'</div>'
+          + '<div style="font-size:11px;color:#888;">'+(o.peca||o.tipo_servico||'')+(o.horario?' · '+o.horario:'')+'</div>'
+          + (o.endereco?'<div style="font-size:11px;color:#888;">📍 '+o.endereco+'</div>':'')
+          + (o.responsavel?'<div style="font-size:12px;color:#006382;font-weight:600;margin-top:4px;">👷 '+o.responsavel+'</div>':'')
+          + '</div>'
+          + '<div style="text-align:right;flex-shrink:0;">'
+          + '<div style="font-size:14px;font-weight:700;color:'+corDia+';">'+dias[dd.getDay()]+', '+dd.getDate()+'/'+(dd.getMonth()+1)+'</div>'
+          + '<div style="font-size:11px;color:#888;">'+(diasR===0?'Hoje':diasR===1?'Amanhã':diasR+' dias')+'</div>'
+          + btnResp
+          + '</div></div></div>';
         }).join('');
       })()}
     </div>

@@ -1016,6 +1016,7 @@ function createCard(o) {
         <button class="card-btn" onclick="openDetail('${o.id}')" title="Ver detalhes">👁</button>
         <button class="card-btn" onclick="copiarLinkCliente('${o.id}');event.stopPropagation()" title="Link cliente" style="color:#25D366;">🔗</button>
         ${['corte','acabamento','pronto','entregue'].includes(o.stage)?`<button class="card-btn" onclick="abrirVerProjeto('${o.id}');event.stopPropagation()" title="Ver Projeto" style="color:#006382;">📐</button>`:''}
+        ${o.stage==='pronto'&&(currentUser==='dono'||currentUser==='comercial')?`<button class="card-btn" onclick="definirResponsavelInstalacao('${o.id}','${o.dataentrega||''}','pedido');event.stopPropagation()" title="${o.responsavel_instalacao?'👷 '+o.responsavel_instalacao:'Definir responsável'}" style="color:${o.responsavel_instalacao?'#2E7D32':'#B85A4A'};">🔧</button>`:''}
         ${showFechar?`<button class="card-btn" onclick="abrirFecharPedido('${o.id}');event.stopPropagation()" title="Adicionar dados comerciais" style="color:var(--green);font-size:13px;">💼</button>`:''}
         ${p.canEdit&&o.stage==='medicao'?`<button class="card-btn" onclick="openEditMedidor('${o.id}')" title="Editar">✏️</button>`:''}
         ${p.canDelete?`<button class="card-btn" onclick="deleteOrder('${o.id}')" title="Excluir">🗑</button>`:''}
@@ -4237,12 +4238,20 @@ async function renderAgendaMedicao() {
     </div>` : ''}
 
     ${hojeList.length > 0 ? `
-    <div style="background:#FFF8E8;border:2px solid var(--gold);border-radius:14px;padding:20px;margin-bottom:20px;">
-      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:14px;">📍 HOJE — ${hojeList.length} visita(s)</div>
+    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:16px;padding:20px;margin-bottom:20px;box-shadow:0 4px 20px rgba(0,0,0,0.2);">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+        <div style="background:var(--gold);border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">📍</div>
+        <div>
+          <div style="font-size:16px;font-weight:800;color:white;letter-spacing:.5px;">AGENDA DE HOJE</div>
+          <div style="font-size:12px;color:var(--gold);font-weight:600;">${hojeList.length} visita(s) agendada(s)</div>
+        </div>
+      </div>
       ${hojeList.map(m => cardMedicao(m, true)).join('')}
     </div>` : `
-    <div style="background:#f5f5f5;border-radius:14px;padding:16px 20px;margin-bottom:20px;text-align:center;color:#888;font-size:13px;">
-      Nenhuma medição agendada para hoje
+    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:16px;padding:24px;margin-bottom:20px;text-align:center;">
+      <div style="font-size:36px;margin-bottom:8px;">📅</div>
+      <div style="font-size:15px;font-weight:800;color:white;">AGENDA DE HOJE</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:6px;">Nenhuma medição agendada</div>
     </div>`}
 
     ${futuras.length > 0 ? `
@@ -4332,7 +4341,11 @@ function cardMedicao(m, isHoje, passada) {
       <div style="flex:1;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
           ${m.Horario?`<span style="background:${isHoje?'var(--gold)':'var(--cream-dark)'};color:${isHoje?'white':'var(--stone)'};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">🕐 ${m.Horario}</span>`:''}
-          <span style="font-size:11px;color:#888;">${m.Data?m.Data.substring(8,10)+'/'+m.Data.substring(5,7)+'/'+m.Data.substring(0,4):''}</span>
+          <span style="font-size:11px;color:#888;">${m.Data?(()=>{
+            const dias=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+            const d=new Date(m.Data+'T12:00:00');
+            return dias[d.getDay()]+', '+m.Data.substring(8,10)+'/'+m.Data.substring(5,7)+'/'+m.Data.substring(0,4);
+          })():''}</span>
           <span style="background:${statusCor}22;color:${statusCor};padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;">${statusLabel}</span>
         </div>
         <div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">${m.Cliente||'—'}</div>
@@ -4783,6 +4796,12 @@ function renderAgendaInstalacao() {
   const el = document.getElementById('painel-agenda-instalacao');
   if (!el) return;
 
+  const podeEditar = currentUser === 'dono' || currentUser === 'comercial';
+  
+  // Pegar instalações extras cadastradas manualmente
+  const instalacoesExtras = JSON.parse(localStorage.getItem('mf_instalacoes') || '[]');
+  
+  // Combinar pedidos com instalação + instalações manuais
   const ocupados = getDiasOcupados();
   const hoje = new Date();
   hoje.setHours(0,0,0,0);
@@ -4850,23 +4869,198 @@ function renderAgendaInstalacao() {
     </div>
 
     <div style="background:white;border-radius:16px;padding:20px;box-shadow:var(--shadow);">
-      <div style="font-size:13px;font-weight:700;color:var(--stone);margin-bottom:14px;">Próximas Instalações</div>
-      ${ocupados.filter(o => o.data >= dateToStr(hoje)).sort((a,b)=>a.data.localeCompare(b.data)).map(o => {
-        const dd = new Date(o.data+'T12:00:00');
-        const diasRestantes = Math.ceil((dd-hoje)/(1000*60*60*24));
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--cream-dark);">
-          <div>
-            <div style="font-size:13px;font-weight:600;color:var(--stone);">${o.cliente} · ${o.id}</div>
-            <div style="font-size:11px;color:var(--stone-light);">${o.peca||''}</div>
-          </div>
-          <div style="text-align:right;">
-            <div style="font-size:13px;font-weight:700;color:${diasRestantes<=3?'#B85A4A':diasRestantes<=7?'#B8760A':'#4A7C59'};">${dd.getDate()}/${dd.getMonth()+1}</div>
-            <div style="font-size:11px;color:var(--stone-light);">${diasRestantes===0?'Hoje':diasRestantes===1?'Amanhã':diasRestantes+' dias'}</div>
-          </div>
-        </div>`;
-      }).join('') || '<div style="color:var(--stone-light);font-size:13px;">Nenhuma instalação agendada.</div>'}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div style="font-size:13px;font-weight:700;color:var(--stone);">🔧 Próximas Instalações</div>
+        ${podeEditar ? `<button onclick="abrirModalAgendarInstalacao()" 
+          style="background:var(--gold);color:white;border:none;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">
+          + Agendar Instalação
+        </button>` : ''}
+      </div>
+      ${(() => {
+        const todas = [
+          ...ocupados.filter(o => o.data >= dateToStr(hoje)).map(o => ({
+            ...o, tipo: 'pedido'
+          })),
+          ...instalacoesExtras.filter(i => i.data >= dateToStr(hoje)).map(i => ({
+            ...i, tipo: 'manual'
+          }))
+        ].sort((a,b) => a.data.localeCompare(b.data));
+
+        if (todas.length === 0) return '<div style="color:var(--stone-light);font-size:13px;">Nenhuma instalação agendada.</div>';
+
+        return todas.map(o => {
+          const dd = new Date(o.data+'T12:00:00');
+          const diasR = Math.ceil((dd-hoje)/(1000*60*60*24));
+          const dias = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+          const corDia = diasR<=3?'#B85A4A':diasR<=7?'#B8760A':'#4A7C59';
+          return \`<div style="background:#f9f9f9;border-radius:10px;padding:12px 14px;margin-bottom:8px;border-left:3px solid \${corDia};">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+              <div style="flex:1;">
+                <div style="font-size:13px;font-weight:700;color:var(--stone);">\${o.cliente||o.descricao||'—'} \${o.id?'· '+o.id:''}</div>
+                <div style="font-size:11px;color:#888;">\${o.peca||o.tipo_servico||''} \${o.horario?'· '+o.horario:''}</div>
+                \${o.endereco?'<div style="font-size:11px;color:#888;">📍 '+o.endereco+'</div>':''}
+                \${o.responsavel?'<div style="font-size:12px;color:#006382;font-weight:600;margin-top:4px;">👷 '+o.responsavel+'</div>':''}
+              </div>
+              <div style="text-align:right;flex-shrink:0;">
+                <div style="font-size:14px;font-weight:700;color:\${corDia};">\${dias[dd.getDay()]}, \${dd.getDate()}/\${dd.getMonth()+1}</div>
+                <div style="font-size:11px;color:#888;">\${diasR===0?'Hoje':diasR===1?'Amanhã':diasR+' dias'}</div>
+                \${podeEditar ? \`<button onclick="definirResponsavelInstalacao('\${o.id||''}','\${o.data}','\${o.tipo}')"
+                  style="background:#f0f0f0;border:1px solid #ddd;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;">
+                  👷 \${o.responsavel?'Trocar':'Definir'} responsável
+                </button>\` : ''}
+              </div>
+            </div>
+          </div>\`;
+        }).join('');
+      })()}
     </div>
   </div>`;
+}
+
+// ─── AGENDA DE INSTALAÇÃO ────────────────────────────────────────────────────
+
+function abrirModalAgendarInstalacao() {
+  document.getElementById('detail-title').textContent = '🔧 Agendar Instalação';
+  document.getElementById('detail-body').innerHTML = `
+    <div style="display:grid;gap:14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="form-label">CLIENTE *</label>
+          <input class="form-input" id="inst-cliente" placeholder="Nome do cliente">
+        </div>
+        <div>
+          <label class="form-label">PEDIDO (opcional)</label>
+          <select class="form-select" id="inst-pedido">
+            <option value="">Sem pedido vinculado</option>
+            ${orders.filter(o=>['pronto','fechado','corte','acabamento'].includes(o.stage)&&!o.ref_fechado)
+              .map(o=>`<option value="${o.id}">${o.id} · ${o.cliente}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="form-label">ENDEREÇO</label>
+        <input class="form-input" id="inst-endereco" placeholder="Rua, número, bairro">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="form-label">DATA *</label>
+          <input class="form-input" type="date" id="inst-data">
+        </div>
+        <div>
+          <label class="form-label">HORÁRIO</label>
+          <input class="form-input" type="time" id="inst-horario" value="08:00">
+        </div>
+      </div>
+      <div>
+        <label class="form-label">TIPO DE SERVIÇO</label>
+        <input class="form-input" id="inst-servico" placeholder="Ex: Bancada cozinha, Soleira...">
+      </div>
+      <div>
+        <label class="form-label">👷 RESPONSÁVEL PELA INSTALAÇÃO</label>
+        <input class="form-input" id="inst-responsavel" placeholder="Ex: João e Pedro, Equipe A...">
+      </div>
+      <div>
+        <label class="form-label">OBSERVAÇÕES</label>
+        <textarea class="form-input" id="inst-obs" rows="2" placeholder="Detalhes importantes..."></textarea>
+      </div>
+    </div>`;
+
+  document.getElementById('detail-footer').innerHTML = `
+    <button class="btn-secondary" onclick="closeModal('modal-detail')">Cancelar</button>
+    <button onclick="salvarInstalacao()" 
+      style="background:#2E7D32;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">
+      💾 Salvar Instalação
+    </button>`;
+  openModal('modal-detail');
+
+  // Preencher dados do pedido ao selecionar
+  setTimeout(() => {
+    document.getElementById('inst-pedido')?.addEventListener('change', function() {
+      const o = orders.find(x => x.id === this.value);
+      if (o) {
+        document.getElementById('inst-cliente').value = o.cliente || '';
+        document.getElementById('inst-endereco').value = o.endereco || '';
+        document.getElementById('inst-servico').value = o.peca || '';
+        if (o.dataentrega) document.getElementById('inst-data').value = o.dataentrega;
+      }
+    });
+  }, 100);
+}
+
+function salvarInstalacao() {
+  const cliente  = document.getElementById('inst-cliente')?.value.trim();
+  const data     = document.getElementById('inst-data')?.value;
+  const horario  = document.getElementById('inst-horario')?.value;
+  const endereco = document.getElementById('inst-endereco')?.value.trim();
+  const servico  = document.getElementById('inst-servico')?.value.trim();
+  const responsavel = document.getElementById('inst-responsavel')?.value.trim();
+  const obs      = document.getElementById('inst-obs')?.value.trim();
+  const pedidoId = document.getElementById('inst-pedido')?.value;
+
+  if (!cliente) { showNotif('Informe o cliente!', 'error'); return; }
+  if (!data)    { showNotif('Informe a data!', 'error'); return; }
+
+  const instalacoes = JSON.parse(localStorage.getItem('mf_instalacoes') || '[]');
+  instalacoes.push({
+    id: 'INST-' + Date.now(),
+    cliente, data, horario, endereco,
+    tipo_servico: servico,
+    responsavel, obs,
+    pedido_id: pedidoId,
+    criado_em: new Date().toISOString()
+  });
+  localStorage.setItem('mf_instalacoes', JSON.stringify(instalacoes));
+
+  closeModal('modal-detail');
+  renderAgendaInstalacao();
+  showNotif('✅ Instalação agendada!', 'success');
+}
+
+function definirResponsavelInstalacao(pedidoId, data, tipo) {
+  const responsavelAtual = tipo === 'manual'
+    ? (JSON.parse(localStorage.getItem('mf_instalacoes')||'[]').find(i=>i.data===data)?.responsavel||'')
+    : (orders.find(o=>o.id===pedidoId)?.responsavel_instalacao||'');
+
+  document.getElementById('detail-title').textContent = '👷 Responsável pela Instalação';
+  document.getElementById('detail-body').innerHTML = `
+    <div style="margin-bottom:14px;padding:12px;background:#f0fff4;border-radius:8px;">
+      <div style="font-size:13px;color:#888;">Data: <b>${data}</b></div>
+    </div>
+    <div>
+      <label class="form-label">QUEM VAI FAZER A INSTALAÇÃO?</label>
+      <input class="form-input" id="resp-inst-input" value="${responsavelAtual}" 
+        placeholder="Ex: João e Pedro, Equipe A..."
+        style="font-size:15px;font-weight:700;">
+    </div>`;
+
+  document.getElementById('detail-footer').innerHTML = `
+    <button class="btn-secondary" onclick="closeModal('modal-detail')">Cancelar</button>
+    <button onclick="salvarResponsavelInstalacao('${pedidoId}','${data}','${tipo}')"
+      style="background:#2E7D32;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">
+      ✅ Salvar
+    </button>`;
+  openModal('modal-detail');
+}
+
+async function salvarResponsavelInstalacao(pedidoId, data, tipo) {
+  const responsavel = document.getElementById('resp-inst-input')?.value.trim();
+  if (!responsavel) { showNotif('Informe o responsável!', 'error'); return; }
+
+  if (tipo === 'manual') {
+    const inst = JSON.parse(localStorage.getItem('mf_instalacoes')||'[]');
+    const idx = inst.findIndex(i => i.data === data);
+    if (idx >= 0) inst[idx].responsavel = responsavel;
+    localStorage.setItem('mf_instalacoes', JSON.stringify(inst));
+  } else if (pedidoId) {
+    // Salva no pedido
+    await getSB().from('pedidos').update({ responsavel_instalacao: responsavel }).eq('id', pedidoId);
+    const o = orders.find(x => x.id === pedidoId);
+    if (o) o.responsavel_instalacao = responsavel;
+  }
+
+  closeModal('modal-detail');
+  renderAgendaInstalacao();
+  showNotif('✅ Responsável definido: ' + responsavel, 'success');
 }
 
 function atualizarDataComConflito() {
@@ -5037,6 +5231,19 @@ function atualizarTotalItens(id) {
   if (el) el.textContent = 'R$ ' + total.toFixed(2).replace('.',',');
 }
 
+function toggleSemInstalacao() {
+  const chk = document.getElementById('chk-sem-instalacao');
+  const blocoDatas = document.getElementById('bloco-datas');
+  const blocoEntrega = document.getElementById('bloco-data-entrega');
+  const label = document.getElementById('bloco-sem-instalacao');
+  if (chk) {
+    if (blocoDatas) blocoDatas.style.display = chk.checked ? 'none' : 'block';
+    if (blocoEntrega) blocoEntrega.style.display = chk.checked ? 'block' : 'none';
+    label.style.borderColor = chk.checked ? 'var(--gold)' : '#ddd';
+    label.style.background = chk.checked ? '#FFF8E8' : '#f5f5f5';
+  }
+}
+
 function selecionarDataSugerida(data, el) {
   // Visual: marca o selecionado
   document.querySelectorAll('#sugestoes-datas > div').forEach(d => {
@@ -5077,13 +5284,20 @@ function calcDiasUteisEntre(dataInicio, dataFim) {
 }
 
 async function confirmarFechamentoComData() {
-  const dataEscolhida = document.getElementById('data-manual-fechamento').value;
-  if (!dataEscolhida) { showNotif('Escolha uma data de instalação','error'); return; }
+  const semInstalacao = document.getElementById('chk-sem-instalacao')?.checked;
+  let dataEscolhida = '';
 
-  const ocupados = getDiasOcupados().map(d => d.data);
-  const d = new Date(dataEscolhida + 'T12:00:00');
-  if (!isDiaUtil(d)) { showNotif('Escolha um dia útil (segunda a sexta)','error'); return; }
-  if (ocupados.includes(dataEscolhida)) { showNotif('Este dia já tem instalação. Escolha outro.','error'); return; }
+  if (semInstalacao) {
+    dataEscolhida = document.getElementById('data-entrega-simples')?.value || '';
+    if (!dataEscolhida) { showNotif('Informe a data de entrega!', 'error'); return; }
+  } else {
+    dataEscolhida = document.getElementById('data-manual-fechamento')?.value || '';
+    if (!dataEscolhida) { showNotif('Escolha uma data de instalação ou marque "Sem instalação"!','error'); return; }
+    const ocupados = getDiasOcupados().map(d => d.data);
+    const d = new Date(dataEscolhida + 'T12:00:00');
+    if (!isDiaUtil(d)) { showNotif('Escolha um dia útil (segunda a sexta)','error'); return; }
+    if (ocupados.includes(dataEscolhida)) { showNotif('Este dia já tem instalação. Escolha outro.','error'); return; }
+  }
 
   const id = fechandoIdDrop;
   const order = orders.find(o => o.id === id);
@@ -6476,6 +6690,13 @@ function abrirTelaOrcamentoPedido(id) {
   }
   orcamentoAtual = JSON.parse(JSON.stringify(orc));
 
+  // Se o orçamento é novo (sem itens calculados), resetar valorNegociado
+  const temItensCalculados = orcamentoAtual.itens?.some(it => it.calc?.precoFinal > 0);
+  if (!temItensCalculados) {
+    orcamentoAtual.valorNegociado = 0;
+    orcamentoAtual.usandoValorNegociado = false;
+  }
+
   // Inicializa: resolve pedra por ID ou nome, corrige custoM2Override
   const pedrasCad = getPedrasCadastradas();
   orcamentoAtual.itens.forEach(item => {
@@ -6515,6 +6736,8 @@ function limparOrcamentoAtual() {
     id: 'ORC-' + Date.now(),
     pedidoId: pedidoOrcAtual,
     pedidoKey: orcKey,
+    valorNegociado: 0,
+    usandoValorNegociado: false,
     cliente: order.cliente || '',
     distancia: 0,
     idas: 1,
@@ -6760,11 +6983,14 @@ function renderTelaOrcamentoPedido(order) {
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px;">
           <div><div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600;">CUSTO TOTAL</div>
-            <input class="form-input" value="${fmt(custoTotal)}" readonly style="background:#f5f5f5;font-weight:700;"></div>
+            <input class="form-input" id="sim-custo-edit" value="${custoTotal.toFixed(2).replace('.',',')}" 
+              style="font-weight:700;border-color:#8B6914;border-width:2px;" 
+              oninput="simularPrecoComCustoEdit()" 
+              title="Você pode editar este valor para arredondar"></div>
           <div><div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600;" id="sim-label-valor">VALOR DO CONCORRENTE</div>
-            <input class="form-input" id="sim-valor" type="text" placeholder="R$ 0,00" oninput="simularPreco(${custoTotal})" style="font-weight:700;border-color:#006382;border-width:2px;"></div>
+            <input class="form-input" id="sim-valor" type="text" placeholder="R$ 0,00" oninput="simularPrecoComCustoEdit()" style="font-weight:700;border-color:#006382;border-width:2px;"></div>
           <div><div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600;" id="sim-label-margem">MARGEM LUCRO (%)</div>
-            <input class="form-input" id="sim-margem" type="text" placeholder="0,000" oninput="simularPreco(${custoTotal})" style="font-weight:700;"></div>
+            <input class="form-input" id="sim-margem" type="text" placeholder="0,000" oninput="simularPrecoComCustoEdit()" style="font-weight:700;"></div>
           <div><div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600;">LUCRO LÍQUIDO</div>
             <input class="form-input" id="sim-lucro" placeholder="—" readonly style="background:#f5f5f5;font-weight:700;"></div>
           <div><div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600;">LLH (R$/hora)</div>
@@ -7327,8 +7553,11 @@ function atualizarResumoHeader() {
   const custoTotal     = orcamentoAtual.itens.reduce((s,it) => s+(it.calc?.custoTotal||0), 0);
   const tpp            = orcamentoAtual.itens.reduce((s,it) => s+(it.calc?.tempoProdTotal||0), 0);
 
-  // Se tem valor negociado salvo, usa ele no header
-  const usandoNeg  = orcamentoAtual.usandoValorNegociado && orcamentoAtual.valorNegociado > 0;
+  // Se tem valor negociado salvo E o total calculado condiz com o orçamento atual, usa ele
+  // Evita mostrar valor negociado de outro orçamento
+  const usandoNeg  = orcamentoAtual.usandoValorNegociado && 
+                     orcamentoAtual.valorNegociado > 0 && 
+                     orcamentoAtual.valorNegociado >= custoTotal; // nunca abaixo do custo
   const totalGeral = usandoNeg ? orcamentoAtual.valorNegociado : totalCalculado;
   const lucroTotal = totalGeral - custoTotal;
   const margem     = totalGeral > 0 ? (lucroTotal / totalGeral * 100) : 0;
@@ -7343,9 +7572,16 @@ function atualizarResumoHeader() {
   const elV = document.getElementById('hdr-valor');
   if (elV) {
     elV.textContent = fmt(totalGeral);
-    // Dourado se for valor negociado, branco/padrão se for calculado
-    elV.style.color = usandoNeg ? '#FFD700' : '#FFD700';
-    if (usandoNeg) elV.title = 'Valor negociado (calculado: ' + fmt(totalCalculado) + ')';
+    elV.style.color = '#FFD700';
+    if (usandoNeg) {
+      elV.title = '⚠️ Valor negociado. Calculado: ' + fmt(totalCalculado) + '. Clique em Limpar para resetar.';
+      elV.style.textDecoration = 'underline dotted';
+      elV.style.cursor = 'help';
+    } else {
+      elV.title = '';
+      elV.style.textDecoration = '';
+      elV.style.cursor = '';
+    }
   }
   const elM = document.getElementById('hdr-margem');
   if (elM) { elM.textContent = margem.toFixed(1)+'%'; elM.parentElement.style.background = margemCor; }
@@ -8105,6 +8341,14 @@ function salvarValorSimulado() {
 
   showNotif('✅ Valor R$ ' + fmt(valorFinal) + ' (margem ' + margemFinal.toFixed(1) + '%) salvo no orçamento!', 'success');
   closeModal('modal-desconto-geral');
+}
+
+function simularPrecoComCustoEdit() {
+  const elCusto = document.getElementById('sim-custo-edit');
+  if (!elCusto) return;
+  const val = elCusto.value.replace(',','.').replace(/[^0-9.]/g,'');
+  const custoEditado = parseFloat(val) || 0;
+  if (custoEditado > 0) simularPreco(custoEditado);
 }
 
 function simularPreco(custoTotal) {
@@ -8932,9 +9176,31 @@ function toggleOrigemOrc() {
         </div>
       </div>
 
+      <!-- Opção sem instalação -->
+      <div style="margin-bottom:16px;">
+        <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:#f5f5f5;border:2px solid #ddd;border-radius:10px;cursor:pointer;" id="bloco-sem-instalacao">
+          <input type="checkbox" id="chk-sem-instalacao" style="width:18px;height:18px;accent-color:var(--gold);cursor:pointer;"
+            onchange="toggleSemInstalacao()">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--stone);">Sem instalação — só entrega</div>
+            <div style="font-size:11px;color:#888;">Ex: soleira, peitoril — informe a data de entrega abaixo</div>
+          </div>
+        </label>
+
+        <!-- Data de entrega (aparece quando marcar sem instalação) -->
+        <div id="bloco-data-entrega" style="display:none;margin-top:10px;padding:12px 14px;background:#FFF8E8;border-radius:10px;border:2px solid var(--gold);">
+          <label class="form-label">📦 DATA DE ENTREGA *</label>
+          <input class="form-input" type="date" id="data-entrega-simples" style="font-size:15px;font-weight:700;margin-top:6px;">
+          <div style="font-size:11px;color:#888;margin-top:4px;">A produção precisa saber o prazo para organizar o corte</div>
+        </div>
+      </div>
+
       <!-- Sugestões de datas -->
+      <div id="bloco-datas" style="">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:10px;">Próximos dias disponíveis</div>
       <div id="sugestoes-datas" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;"></div>
+
+      </div><!-- /bloco-datas -->
 
       <!-- Pergunta levigado (aparece só se acabamento = Levigado) -->
       <div id="bloco-levigado" style="display:none;border-top:1px solid var(--cream-dark);padding-top:16px;margin-bottom:16px;">

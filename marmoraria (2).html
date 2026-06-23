@@ -1758,6 +1758,24 @@ function iniciarApp() {
 // window.load garante que CDN do Supabase carregou antes de restaurar sessão
 window.addEventListener('load', iniciarApp);
 
+// Limpar zero em inputs numéricos ao focar
+document.addEventListener('focusin', function(e) {
+  const inp = e.target;
+  if (inp.tagName !== 'INPUT') return;
+  if (inp.type === 'number' || inp.classList.contains('orc-input') || inp.classList.contains('form-input')) {
+    if (inp.value === '0' || inp.value === '0.0' || inp.value === '0.00') {
+      inp.value = '';
+    }
+  }
+});
+document.addEventListener('focusout', function(e) {
+  const inp = e.target;
+  if (inp.tagName !== 'INPUT') return;
+  if ((inp.type === 'number' || inp.classList.contains('orc-input')) && inp.value === '') {
+    inp.value = '0';
+  }
+});
+
 // ── REALTIME — atualiza só quando há mudança no banco ────────────
 let _realtimeChannel = null;
 
@@ -5896,8 +5914,10 @@ function calcularItem(item, pedra, cfg) {
   const idas = parseInt(item.idas)||1;
   const minKm = cfg.transito==='lento'?(cfg.minKmLento||3):cfg.transito==='intermediario'?(cfg.minKmIntermediario||2):(cfg.minKmRapido||1);
   // Padrão de pessoas: 2 para instalação, 1 para só entrega (igual Marmoprice)
-  const nPessoasDefault = (item.tipoEntrega === 'instalacao') ? (cfg.pessoasInstalacao||2) : 1;
-  const nPessoas = parseInt(item.nPessoasInstal) || nPessoasDefault;
+  const temInstal = item.tipoEntrega === 'instalacao' || item.tipoEntrega === 'entrega_instalacao' || item.tipoEntrega === 'so_instalacao';
+  const nPessoasDefault = temInstal ? (cfg.pessoasInstalacao||2) : 1;
+  // Se nPessoasInstal não foi definido manualmente, usa o default
+  const nPessoas = (item.nPessoasInstal && item.nPessoasInstal > 0) ? parseInt(item.nPessoasInstal) : nPessoasDefault;
 
   const tempoDeslocamento = (distancia * 2 * minKm * idas) / 60;
 

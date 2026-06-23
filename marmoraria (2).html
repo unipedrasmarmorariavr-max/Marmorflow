@@ -4237,20 +4237,12 @@ async function renderAgendaMedicao() {
     </div>` : ''}
 
     ${hojeList.length > 0 ? `
-    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:16px;padding:20px;margin-bottom:20px;box-shadow:0 4px 20px rgba(0,0,0,0.2);">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-        <div style="background:var(--gold);border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">📍</div>
-        <div>
-          <div style="font-size:16px;font-weight:800;color:white;letter-spacing:.5px;">AGENDA DE HOJE</div>
-          <div style="font-size:12px;color:var(--gold);font-weight:600;">${hojeList.length} visita(s) agendada(s)</div>
-        </div>
-      </div>
+    <div style="background:#FFF8E8;border:2px solid var(--gold);border-radius:14px;padding:20px;margin-bottom:20px;">
+      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:14px;">📍 HOJE — ${hojeList.length} visita(s)</div>
       ${hojeList.map(m => cardMedicao(m, true)).join('')}
     </div>` : `
-    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:16px;padding:24px;margin-bottom:20px;text-align:center;">
-      <div style="font-size:36px;margin-bottom:8px;">📅</div>
-      <div style="font-size:15px;font-weight:800;color:white;">AGENDA DE HOJE</div>
-      <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:6px;">Nenhuma medição agendada</div>
+    <div style="background:#f5f5f5;border-radius:14px;padding:16px 20px;margin-bottom:20px;text-align:center;color:#888;font-size:13px;">
+      Nenhuma medição agendada para hoje
     </div>`}
 
     ${futuras.length > 0 ? `
@@ -4340,11 +4332,7 @@ function cardMedicao(m, isHoje, passada) {
       <div style="flex:1;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
           ${m.Horario?`<span style="background:${isHoje?'var(--gold)':'var(--cream-dark)'};color:${isHoje?'white':'var(--stone)'};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">🕐 ${m.Horario}</span>`:''}
-          <span style="font-size:11px;color:#888;">${m.Data?(()=>{
-            const dias=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-            const d=new Date(m.Data+'T12:00:00');
-            return dias[d.getDay()]+', '+m.Data.substring(8,10)+'/'+m.Data.substring(5,7)+'/'+m.Data.substring(0,4);
-          })():''}</span>
+          <span style="font-size:11px;color:#888;">${m.Data?m.Data.substring(8,10)+'/'+m.Data.substring(5,7)+'/'+m.Data.substring(0,4):''}</span>
           <span style="background:${statusCor}22;color:${statusCor};padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;">${statusLabel}</span>
         </div>
         <div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">${m.Cliente||'—'}</div>
@@ -5049,19 +5037,6 @@ function atualizarTotalItens(id) {
   if (el) el.textContent = 'R$ ' + total.toFixed(2).replace('.',',');
 }
 
-function toggleSemInstalacao() {
-  const chk = document.getElementById('chk-sem-instalacao');
-  const blocoDatas = document.getElementById('bloco-datas');
-  const blocoEntrega = document.getElementById('bloco-data-entrega');
-  const label = document.getElementById('bloco-sem-instalacao');
-  if (chk) {
-    if (blocoDatas) blocoDatas.style.display = chk.checked ? 'none' : 'block';
-    if (blocoEntrega) blocoEntrega.style.display = chk.checked ? 'block' : 'none';
-    label.style.borderColor = chk.checked ? 'var(--gold)' : '#ddd';
-    label.style.background = chk.checked ? '#FFF8E8' : '#f5f5f5';
-  }
-}
-
 function selecionarDataSugerida(data, el) {
   // Visual: marca o selecionado
   document.querySelectorAll('#sugestoes-datas > div').forEach(d => {
@@ -5102,20 +5077,13 @@ function calcDiasUteisEntre(dataInicio, dataFim) {
 }
 
 async function confirmarFechamentoComData() {
-  const semInstalacao = document.getElementById('chk-sem-instalacao')?.checked;
-  let dataEscolhida = '';
+  const dataEscolhida = document.getElementById('data-manual-fechamento').value;
+  if (!dataEscolhida) { showNotif('Escolha uma data de instalação','error'); return; }
 
-  if (semInstalacao) {
-    dataEscolhida = document.getElementById('data-entrega-simples')?.value || '';
-    if (!dataEscolhida) { showNotif('Informe a data de entrega!', 'error'); return; }
-  } else {
-    dataEscolhida = document.getElementById('data-manual-fechamento')?.value || '';
-    if (!dataEscolhida) { showNotif('Escolha uma data de instalação ou marque "Sem instalação"!','error'); return; }
-    const ocupados = getDiasOcupados().map(d => d.data);
-    const d = new Date(dataEscolhida + 'T12:00:00');
-    if (!isDiaUtil(d)) { showNotif('Escolha um dia útil (segunda a sexta)','error'); return; }
-    if (ocupados.includes(dataEscolhida)) { showNotif('Este dia já tem instalação. Escolha outro.','error'); return; }
-  }
+  const ocupados = getDiasOcupados().map(d => d.data);
+  const d = new Date(dataEscolhida + 'T12:00:00');
+  if (!isDiaUtil(d)) { showNotif('Escolha um dia útil (segunda a sexta)','error'); return; }
+  if (ocupados.includes(dataEscolhida)) { showNotif('Este dia já tem instalação. Escolha outro.','error'); return; }
 
   const id = fechandoIdDrop;
   const order = orders.find(o => o.id === id);
@@ -8964,31 +8932,9 @@ function toggleOrigemOrc() {
         </div>
       </div>
 
-      <!-- Opção sem instalação -->
-      <div style="margin-bottom:16px;">
-        <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:#f5f5f5;border:2px solid #ddd;border-radius:10px;cursor:pointer;" id="bloco-sem-instalacao">
-          <input type="checkbox" id="chk-sem-instalacao" style="width:18px;height:18px;accent-color:var(--gold);cursor:pointer;"
-            onchange="toggleSemInstalacao()">
-          <div>
-            <div style="font-size:13px;font-weight:700;color:var(--stone);">Sem instalação — só entrega</div>
-            <div style="font-size:11px;color:#888;">Ex: soleira, peitoril — informe a data de entrega abaixo</div>
-          </div>
-        </label>
-
-        <!-- Data de entrega (aparece quando marcar sem instalação) -->
-        <div id="bloco-data-entrega" style="display:none;margin-top:10px;padding:12px 14px;background:#FFF8E8;border-radius:10px;border:2px solid var(--gold);">
-          <label class="form-label">📦 DATA DE ENTREGA *</label>
-          <input class="form-input" type="date" id="data-entrega-simples" style="font-size:15px;font-weight:700;margin-top:6px;">
-          <div style="font-size:11px;color:#888;margin-top:4px;">A produção precisa saber o prazo para organizar o corte</div>
-        </div>
-      </div>
-
       <!-- Sugestões de datas -->
-      <div id="bloco-datas" style="">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:10px;">Próximos dias disponíveis</div>
       <div id="sugestoes-datas" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;"></div>
-
-      </div><!-- /bloco-datas -->
 
       <!-- Pergunta levigado (aparece só se acabamento = Levigado) -->
       <div id="bloco-levigado" style="display:none;border-top:1px solid var(--cream-dark);padding-top:16px;margin-bottom:16px;">

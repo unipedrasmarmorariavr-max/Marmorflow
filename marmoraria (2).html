@@ -4463,6 +4463,18 @@ async function abrirModalMedicao(id) {
   const pedidosMedicao = orders.filter(o => o.stage === 'medicao' || o.stage === 'negociacao');
   
   document.getElementById('titulo-modal-medicao-ag').textContent = m ? 'Editar Medição' : 'Agendar Medição';
+  // Supabase salva com maiúscula (Cliente, Data, Endereco...) — lê das duas formas para compatibilidade
+  const vCliente    = m?.Cliente    || m?.cliente    || '';
+  const vTelefone   = m?.Telefone   || m?.telefone   || '';
+  const vData       = m?.Data       || m?.data       || new Date().toISOString().substring(0,10);
+  const vHorario    = m?.Horario    || m?.horario    || '08:00';
+  const vEndereco   = m?.Endereco   || m?.endereco   || '';
+  const vNumero     = m?.Numero     || m?.numero     || '';
+  const vBairro     = m?.Bairro     || m?.bairro     || '';
+  const vCompl      = m?.Complemento|| m?.complemento|| '';
+  const vCidade     = m?.Cidade     || m?.cidade     || 'Volta Redonda/RJ';
+  const vObs        = m?.Obs        || m?.obs        || '';
+  const vPedidoId   = m?.Pedido_id  || m?.pedidoId   || '';
   document.getElementById('body-modal-medicao-ag').innerHTML = `
     <input type="hidden" id="med-edit-id" value="${id||''}">
     <div style="display:grid;gap:14px;">
@@ -4470,56 +4482,56 @@ async function abrirModalMedicao(id) {
         <label class="form-label">Pedido (opcional)</label>
         <select class="form-select" id="med-pedido" onchange="preencherClienteMedicao(this.value)">
           <option value="">Sem pedido vinculado</option>
-          ${pedidosMedicao.map(o => `<option value="${o.id}" ${m?.pedidoId===o.id?'selected':''}>${o.id} — ${o.cliente}</option>`).join('')}
+          ${pedidosMedicao.map(o => `<option value="${o.id}" ${vPedidoId===o.id?'selected':''}>${o.id} — ${o.cliente}</option>`).join('')}
         </select>
       </div>
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;">
         <div>
           <label class="form-label">Cliente *</label>
-          <input class="form-input" id="med-cliente" value="${m?.cliente||''}" placeholder="Nome do cliente">
+          <input class="form-input" id="med-cliente" value="${vCliente}" placeholder="Nome do cliente">
         </div>
         <div>
           <label class="form-label">Celular</label>
-          <input class="form-input" id="med-telefone" type="tel" value="${m?.telefone||''}" placeholder="(24) 99999-9999">
+          <input class="form-input" id="med-telefone" type="tel" value="${vTelefone}" placeholder="(24) 99999-9999">
         </div>
       </div>
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;">
         <div>
           <label class="form-label">Data *</label>
-          <input class="form-input" id="med-data" type="date" value="${m?.data||new Date().toISOString().substring(0,10)}">
+          <input class="form-input" id="med-data" type="date" value="${vData}">
         </div>
         <div>
           <label class="form-label">Horário *</label>
-          <input class="form-input" id="med-horario" type="time" value="${m?.horario||'08:00'}">
+          <input class="form-input" id="med-horario" type="time" value="${vHorario}">
         </div>
       </div>
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;">
         <div>
           <label class="form-label">Endereço *</label>
-          <input class="form-input" id="med-endereco" value="${m?.endereco||''}" placeholder="Rua, Av...">
+          <input class="form-input" id="med-endereco" value="${vEndereco}" placeholder="Rua, Av...">
         </div>
         <div>
           <label class="form-label">Número *</label>
-          <input class="form-input" id="med-numero" value="${m?.numero||''}" placeholder="123">
+          <input class="form-input" id="med-numero" value="${vNumero}" placeholder="123">
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div>
           <label class="form-label">Bairro</label>
-          <input class="form-input" id="med-bairro" value="${m?.bairro||''}" placeholder="Ex: Vila Americana...">
+          <input class="form-input" id="med-bairro" value="${vBairro}" placeholder="Ex: Vila Americana...">
         </div>
         <div>
           <label class="form-label">Complemento</label>
-          <input class="form-input" id="med-complemento" value="${m?.complemento||''}" placeholder="Apto 201, Bloco B...">
+          <input class="form-input" id="med-complemento" value="${vCompl}" placeholder="Apto 201, Bloco B...">
         </div>
       </div>
       <div>
         <label class="form-label">Cidade</label>
-        <input class="form-input" id="med-cidade" value="${m?.cidade||'Volta Redonda/RJ'}" placeholder="Volta Redonda/RJ">
+        <input class="form-input" id="med-cidade" value="${vCidade}" placeholder="Volta Redonda/RJ">
       </div>
       <div>
         <label class="form-label">Observações</label>
-        <input class="form-input" id="med-obs" value="${m?.obs||''}" placeholder="Ex: Apartamento 3º andar, portaria confirma...">
+        <input class="form-input" id="med-obs" value="${vObs}" placeholder="Ex: Apartamento 3º andar, portaria confirma...">
       </div>
     </div>`;
   openModal('modal-medicao-ag');

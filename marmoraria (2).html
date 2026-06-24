@@ -4457,7 +4457,9 @@ function cardMedicao(m, isHoje, passada) {
 
 async function abrirModalMedicao(id) {
   const medicoes = await getMedicoes();
-  const m = id ? medicoes.find(x => x.id === id) : null;
+  // id vem como string do HTML ('${m.id}'), mas no Supabase é bigint → converter para comparar corretamente
+  const idNum = id ? Number(id) : null;
+  const m = idNum ? medicoes.find(x => Number(x.id) === idNum) : null;
   const pedidosMedicao = orders.filter(o => o.stage === 'medicao' || o.stage === 'negociacao');
   
   document.getElementById('titulo-modal-medicao-ag').textContent = m ? 'Editar Medição' : 'Agendar Medição';

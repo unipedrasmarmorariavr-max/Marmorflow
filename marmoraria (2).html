@@ -6676,20 +6676,26 @@ function abrirTelaOrcamentoPedido(id) {
   pedidoOrcAtual = id;
   localStorage.setItem('mf_orc_aberto', id); // salva para restaurar após reload
 
-  // Chave única = pedidoId + timestamp de criação do pedido
-  // Garante que todo pedido novo começa do zero, mesmo com mesmo ID
-  const orcKey = id + '_' + (order.created_at || id);
+  // Chave única: ID + created_at do Supabase (timestamp único por registro)
+  // O created_at nunca é igual para dois pedidos diferentes no Supabase
+  // Se for null (pedido muito antigo), usa id + cliente como diferenciador
+  const clienteHash = (order.cliente||'').replace(/\s+/g,'').substring(0,10).toLowerCase();
+  const tsUnico = order.created_at ? order.created_at.replace(/[^0-9]/g,'').substring(0,14) : clienteHash;
+  const orcKey = 'ORC_' + id + '_' + tsUnico;
 
   let orcs = getOrcamentos();
-  // Busca pelo pedidoKey exato primeiro, depois por pedidoId como fallback
-  // Isso garante que orçamentos existentes nunca são perdidos ao mudar de stage
-  let orc = orcs.find(o => o.pedidoKey === orcKey)
-           || orcs.find(o => o.pedidoId === id && o.itens && o.itens.some(it => it.pedraId || it.pecas?.some(p => p.medidas)));
-
-  if (orc && !orc.pedidoKey) {
-    // Atualiza a chave para evitar problema no futuro
-    orc.pedidoKey = orcKey;
-    salvarOrcamentos(orcs);
+  
+  // Busca SOMENTE pela chave única — garantia de isolamento entre pedidos
+  let orc = orcs.find(o => o.pedidoKey === orcKey);
+  
+  // Se não achou pela nova chave, verifica se tem orçamento antigo COM cliente correto
+  if (!orc) {
+    const antigo = orcs.find(o => o.pedidoId === id && (o.cliente||'').toLowerCase() === (order.cliente||'').toLowerCase());
+    if (antigo) {
+      antigo.pedidoKey = orcKey; // migra para nova chave
+      salvarOrcamentos(orcs);
+      orc = antigo;
+    }
   }
 
   if (!orc) {
@@ -6732,6 +6738,11 @@ function abrirTelaOrcamentoPedido(id) {
     salvarOrcamentos(orcs);
   }
   orcamentoAtual = JSON.parse(JSON.stringify(orc));
+
+  // SEMPRE forçar o cliente do pedido atual — nunca herdar de outro pedido
+  orcamentoAtual.cliente = order.cliente || '';
+  orcamentoAtual.pedidoId = id;
+  orcamentoAtual.pedidoKey = orcKey;
 
   // Se o orçamento é novo (sem itens calculados), resetar valorNegociado
   const temItensCalculados = orcamentoAtual.itens?.some(it => it.calc?.precoFinal > 0);

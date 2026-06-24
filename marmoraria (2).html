@@ -4398,6 +4398,11 @@ function cardMedicao(m, isHoje, passada) {
           style="background:#006382;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:6px;">
           🗺️ Navegar
         </a>` : ''}
+        ${m.Telefone ? `
+        <a href="https://wa.me/55${m.Telefone.replace(/\D/g,'')}" target="_blank"
+          style="background:#25D366;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:6px;">
+          📱 WhatsApp
+        </a>` : ''}
         ${isPerfMedidor && m.Status==='pendente' ? `
         <button onclick="concluirMedicao('${m.id}')"
           style="background:#2E7D32;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">

@@ -3475,7 +3475,7 @@ async function renderFinanceiro() {
 
     <!-- TABS -->
     <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid var(--cream-dark);">
-      ${[['geral','📊 Lançamentos'],['receber','📋 A Receber'],['pagar','📤 Contas a Pagar']].map(([aba,label]) => `
+      ${[['geral','📊 Lançamentos'],['receber','📋 A Receber'],['pagar','📤 Contas a Pagar'],['analise','📈 Análise']].map(([aba,label]) => `
       <button onclick="finSwitchAba('${aba}')" id="fin-aba-${aba}"
         style="padding:10px 20px;border:none;background:${abaFin===aba?'var(--gold)':'var(--cream-dark)'};color:${abaFin===aba?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
         ${label}
@@ -3697,12 +3697,114 @@ async function renderFinanceiro() {
       </details>`:''}
     </div>
 
+    <!-- PAINEL ANÁLISE -->
+    <div id="fin-painel-analise" style="display:${abaFin==='analise'?'block':'none'}">
+      <div id="fin-analise-inner" style="color:#888;padding:20px;text-align:center;">Carregando análise...</div>
+    </div>
+
   </div>`;
+  // Renderiza a aba análise separadamente para evitar template literal aninhado
+  setTimeout(function() {
+    const el = document.getElementById('fin-analise-inner');
+    if (el) el.innerHTML = renderAnaliseFinanceiro(txMes, filtroMes);
+  }, 50);
+}
+
+function renderAnaliseFinanceiro(txMes, filtroMes) {
+  const saidas = txMes.filter(function(t){ return t.tipo === 'saida'; });
+  const totalSaidas = saidas.reduce(function(s,t){ return s + (parseFloat(t.valor)||0); }, 0);
+  const grupos = {};
+  saidas.forEach(function(t) {
+    const cat = t.categoria || 'Sem categoria';
+    if (!grupos[cat]) grupos[cat] = 0;
+    grupos[cat] += parseFloat(t.valor)||0;
+  });
+  const sorted = Object.entries(grupos).sort(function(a,b){ return b[1]-a[1]; });
+  const cores = ['#B8965A','#006382','#2E7D32','#B85A4A','#8B6914','#5C3D8F','#1565C0','#AD1457','#00695C','#E65100','#4E342E','#37474F'];
+
+  if (sorted.length === 0) return '<div style="padding:40px;text-align:center;color:#888;font-size:14px;">Nenhuma sa\u00edda lan\u00e7ada neste m\u00eas ainda.</div>';
+
+  const canvasId = 'chart-cat-' + Date.now();
+  const mes = filtroMes.substring(5,7) + '/' + filtroMes.substring(0,4);
+
+  setTimeout(function() {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    function buildChart(c) {
+      if (!window.Chart) return setTimeout(function(){ buildChart(c); }, 200);
+      new Chart(c, {
+        type: 'doughnut',
+        data: {
+          labels: sorted.map(function(x){ return x[0]; }),
+          datasets: [{ data: sorted.map(function(x){ return Math.round(x[1]*100)/100; }), backgroundColor: cores.slice(0, sorted.length), borderWidth: 2, borderColor: '#fff' }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: function(ctx){ return ' R$ ' + ctx.raw.toLocaleString('pt-BR',{minimumFractionDigits:2}) + ' (' + Math.round(ctx.raw/totalSaidas*100) + '%)'; } } }
+          }
+        }
+      });
+    }
+    buildChart(canvas);
+  }, 200);
+
+  let pizzaLegenda = '';
+  sorted.forEach(function(entry, i) {
+    const cat = entry[0], val = entry[1];
+    pizzaLegenda += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+      + '<div style="width:12px;height:12px;border-radius:3px;background:' + cores[i%cores.length] + ';flex-shrink:0;"></div>'
+      + '<div style="flex:1;min-width:0;">'
+      + '<div style="font-size:12px;font-weight:600;color:var(--stone);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + cat + '</div>'
+      + '<div style="font-size:11px;color:#888;">' + Math.round(val/totalSaidas*100) + '%</div>'
+      + '</div>'
+      + '<div style="font-size:13px;font-weight:700;color:#A32D2D;white-space:nowrap;">R$ ' + val.toLocaleString('pt-BR',{minimumFractionDigits:2}) + '</div>'
+      + '</div>';
+  });
+
+  let lista = '';
+  sorted.forEach(function(entry, i) {
+    const cat = entry[0], val = entry[1];
+    const itens = saidas.filter(function(t){ return (t.categoria||'Sem categoria')===cat; });
+    const cor = cores[i%cores.length];
+    const pct = Math.round(val/totalSaidas*100);
+    let detalhes = '';
+    itens.forEach(function(t) {
+      detalhes += '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid #f0f0f0;font-size:12px;">'
+        + '<span style="color:#555;">' + (t.descricao||'—') + ' <span style="color:#bbb;">· ' + (t.data||'') + '</span></span>'
+        + '<span style="color:#A32D2D;font-weight:500;">R$ ' + parseFloat(t.valor).toLocaleString('pt-BR',{minimumFractionDigits:2}) + '</span>'
+        + '</div>';
+    });
+    lista += '<div style="border-bottom:0.5px solid var(--cream-dark);">'
+      + '<div style="padding:12px 20px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;background:#fafaf8;" onclick="var n=this.nextElementSibling;n.style.display=n.style.display===\'none\'?\'block\':\'none\'">'  
+      + '<div style="display:flex;align-items:center;gap:10px;">'
+      + '<div style="width:10px;height:10px;border-radius:2px;background:' + cor + ';"></div>'
+      + '<span style="font-size:13px;font-weight:600;color:var(--stone);">' + cat + '</span>'
+      + '<span style="font-size:11px;color:#888;">' + itens.length + ' lan\u00e7amento(s) \u00b7 ' + pct + '%</span>'
+      + '</div>'
+      + '<span style="font-size:14px;font-weight:700;color:#A32D2D;">R$ ' + val.toLocaleString('pt-BR',{minimumFractionDigits:2}) + '</span>'
+      + '</div>'
+      + '<div style="display:none;padding:0 20px 12px;">' + detalhes + '</div>'
+      + '</div>';
+  });
+
+  return '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;margin-bottom:16px;">'
+    + '<div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">Sa\u00eddas por Categoria \u2014 ' + mes + '</div>'
+    + '<div style="font-size:12px;color:#888;margin-bottom:20px;">Total: R$ ' + totalSaidas.toLocaleString('pt-BR',{minimumFractionDigits:2}) + ' em ' + saidas.length + ' lan\u00e7amentos</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center;">'
+    + '<div style="height:260px;position:relative;"><canvas id="' + canvasId + '"></canvas></div>'
+    + '<div style="display:flex;flex-direction:column;max-height:280px;overflow-y:auto;">' + pizzaLegenda + '</div>'
+    + '</div></div>'
+    + '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">'
+    + '<div style="background:var(--stone);color:white;padding:14px 20px;font-size:14px;font-weight:700;">Detalhamento por Categoria <span style="font-size:12px;opacity:.7;">(clique para expandir)</span></div>'
+    + lista
+    + '</div>';
 }
 
 function finSwitchAba(aba) {
   localStorage.setItem('fin_aba', aba);
-  ['geral','receber','pagar'].forEach(a => {
+  ['geral','receber','pagar','analise'].forEach(a => {
     const btn = document.getElementById('fin-aba-'+a);
     const panel = document.getElementById('fin-painel-'+a);
     if (btn) { btn.style.background = a===aba?'var(--gold)':'var(--cream-dark)'; btn.style.color = a===aba?'white':'var(--stone)'; }

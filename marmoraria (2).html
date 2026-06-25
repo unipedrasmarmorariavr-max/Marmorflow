@@ -4334,8 +4334,10 @@ async function renderAgendaMedicao() {
 }
 
 function cardMedicao(m, isHoje, passada) {
-  const statusCor = m.Status==='concluido'?'#2E7D32':m.Status==='revisitar'?'#B85A4A':'#8B6914';
-  const statusLabel = m.Status==='concluido'?'✅ Concluído':m.Status==='revisitar'?'🔄 Aguarda Reagendamento':'⏳ Pendente';
+  // Normaliza o Status para minúsculo para comparações seguras (Supabase pode salvar 'Pendente' ou 'pendente')
+  const statusNorm = (m.Status||'').toLowerCase();
+  const statusCor = statusNorm==='concluido'?'#2E7D32':statusNorm==='revisitar'?'#B85A4A':'#8B6914';
+  const statusLabel = statusNorm==='concluido'?'✅ Concluído':statusNorm==='revisitar'?'🔄 Aguarda Reagendamento':'⏳ Pendente';
   const enderecoCompleto = [m.Endereco, m.Numero, m.Complemento].filter(Boolean).join(', ');
   const enderecoComBairro = [m.Endereco, m.Numero, m.Complemento, m.Bairro].filter(Boolean).join(', ');
   const cidadeStr = m.Cidade || 'Volta Redonda RJ';
@@ -4343,9 +4345,9 @@ function cardMedicao(m, isHoje, passada) {
   const isPerfMedidor = currentUser === 'medidor';
 
   return `
-  <div style="border:1px solid ${isHoje&&m.Status==='pendente'?'var(--gold)':'var(--cream-dark)'};border-radius:12px;padding:16px;margin-bottom:12px;background:${passada?'#fafafa':isHoje&&m.Status==='pendente'?'white':'white'};${isHoje&&m.Status==='pendente'?'box-shadow:0 2px 12px rgba(184,150,90,0.2);':''}">
+  <div style="border:1px solid ${isHoje&&statusNorm==='pendente'?'var(--gold)':'var(--cream-dark)'};border-radius:12px;padding:16px;margin-bottom:12px;background:${passada?'#fafafa':isHoje&&statusNorm==='pendente'?'white':'white'};${isHoje&&statusNorm==='pendente'?'box-shadow:0 2px 12px rgba(184,150,90,0.2);':''}">
     
-    ${isPerfMedidor && isHoje && m.Status==='pendente' ? `
+    ${isPerfMedidor && isHoje && statusNorm==='pendente' ? `
     <!-- VIEW MOBILE MEDIDOR — HOJE -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <div style="background:var(--gold);color:white;padding:6px 16px;border-radius:20px;font-size:15px;font-weight:700;">🕐 ${m.Horario||'Horário não definido'}</div>
@@ -4403,7 +4405,7 @@ function cardMedicao(m, isHoje, passada) {
           style="background:#25D366;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:6px;">
           📱 WhatsApp
         </a>` : ''}
-        ${isPerfMedidor && m.Status==='pendente' ? `
+        ${statusNorm==='pendente' || statusNorm==='revisitar' ? `
         <button onclick="concluirMedicao('${m.id}')"
           style="background:#2E7D32;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
           ✅ Concluído
@@ -4446,7 +4448,7 @@ function cardMedicao(m, isHoje, passada) {
           style="background:#25D366;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:6px;">
           📱 WhatsApp
         </a>` : ''}
-        ${isPerfMedidor && m.Status === 'pendente' ? `
+        ${isPerfMedidor && statusNorm === 'pendente' ? `
         <button onclick="concluirMedicao('${m.id}')"
           style="background:#2E7D32;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
           ✅ Concluído

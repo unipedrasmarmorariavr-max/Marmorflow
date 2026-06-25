@@ -1095,8 +1095,15 @@ async function abrirVerProjeto(id) {
 
     <!-- CROQUI -->
     <div style="margin-bottom:16px;">
-      <div style="font-size:12px;font-weight:700;color:var(--stone);text-transform:uppercase;margin-bottom:8px;">
-        📐 Croqui / Medidas
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:700;color:var(--stone);text-transform:uppercase;">
+          📐 Croqui / Medidas
+        </div>
+        ${croquiImgs.length > 0 && (currentUser==='dono'||currentUser==='comercial') ? `
+        <button onclick="imprimirCroqui('${o.id}')"
+          style="background:#006382;color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px;">
+          🖨️ Imprimir
+        </button>` : ''}
       </div>
       ${croquiImgs.length > 0 ? `
         <div class="images-protected" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
@@ -1154,6 +1161,76 @@ async function abrirVerProjeto(id) {
   }
   document.getElementById('detail-footer').innerHTML = footerBtns.join('');
   openModal('modal-detail');
+}
+
+function imprimirCroqui(id) {
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+  const croquiImgs = Array.isArray(o.croqui) ? o.croqui : (o.croqui ? [o.croqui] : []);
+  if (croquiImgs.length === 0) { showNotif('Nenhum croqui para imprimir.', 'error'); return; }
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Croqui — ${o.id} — ${o.cliente}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; padding: 20px; color: #222; }
+  .header { border-bottom: 2px solid #006382; padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-start; }
+  .header h1 { font-size: 18px; color: #006382; }
+  .header .info { font-size: 12px; color: #555; text-align: right; }
+  .meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; padding: 10px; background: #f5f5f5; border-radius: 6px; }
+  .meta div { font-size: 12px; }
+  .meta strong { display: block; color: #006382; font-size: 11px; text-transform: uppercase; }
+  .fotos { display: flex; flex-wrap: wrap; gap: 12px; }
+  .fotos img { max-width: 100%; border: 1px solid #ddd; border-radius: 6px; page-break-inside: avoid; }
+  .foto-wrap { break-inside: avoid; }
+  h2 { font-size: 13px; color: #555; text-transform: uppercase; margin-bottom: 10px; border-left: 3px solid #006382; padding-left: 8px; }
+  @media print {
+    body { padding: 10px; }
+    button { display: none !important; }
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>📐 Croqui de Medição</h1>
+      <div style="font-size:13px;margin-top:4px;"><strong>${o.id}</strong> — ${o.cliente}</div>
+    </div>
+    <div class="info">
+      <div>Unipedras Marmoraria</div>
+      <div>Volta Redonda / RJ</div>
+      <div style="margin-top:4px;">${new Date().toLocaleDateString('pt-BR')}</div>
+    </div>
+  </div>
+
+  <div class="meta">
+    <div><strong>Peça</strong>${o.peca||'—'}</div>
+    <div><strong>Material</strong>${o.material||'—'}</div>
+    <div><strong>Endereço</strong>${o.endereco||'—'}</div>
+    <div><strong>Obs. Medição</strong>${o.obs||'—'}</div>
+    <div><strong>Acesso</strong>${o.acesso||'—'}</div>
+    <div><strong>Responsável</strong>${o.vendedor||'—'}</div>
+  </div>
+
+  <h2>Fotos do Croqui (${croquiImgs.length} foto${croquiImgs.length>1?'s':''})</h2>
+  <div class="fotos">
+    ${croquiImgs.map((img, i) => `
+    <div class="foto-wrap" style="flex:1;min-width:${croquiImgs.length===1?'100%':'calc(50% - 6px)'};">
+      <img src="${img}" alt="Croqui ${i+1}" style="width:100%;">
+    </div>`).join('')}
+  </div>
+
+  <script>window.onload = () => window.print();<\/script>
+</body>
+</html>`;
+
+  const win = window.open('', '_blank');
+  if (!win) { showNotif('Permita popups para imprimir.', 'error'); return; }
+  win.document.write(html);
+  win.document.close();
 }
 
 function previewNovoCroqui() {
@@ -4415,7 +4492,7 @@ function cardMedicao(m, isHoje, passada) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
       <button onclick="concluirMedicao('${m.id}')"
         style="background:#2E7D32;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;">
-        ✅ Concluir
+        📋 Registrar Medição
       </button>
       <button onclick="solicitarRevisita('${m.id}')"
         style="background:#B85A4A;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;">
@@ -4453,7 +4530,7 @@ function cardMedicao(m, isHoje, passada) {
         ${statusNorm==='pendente' || statusNorm==='revisitar' ? `
         <button onclick="concluirMedicao('${m.id}')"
           style="background:#2E7D32;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
-          ✅ Concluir
+          📋 Registrar Medição
         </button>
         <button onclick="solicitarRevisita('${m.id}')"
           style="background:#B85A4A;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
@@ -4496,7 +4573,7 @@ function cardMedicao(m, isHoje, passada) {
         ${isPerfMedidor && statusNorm === 'pendente' ? `
         <button onclick="concluirMedicao('${m.id}')"
           style="background:#2E7D32;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
-          ✅ Concluir
+          📋 Registrar Medição
         </button>
         <button onclick="solicitarRevisita('${m.id}')"
           style="background:#B85A4A;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">

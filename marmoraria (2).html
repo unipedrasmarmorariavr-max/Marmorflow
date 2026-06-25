@@ -2366,13 +2366,19 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
   // Montar dados por mês (todos os meses que têm lançamento, ordenados)
   const mesesKeys = [...new Set(transacoes.map(t=>(t.data||'').substring(0,7)).filter(k=>k&&k.length===7))].sort();
   
-  // Se não há meses, montar os últimos 6 como fallback
-  const allMeses = mesesKeys.length ? mesesKeys : [];
-  for (let i=5; i>=0; i--) {
-    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
-    const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
-    if (!allMeses.includes(key)) allMeses.push(key);
+  // Sempre incluir todos os meses desde o mais antigo com lançamento ATÉ o mês atual
+  // Assim julho, agosto etc. aparecem automaticamente para lançamento manual
+  const mesAtualKey = hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0');
+  const primeiromes = mesesKeys.length ? mesesKeys[0] : mesAtualKey;
+  const allMeses = [];
+  let cur = new Date(parseInt(primeiromes.split('-')[0]), parseInt(primeiromes.split('-')[1])-1, 1);
+  const fim = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  while (cur <= fim) {
+    allMeses.push(cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0'));
+    cur.setMonth(cur.getMonth()+1);
   }
+  // Garante que o mês atual está sempre presente
+  if (!allMeses.includes(mesAtualKey)) allMeses.push(mesAtualKey);
   allMeses.sort();
 
   // Montar objeto com dados de cada mês

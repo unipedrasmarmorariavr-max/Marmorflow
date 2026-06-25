@@ -3208,7 +3208,141 @@ async function deletarTransacao(id) {
   if (!confirm('Excluir este lançamento?')) return;
   await getSB().from('transacoes').delete().eq('id', id);
   renderFinanceiro();
-  showNotif('Lançamento excluído','error');
+}
+
+async function importarSaidasJunho2026() {
+  if (!confirm('Importar todas as saídas de junho/2026 para o Financeiro? Esta ação não pode ser desfeita.')) return;
+  showLoading('Importando saídas de junho...');
+
+  const saidas = [
+    // FOLHA DE PAGAMENTO
+    { data:'2026-06-03', descricao:'Folha — Jonas Ferreira Brandão', valor:4769.14, categoria:'Folha de Pagamento' },
+    { data:'2026-06-05', descricao:'Folha — Bras Viana Belo', valor:2000.00, categoria:'Folha de Pagamento' },
+    { data:'2026-06-05', descricao:'Folha complemento — Bras Viana Belo', valor:1530.35, categoria:'Folha de Pagamento' },
+    { data:'2026-06-05', descricao:'Folha — Ademir Aparecido Lima', valor:2000.00, categoria:'Folha de Pagamento' },
+    { data:'2026-06-05', descricao:'Folha complemento — Ademir Aparecido Lima', valor:283.53, categoria:'Folha de Pagamento' },
+    { data:'2026-06-05', descricao:'Folha — Paulo Pereira da Silva', valor:2000.00, categoria:'Folha de Pagamento' },
+    { data:'2026-06-05', descricao:'Folha complemento — Paulo Pereira da Silva', valor:2641.26, categoria:'Folha de Pagamento' },
+    { data:'2026-06-05', descricao:'Folha — Denise Cristina Lopes', valor:2000.00, categoria:'Folha de Pagamento' },
+    { data:'2026-06-05', descricao:'Folha complemento — Denise Cristina Lopes', valor:223.98, categoria:'Folha de Pagamento' },
+    { data:'2026-06-05', descricao:'Folha — Ronaldo Luiz Thomaz', valor:2000.00, categoria:'Folha de Pagamento' },
+    { data:'2026-06-05', descricao:'Folha complemento — Ronaldo Luiz Thomaz', valor:1235.23, categoria:'Folha de Pagamento' },
+    { data:'2026-06-05', descricao:'Folha — Reginaldo de Aguiar', valor:2000.00, categoria:'Folha de Pagamento' },
+    { data:'2026-06-05', descricao:'Folha complemento — Reginaldo de Aguiar', valor:1576.21, categoria:'Folha de Pagamento' },
+    { data:'2026-06-05', descricao:'Folha — Arnaldo Ramos de Carvalho', valor:420.00, categoria:'Folha de Pagamento' },
+    { data:'2026-06-08', descricao:'Folha complemento — Arnaldo Ramos de Carvalho', valor:50.00, categoria:'Folha de Pagamento' },
+    { data:'2026-06-05', descricao:'Pró-labore — Filipe da Silva Abraão', valor:3120.00, categoria:'Folha de Pagamento' },
+    { data:'2026-06-12', descricao:'Folha 2ª parte — Ademir Aparecido Lima', valor:897.87, categoria:'Folha de Pagamento' },
+    // FORNECEDORES DE PEDRA
+    { data:'2026-06-08', descricao:'Fornecedor pedra — Guidoni Brasil SA', valor:5067.63, categoria:'Fornecedor' },
+    { data:'2026-06-08', descricao:'Fornecedor pedra — Igramar Ltda', valor:4769.00, categoria:'Fornecedor' },
+    { data:'2026-06-11', descricao:'Fornecedor pedra — Igramar Ltda', valor:7829.00, categoria:'Fornecedor' },
+    { data:'2026-06-16', descricao:'Fornecedor pedra — Igramar Ltda', valor:1893.00, categoria:'Fornecedor' },
+    { data:'2026-06-12', descricao:'Fornecedor insumos — Melo Comércio', valor:272.68, categoria:'Fornecedor' },
+    { data:'2026-06-09', descricao:'Fornecedor pedra — Igramar Ltda (Caixa)', valor:15582.74, categoria:'Fornecedor' },
+    { data:'2026-06-15', descricao:'Fornecedor chapa — Stone One', valor:8418.24, categoria:'Fornecedor' },
+    // INSUMOS (KELY)
+    { data:'2026-06-01', descricao:'Insumos — K C P de A Machado (Kely)', valor:200.00, categoria:'Insumos de Instalação' },
+    { data:'2026-06-05', descricao:'Insumos — K C P de A Machado (Kely)', valor:200.00, categoria:'Insumos de Instalação' },
+    { data:'2026-06-11', descricao:'Insumos — K C P de A Machado (Kely)', valor:371.00, categoria:'Insumos de Instalação' },
+    { data:'2026-06-12', descricao:'Insumos — K C P de A Machado (Kely)', valor:200.00, categoria:'Insumos de Instalação' },
+    { data:'2026-06-22', descricao:'Insumos — K C P de A Machado (Kely)', valor:888.00, categoria:'Insumos de Instalação' },
+    { data:'2026-06-23', descricao:'Insumos — K C P de A Machado (Kely / Caixa)', valor:477.00, categoria:'Insumos de Instalação' },
+    { data:'2026-06-10', descricao:'Insumos — K C P de A Machado (Kely / Caixa)', valor:151.00, categoria:'Insumos de Instalação' },
+    { data:'2026-06-08', descricao:'Insumos — Ferramar (tubos instalação)', valor:193.00, categoria:'Insumos de Instalação' },
+    { data:'2026-06-23', descricao:'Insumos — Ibrate (arame fixação cubas)', valor:24.25, categoria:'Insumos de Instalação' },
+    { data:'2026-06-15', descricao:'Insumos — André Luis Citero (a identificar)', valor:390.00, categoria:'Insumos de Instalação' },
+    { data:'2026-06-09', descricao:'Insumos produção — Material de Construção', valor:210.00, categoria:'Insumos de Instalação' },
+    // FERRAMENTAS / EQUIPAMENTOS
+    { data:'2026-06-22', descricao:'Equipamento — Trincofort (serra mármore)', valor:530.00, categoria:'Manutenção de Máquina' },
+    { data:'2026-06-17', descricao:'Ferramentas — Limafer (mão francesa)', valor:110.00, categoria:'Insumos de Instalação' },
+    // IMPOSTOS E DÍVIDAS
+    { data:'2026-06-19', descricao:'Receita Federal — DARF/DAS', valor:4286.01, categoria:'Dívida' },
+    { data:'2026-06-22', descricao:'Receita Federal — DARF/DAS', valor:4935.39, categoria:'Dívida' },
+    { data:'2026-06-08', descricao:'Prefeitura VR — parcelamento termo 119', valor:486.77, categoria:'Dívida' },
+    { data:'2026-06-08', descricao:'Prefeitura VR — parcelamento termo 120', valor:145.58, categoria:'Dívida' },
+    { data:'2026-06-19', descricao:'Euro Cobranças — Angramar parcelamento', valor:1197.74, categoria:'Dívida' },
+    { data:'2026-06-24', descricao:'SAAE — água', valor:89.03, categoria:'Água' },
+    { data:'2026-06-08', descricao:'Sicredi — parcela refinanciamento caminhão', valor:1662.98, categoria:'Dívida' },
+    { data:'2026-06-02', descricao:'Sicredi — seguro prestamista', valor:6.94, categoria:'Dívida' },
+    { data:'2026-06-12', descricao:'Sindicato dos Trabalhadores', valor:138.40, categoria:'Dívida' },
+    { data:'2026-06-19', descricao:'Uniodonto — plano odontológico', valor:532.16, categoria:'Assistência Saúde' },
+    { data:'2026-06-19', descricao:'Grupo E — boleto Sicredi', valor:387.07, categoria:'Dívida' },
+    // ALUGUEL
+    { data:'2026-06-12', descricao:'Aluguel galpão — João Carlos Belo Mansur', valor:2100.00, categoria:'Aluguel' },
+    // BENEFÍCIOS
+    { data:'2026-06-02', descricao:'Caju — vale alimentação', valor:300.00, categoria:'Alimentação (Vale/Cesta)' },
+    { data:'2026-06-05', descricao:'Caju — vale alimentação', valor:1920.00, categoria:'Alimentação (Vale/Cesta)' },
+    { data:'2026-06-24', descricao:'Joeci Tirello — benefício funcionário', valor:600.00, categoria:'Alimentação (Vale/Cesta)' },
+    { data:'2026-06-05', descricao:'Lucia Helena de Oliveira — benefício', valor:53.00, categoria:'Alimentação (Vale/Cesta)' },
+    // COMBUSTÍVEL
+    { data:'2026-06-03', descricao:'Combustível — Posto Tetra Diesel', valor:42.72, categoria:'Combustível' },
+    { data:'2026-06-05', descricao:'Combustível — Posto Tetra Diesel', valor:300.00, categoria:'Combustível' },
+    { data:'2026-06-12', descricao:'Combustível — Posto Tetra Diesel', valor:300.00, categoria:'Combustível' },
+    { data:'2026-06-22', descricao:'Combustível — Posto Tetra Diesel', valor:40.00, categoria:'Combustível' },
+    { data:'2026-06-23', descricao:'Combustível — Posto Tetra Diesel', valor:300.00, categoria:'Combustível' },
+    { data:'2026-06-11', descricao:'Combustível — Posto Metano Volta Redonda', valor:88.80, categoria:'Combustível' },
+    // TRANSPORTE
+    { data:'2026-06-11', descricao:'Transporte — JV Transporte Ltda', valor:1320.00, categoria:'Combustível' },
+    { data:'2026-06-19', descricao:'Transporte — JV Transporte Ltda', valor:880.00, categoria:'Combustível' },
+    { data:'2026-06-17', descricao:'Transporte — JV Transporte Ltda (Caixa)', valor:1980.00, categoria:'Combustível' },
+    // MARKETING
+    { data:'2026-06-01', descricao:'Marketing — Facebook / Meta Ads', valor:750.00, categoria:'Marketing' },
+    { data:'2026-06-16', descricao:'Marketing — Trivo Gestão de Mídia', valor:2550.83, categoria:'Marketing' },
+    // INSTALAÇÃO TERCEIROS
+    { data:'2026-06-09', descricao:'Instalação terceirizada — Oliveira & Nyarady', valor:136.00, categoria:'Insumos de Instalação' },
+    // SOFTWARE
+    { data:'2026-06-15', descricao:'Software — MarmóPrice', valor:499.00, categoria:'Software (MarmóPrice)' },
+    { data:'2026-06-10', descricao:'Software — Aptast Tecnologia', valor:573.30, categoria:'Software (MarmóPrice)' },
+    { data:'2026-06-08', descricao:'Software — Info In Time Informática', valor:285.00, categoria:'Software (MarmóPrice)' },
+    { data:'2026-06-19', descricao:'Software — Client Co Serviços', valor:159.90, categoria:'Software (MarmóPrice)' },
+    { data:'2026-06-17', descricao:'Software — Client Co Serviços', valor:129.99, categoria:'Software (MarmóPrice)' },
+    { data:'2026-06-09', descricao:'Taxas — PIX Marketplace', valor:234.90, categoria:'Despesas Financeiras (Banco)' },
+    { data:'2026-06-12', descricao:'Taxas — Mercado Pago (tarifas)', valor:3444.09, categoria:'Despesas Financeiras (Banco)' },
+    // CONTABILIDADE
+    { data:'2026-06-15', descricao:'Contabilidade — NZD Contabilidade', valor:1448.00, categoria:'Contabilidade' },
+    // ENERGIA / UTILIDADES
+    { data:'2026-06-05', descricao:'Energia elétrica — Light', valor:666.70, categoria:'Energia Elétrica' },
+    { data:'2026-06-13', descricao:'Energia elétrica — Light (Caixa)', valor:338.87, categoria:'Energia Elétrica' },
+    { data:'2026-06-05', descricao:'Tarifa bancária — Sicredi cesta', valor:113.44, categoria:'Despesas Financeiras (Banco)' },
+    { data:'2026-06-05', descricao:'Tarifa bancária — Caixa mensalidade', valor:125.00, categoria:'Despesas Financeiras (Banco)' },
+    { data:'2026-06-02', descricao:'Juros — Caixa cobrança', valor:1093.34, categoria:'Despesas Financeiras (Banco)' },
+    { data:'2026-06-02', descricao:'IOF — Caixa', valor:106.12, categoria:'Despesas Financeiras (Banco)' },
+    { data:'2026-06-15', descricao:'Telefone — Tim', valor:420.67, categoria:'Celular' },
+    { data:'2026-06-12', descricao:'Plano de saúde — Aliança Retiro VR', valor:155.04, categoria:'Assistência Saúde' },
+    { data:'2026-06-19', descricao:'Plano de saúde — Aliança Retiro VR (Caixa)', valor:83.56, categoria:'Assistência Saúde' },
+    // MATERIAL DE ESCRITÓRIO
+    { data:'2026-06-22', descricao:'Material escritório — Minas Gerais Com', valor:89.90, categoria:'Material de Escritório' },
+    // ALIMENTAÇÃO RUA
+    { data:'2026-06-19', descricao:'Alimentação em campo — Euzinete Viana', valor:70.00, categoria:'Alimentação (Vale/Cesta)' },
+    // DÍZIMO
+    { data:'2026-06-16', descricao:'A identificar — Igreja Metodista W (Caixa)', valor:197.05, categoria:'A Identificar' },
+    { data:'2026-06-08', descricao:'A identificar — Adilson Prado Moro (Caixa)', valor:335.00, categoria:'A Identificar' },
+    { data:'2026-06-23', descricao:'A identificar — Comercial Jaragua / Mercado', valor:42.39, categoria:'A Identificar' },
+  ];
+
+  let sucesso = 0, erro = 0;
+  for (const s of saidas) {
+    const { error } = await getSB().from('transacoes').insert({
+      tipo: 'saida',
+      valor: s.valor,
+      descricao: s.descricao,
+      data: s.data,
+      categoria: s.categoria,
+      banco: 'Sicredi',
+      forma: 'pix',
+      created_by: 'dono'
+    });
+    if (error) erro++; else sucesso++;
+  }
+
+  hideLoading();
+  if (erro === 0) {
+    showNotif(`✅ ${sucesso} saídas de junho importadas com sucesso!`, 'success');
+  } else {
+    showNotif(`⚠️ ${sucesso} importadas, ${erro} com erro. Verifique o financeiro.`, 'error');
+  }
+  renderFinanceiro();
 }
 
 async function renderFinanceiro() {
@@ -3263,6 +3397,11 @@ async function renderFinanceiro() {
           style="background:#B85A4A;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">+ Saída</button>
         <button onclick="abrirModalContaPagar()"
           style="background:#8B6914;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">+ Conta a Pagar</button>
+        ${(currentUser==='dono'||currentUser==='financeiro') ? `
+        <button onclick="importarSaidasJunho2026()"
+          style="background:#2C2A26;color:#D4AF6E;border:1px solid #D4AF6E;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">
+          📥 Importar
+        </button>` : ''}
       </div>
     </div>
 

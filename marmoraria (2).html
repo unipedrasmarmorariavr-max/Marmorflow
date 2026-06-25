@@ -762,6 +762,10 @@
 <!-- LIGHTBOX -->
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
   <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <button onclick="event.stopPropagation();imprimirFotoLightbox()" id="lightbox-print-btn"
+    style="position:fixed;top:16px;right:72px;background:rgba(255,255,255,0.15);border:none;color:white;font-size:14px;font-weight:600;padding:0 16px;height:44px;border-radius:22px;cursor:pointer;display:none;align-items:center;gap:6px;">
+    🖨️ Imprimir
+  </button>
   <img id="lightbox-img" src="" alt="" oncontextmenu="return false;">
 </div>
 
@@ -1722,8 +1726,33 @@ function renderPreviews(){
 function removeImg(type,idx){tempImages[type].splice(idx,1);renderPreviews();}
 
 // ============ LIGHTBOX ============
-function openLightbox(src){document.getElementById('lightbox-img').src=src;document.getElementById('lightbox').classList.add('open');document.body.style.overflow='hidden';}
-function closeLightbox(){document.getElementById('lightbox').classList.remove('open');document.body.style.overflow='';}
+function openLightbox(src) {
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  // Mostra botão de imprimir só para Dono e Comercial
+  const btn = document.getElementById('lightbox-print-btn');
+  if (btn) btn.style.display = (currentUser==='dono'||currentUser==='comercial') ? 'flex' : 'none';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function imprimirFotoLightbox() {
+  const src = document.getElementById('lightbox-img').src;
+  if (!src) return;
+  const win = window.open('', '_blank');
+  if (!win) { showNotif('Permita popups para imprimir.', 'error'); return; }
+  win.document.write(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Croqui — Unipedras</title>
+<style>
+  body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#fff;}
+  img{max-width:100%;max-height:100vh;object-fit:contain;}
+  @media print{body{margin:0;}}
+</style></head>
+<body><img src="${src}" onload="window.print()"></body></html>`);
+  win.document.close();
+}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeLightbox();});
 
 // ============ UTILS ============
@@ -4783,9 +4812,9 @@ async function concluirMedicao(id) {
     </div>
 
     <!-- inputs hidden: câmera com capture, galeria sem capture -->
-    <input type="file" id="foto-camera-croqui" accept="image/*" capture="camera" style="display:none;" onchange="adicionarFotoMedicao(event,'croqui')">
+    <input type="file" id="foto-camera-croqui" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'croqui')">
     <input type="file" id="foto-galeria-croqui" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'croqui')">
-    <input type="file" id="foto-camera-local" accept="image/*" capture="camera" style="display:none;" onchange="adicionarFotoMedicao(event,'local')">
+    <input type="file" id="foto-camera-local" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'local')">
     <input type="file" id="foto-galeria-local" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'local')">
 
     <!-- Mini modal câmera/galeria -->
@@ -4794,16 +4823,10 @@ async function concluirMedicao(id) {
       <div onclick="event.stopPropagation()"
         style="background:white;border-radius:16px 16px 0 0;padding:24px 20px;width:100%;max-width:480px;">
         <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:16px;text-align:center;" id="opcao-foto-titulo">Adicionar foto</div>
-        <div style="display:flex;gap:12px;margin-bottom:12px;">
-          <button onclick="escolherFoto('camera')"
-            style="flex:1;background:#006382;color:white;border:none;padding:18px 12px;border-radius:12px;cursor:pointer;font-size:14px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:8px;">
-            <span style="font-size:28px;">📷</span>Câmera
-          </button>
-          <button onclick="escolherFoto('galeria')"
-            style="flex:1;background:#f0f8ff;color:#006382;border:2px solid #006382;padding:18px 12px;border-radius:12px;cursor:pointer;font-size:14px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:8px;">
-            <span style="font-size:28px;">🖼️</span>Galeria
-          </button>
-        </div>
+        <button onclick="escolherFoto()"
+          style="width:100%;background:#006382;color:white;border:none;padding:18px;border-radius:12px;cursor:pointer;font-size:15px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
+          📷 Câmera ou Galeria
+        </button>
         <button onclick="fecharOpcaoFoto()"
           style="width:100%;background:#f0f0f0;color:#666;border:none;padding:14px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;">
           Cancelar
@@ -4880,9 +4903,9 @@ function fecharOpcaoFoto() {
   if (overlay) overlay.style.display = 'none';
 }
 
-function escolherFoto(origem) {
+function escolherFoto() {
   fecharOpcaoFoto();
-  const inputId = 'foto-' + origem + '-' + _fotoTipoAtivo;
+  const inputId = 'foto-camera-' + _fotoTipoAtivo;
   const inp = document.getElementById(inputId);
   if (inp) inp.click();
 }

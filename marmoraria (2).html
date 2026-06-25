@@ -1186,12 +1186,12 @@ async function salvarNovoCroqui(id) {
   if (allFiles.length === 0) {
     showNotif('Selecione ao menos uma foto!', 'error'); return;
   }
-  const MAX_PX = 1200, QUALITY = 0.75;
-  const lerCompress = file => new Promise(resolve => {
-    const r = new FileReader();
-    r.onload = e => {
-      const img = new Image();
-      img.onload = () => {
+  const MAX_PX = 800, QUALITY = 0.65;
+  const lerCompress = file => new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
         let w = img.width, h = img.height;
         if (w > MAX_PX || h > MAX_PX) {
           if (w > h) { h = Math.round(h*MAX_PX/w); w = MAX_PX; }
@@ -1200,11 +1200,14 @@ async function salvarNovoCroqui(id) {
         const c = document.createElement('canvas');
         c.width = w; c.height = h;
         c.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(c.toDataURL('image/jpeg', QUALITY));
-      };
-      img.src = e.target.result;
+        const b64 = c.toDataURL('image/jpeg', QUALITY);
+        URL.revokeObjectURL(url);
+        c.width = 0; c.height = 0;
+        resolve(b64);
+      } catch(e) { URL.revokeObjectURL(url); reject(e); }
     };
-    r.readAsDataURL(file);
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Erro ao carregar')); };
+    img.src = url;
   });
 
   showLoading('Salvando croqui...');
@@ -1603,29 +1606,35 @@ function sendWhatsAppComLink(id) {
 function sendWhatsApp(o){sendWhatsAppComLink(o.id);}
 
 // ============ UPLOAD ============
-function handleUpload(e,type){
-  const MAX_PX=1200, QUALITY=0.75;
-  Array.from(e.target.files).forEach(file=>{
-    const reader=new FileReader();
-    reader.onload=ev=>{
-      const img=new Image();
-      img.onload=()=>{
-        let w=img.width,h=img.height;
-        if(w>MAX_PX||h>MAX_PX){
-          if(w>h){h=Math.round(h*MAX_PX/w);w=MAX_PX;}
-          else{w=Math.round(w*MAX_PX/h);h=MAX_PX;}
+function handleUpload(e, type) {
+  const MAX_PX = 800, QUALITY = 0.65;
+  const files = Array.from(e.target.files);
+  e.target.value = '';
+  const processarUm = (index) => {
+    if (index >= files.length) return;
+    const url = URL.createObjectURL(files[index]);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        let w = img.width, h = img.height;
+        if (w > MAX_PX || h > MAX_PX) {
+          if (w > h) { h = Math.round(h*MAX_PX/w); w = MAX_PX; }
+          else { w = Math.round(w*MAX_PX/h); h = MAX_PX; }
         }
-        const c=document.createElement('canvas');
-        c.width=w;c.height=h;
-        c.getContext('2d').drawImage(img,0,0,w,h);
-        tempImages[type].push(c.toDataURL('image/jpeg',QUALITY));
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        tempImages[type].push(c.toDataURL('image/jpeg', QUALITY));
+        URL.revokeObjectURL(url);
+        c.width = 0; c.height = 0;
         renderPreviews();
-      };
-      img.src=ev.target.result;
+        setTimeout(() => processarUm(index + 1), 200);
+      } catch(err) { URL.revokeObjectURL(url); }
     };
-    reader.readAsDataURL(file);
-  });
-  e.target.value='';
+    img.onerror = () => URL.revokeObjectURL(url);
+    img.src = url;
+  };
+  processarUm(0);
 }
 function renderPreviews(){
   ['croqui','local'].forEach(type=>{
@@ -4802,31 +4811,56 @@ function escolherFoto(origem) {
 }
 
 function adicionarFotoMedicao(event, tipo) {
-  const MAX_PX = 1200, QUALITY = 0.75;
-  Array.from(event.target.files).forEach(file => {
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const img = new Image();
-      img.onload = () => {
+  // Resolução máxima bem menor para não estourar RAM em Androids com pouca memória livre
+  const MAX_PX = 800, QUALITY = 0.65;
+
+  const files = Array.from(event.target.files);
+  event.target.value = ''; // libera o input imediatamente
+
+  // Processa um arquivo por vez (evita carregar múltiplos na RAM simultaneamente)
+  const processarUm = (index) => {
+    if (index >= files.length) return;
+    const file = files[index];
+
+    // Cria URL temporária sem carregar o arquivo inteiro na RAM de uma vez
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
         let w = img.width, h = img.height;
+        // Reduz agressivamente se a imagem for muito grande
         if (w > MAX_PX || h > MAX_PX) {
-          if (w > h) { h = Math.round(h*MAX_PX/w); w = MAX_PX; }
-          else { w = Math.round(w*MAX_PX/h); h = MAX_PX; }
+          if (w > h) { h = Math.round(h * MAX_PX / w); w = MAX_PX; }
+          else { w = Math.round(w * MAX_PX / h); h = MAX_PX; }
         }
         const c = document.createElement('canvas');
         c.width = w; c.height = h;
         c.getContext('2d').drawImage(img, 0, 0, w, h);
         const base64 = c.toDataURL('image/jpeg', QUALITY);
+
+        // Libera memória imediatamente
+        URL.revokeObjectURL(url);
+        c.width = 0; c.height = 0;
+
         _fotosTemp[tipo].push(base64);
-        // Backup no sessionStorage para sobreviver ao reload do Android
         try { sessionStorage.setItem('mf_fotos_temp', JSON.stringify(_fotosTemp)); } catch(e){}
         renderFotosMedicao(tipo);
-      };
-      img.src = ev.target.result;
+
+        // Processa a próxima foto após pequeno delay para o GC liberar memória
+        setTimeout(() => processarUm(index + 1), 300);
+      } catch(err) {
+        URL.revokeObjectURL(url);
+        showNotif('Foto muito grande. Tente tirar com menor resolução.', 'error');
+      }
     };
-    reader.readAsDataURL(file);
-  });
-  event.target.value = '';
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      showNotif('Erro ao carregar foto.', 'error');
+    };
+    img.src = url;
+  };
+
+  processarUm(0);
 }
 
 function renderFotosMedicao(tipo) {

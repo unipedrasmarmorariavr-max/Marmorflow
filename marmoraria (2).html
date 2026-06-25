@@ -4696,24 +4696,30 @@ async function concluirMedicao(id) {
       </div>
     </div>
 
-    <!-- inputs hidden — SEM capture para evitar reload no Android -->
-    <input type="file" id="foto-camera-croqui" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'croqui')">
+    <!-- inputs hidden: câmera com capture, galeria sem capture -->
+    <input type="file" id="foto-camera-croqui" accept="image/*" capture="camera" style="display:none;" onchange="adicionarFotoMedicao(event,'croqui')">
     <input type="file" id="foto-galeria-croqui" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'croqui')">
-    <input type="file" id="foto-camera-local" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'local')">
+    <input type="file" id="foto-camera-local" accept="image/*" capture="camera" style="display:none;" onchange="adicionarFotoMedicao(event,'local')">
     <input type="file" id="foto-galeria-local" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'local')">
 
-    <!-- Mini modal de opção câmera/galeria -->
-    <div id="opcao-foto-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:flex-end;justify-content:center;"
+    <!-- Mini modal câmera/galeria -->
+    <div id="opcao-foto-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:flex-end;justify-content:center;"
       onclick="fecharOpcaoFoto()">
-      <div id="opcao-foto-box" onclick="event.stopPropagation()"
-        style="background:white;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;">
+      <div onclick="event.stopPropagation()"
+        style="background:white;border-radius:16px 16px 0 0;padding:24px 20px;width:100%;max-width:480px;">
         <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:16px;text-align:center;" id="opcao-foto-titulo">Adicionar foto</div>
-        <button onclick="escolherFoto()"
-          style="width:100%;background:#006382;color:white;border:none;padding:16px;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;margin-bottom:10px;">
-          📷 Câmera ou Galeria
-        </button>
+        <div style="display:flex;gap:12px;margin-bottom:12px;">
+          <button onclick="escolherFoto('camera')"
+            style="flex:1;background:#006382;color:white;border:none;padding:18px 12px;border-radius:12px;cursor:pointer;font-size:14px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:28px;">📷</span>Câmera
+          </button>
+          <button onclick="escolherFoto('galeria')"
+            style="flex:1;background:#f0f8ff;color:#006382;border:2px solid #006382;padding:18px 12px;border-radius:12px;cursor:pointer;font-size:14px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:28px;">🖼️</span>Galeria
+          </button>
+        </div>
         <button onclick="fecharOpcaoFoto()"
-          style="width:100%;background:#f5f5f5;color:#666;border:none;padding:12px;border-radius:8px;cursor:pointer;font-size:14px;">
+          style="width:100%;background:#f0f0f0;color:#666;border:none;padding:14px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;">
           Cancelar
         </button>
       </div>
@@ -4757,7 +4763,12 @@ async function concluirMedicao(id) {
       });
     });
     // Inicializa previews de fotos com botão "+"
-    _fotosTemp = { croqui: [], local: [] };
+    // Tenta restaurar do sessionStorage (caso Android tenha recarregado ao abrir câmera)
+    try {
+      const backup = sessionStorage.getItem('mf_fotos_temp');
+      if (backup) { _fotosTemp = JSON.parse(backup); }
+      else { _fotosTemp = { croqui: [], local: [] }; }
+    } catch(e) { _fotosTemp = { croqui: [], local: [] }; }
     renderFotosMedicao('croqui');
     renderFotosMedicao('local');
   }, 100);
@@ -4783,10 +4794,9 @@ function fecharOpcaoFoto() {
   if (overlay) overlay.style.display = 'none';
 }
 
-function escolherFoto() {
+function escolherFoto(origem) {
   fecharOpcaoFoto();
-  // Usa o mesmo input para ambos — o seletor nativo do Android já oferece câmera + galeria
-  const inputId = 'foto-camera-' + _fotoTipoAtivo;
+  const inputId = 'foto-' + origem + '-' + _fotoTipoAtivo;
   const inp = document.getElementById(inputId);
   if (inp) inp.click();
 }
@@ -4807,9 +4817,9 @@ function adicionarFotoMedicao(event, tipo) {
         c.width = w; c.height = h;
         c.getContext('2d').drawImage(img, 0, 0, w, h);
         const base64 = c.toDataURL('image/jpeg', QUALITY);
-        // Salva em memória persistente
         _fotosTemp[tipo].push(base64);
-        // Atualiza o preview
+        // Backup no sessionStorage para sobreviver ao reload do Android
+        try { sessionStorage.setItem('mf_fotos_temp', JSON.stringify(_fotosTemp)); } catch(e){}
         renderFotosMedicao(tipo);
       };
       img.src = ev.target.result;
@@ -4879,10 +4889,10 @@ async function finalizarMedicao() {
     return;
   }
 
-  // Cria pedido em "Aguardando Orçamento"
+  // Fotos já foram comprimidas ao adicionar via adicionarFotoMedicao — lê direto do _fotosTemp
   showLoading('Lendo fotos...');
   try {
-    // Fotos já foram comprimidas ao adicionar via adicionarFotoMedicao — lê direto do preview
+    sessionStorage.removeItem('mf_fotos_temp'); // limpa backup após uso
     const fotosCroqui = coletarFotosMedicao('croqui');
     const fotosLocal  = coletarFotosMedicao('local');
 

@@ -2353,94 +2353,223 @@ async function renderDashFinanceiro() {
   el.innerHTML = '<div style="padding:40px;text-align:center;color:#888;">Carregando...</div>';
 
   const fmtV = v => 'R$ '+(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  const fmtPct = v => (v||0).toFixed(1).replace('.',',')+'%';
   const hoje = new Date();
 
-  // Buscar transações dos últimos 6 meses
+  // Buscar transações
   const { data: txAll } = await getSB().from('transacoes').select('*');
   const transacoes = txAll || [];
 
-  // Montar dados por mês
+  // Categorias que NÃO entram no custo operacional (são dívidas/financeiras, não custo real de produção)
+  const CATS_DIVIDA = ['Dívida','Despesas Financeiras (Banco)'];
+
+  // Montar dados por mês (últimos 6)
   const meses = [];
   for (let i=5; i>=0; i--) {
     const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
     const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
     const label = d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'});
     const txMes = transacoes.filter(t => (t.data||'').substring(0,7) === key);
-    const entradas = txMes.filter(t=>t.tipo==='entrada').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
-    const saidas   = txMes.filter(t=>t.tipo==='saida').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
-    meses.push({ label, key, entradas, saidas, resultado: entradas-saidas });
+    const entradas  = txMes.filter(t=>t.tipo==='entrada').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+    const saidas    = txMes.filter(t=>t.tipo==='saida').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+    const custoOp   = txMes.filter(t=>t.tipo==='saida' && !CATS_DIVIDA.includes(t.categoria)).reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+    const dividas   = txMes.filter(t=>t.tipo==='saida' && CATS_DIVIDA.includes(t.categoria)).reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+    const lucro     = entradas - custoOp;
+    const lucroLiq  = entradas - saidas;
+    const margem    = entradas > 0 ? (lucro/entradas*100) : 0;
+    // Por categoria (saídas operacionais)
+    const porCat = {};
+    txMes.filter(t=>t.tipo==='saida').forEach(t => {
+      const c = t.categoria||'Outros';
+      porCat[c] = (porCat[c]||0) + (parseFloat(t.valor)||0);
+    });
+    meses.push({ label, key, entradas, saidas, custoOp, dividas, lucro, lucroLiq, margem, porCat });
   }
 
-  const maxVal = Math.max(...meses.map(m=>Math.max(m.entradas,m.saidas)), 1);
-
-  // Totais do mês atual
   const mesAtual = meses[meses.length-1];
+  const maxVal = Math.max(...meses.map(m=>Math.max(m.entradas, m.saidas)), 1);
+  const maxLucro = Math.max(...meses.map(m=>Math.abs(m.lucro)), 1);
+
+  // Top categorias de custo do mês atual (operacionais)
+  const topCats = Object.entries(mesAtual.porCat)
+    .filter(([c]) => !CATS_DIVIDA.includes(c))
+    .sort((a,b)=>b[1]-a[1])
+    .slice(0,6);
+
+  // Acumulado 6 meses
+  const acumEntradas = meses.reduce((s,m)=>s+m.entradas,0);
+  const acumCustoOp  = meses.reduce((s,m)=>s+m.custoOp,0);
+  const acumDividas  = meses.reduce((s,m)=>s+m.dividas,0);
+  const acumLucro    = meses.reduce((s,m)=>s+m.lucro,0);
+  const acumLucroLiq = meses.reduce((s,m)=>s+m.lucroLiq,0);
+  const acumMargem   = acumEntradas > 0 ? (acumLucro/acumEntradas*100) : 0;
 
   el.innerHTML = `
-    <!-- Cards resumo -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px;">
+    <!-- ═══ CARDS PRINCIPAIS ═══ -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+
       <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid #2E7D32;">
-        <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;margin-bottom:6px;">💰 Entradas (mês atual)</div>
-        <div style="font-size:24px;font-weight:900;color:#2E7D32;">${fmtV(mesAtual.entradas)}</div>
+        <div style="font-size:10px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">💰 Faturamento</div>
+        <div style="font-size:22px;font-weight:900;color:#2E7D32;">${fmtV(mesAtual.entradas)}</div>
+        <div style="font-size:11px;color:#aaa;margin-top:4px;">mês atual</div>
       </div>
+
       <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid #B85A4A;">
-        <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;margin-bottom:6px;">💸 Saídas (mês atual)</div>
-        <div style="font-size:24px;font-weight:900;color:#B85A4A;">${fmtV(mesAtual.saidas)}</div>
+        <div style="font-size:10px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">🏭 Custo Operacional</div>
+        <div style="font-size:22px;font-weight:900;color:#B85A4A;">${fmtV(mesAtual.custoOp)}</div>
+        <div style="font-size:11px;color:#aaa;margin-top:4px;">folha + fornec. + fixos</div>
       </div>
-      <div style="background:${mesAtual.resultado>=0?'#f0fff4':'#fff5f5'};border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid ${mesAtual.resultado>=0?'#2E7D32':'#B85A4A'};">
-        <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;margin-bottom:6px;">
-          ${mesAtual.resultado>=0?'✅ Resultado':'⚠️ Capital de Giro'}
-        </div>
-        <div style="font-size:24px;font-weight:900;color:${mesAtual.resultado>=0?'#2E7D32':'#B85A4A'};">
-          ${fmtV(Math.abs(mesAtual.resultado))}
-        </div>
-        <div style="font-size:11px;color:#888;">${mesAtual.resultado>=0?'Saldo positivo':'Necessário para cobrir'}</div>
+
+      <div style="background:${mesAtual.lucro>=0?'#f0fff4':'#fff5f5'};border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid ${mesAtual.lucro>=0?'#2E7D32':'#B85A4A'};">
+        <div style="font-size:10px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">📈 Lucro Operacional</div>
+        <div style="font-size:22px;font-weight:900;color:${mesAtual.lucro>=0?'#2E7D32':'#B85A4A'};">${mesAtual.lucro>=0?'':'-'}${fmtV(Math.abs(mesAtual.lucro))}</div>
+        <div style="font-size:11px;color:${mesAtual.margem>=0?'#2E7D32':'#B85A4A'};font-weight:600;margin-top:4px;">Margem: ${fmtPct(mesAtual.margem)}</div>
+      </div>
+
+      <div style="background:${mesAtual.lucroLiq>=0?'#f8f4ff':'#fff5f5'};border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid ${mesAtual.lucroLiq>=0?'#6B4EAA':'#B85A4A'};">
+        <div style="font-size:10px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">💳 Resultado Líquido</div>
+        <div style="font-size:22px;font-weight:900;color:${mesAtual.lucroLiq>=0?'#6B4EAA':'#B85A4A'};">${mesAtual.lucroLiq>=0?'':'-'}${fmtV(Math.abs(mesAtual.lucroLiq))}</div>
+        <div style="font-size:11px;color:#aaa;margin-top:4px;">após dívidas (${fmtV(mesAtual.dividas)})</div>
       </div>
     </div>
 
-    <!-- Gráfico Entradas vs Saídas -->
-    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;margin-bottom:20px;">
-      <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:6px;">📊 Faturamento — Últimos 6 Meses</div>
-      <div style="display:flex;gap:16px;margin-bottom:12px;">
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;"><span style="width:14px;height:14px;background:#2E7D32;border-radius:3px;display:inline-block;"></span>Entradas</div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;"><span style="width:14px;height:14px;background:#B85A4A;border-radius:3px;display:inline-block;"></span>Saídas</div>
-      </div>
-      <div style="display:flex;align-items:flex-end;gap:8px;height:180px;">
-        ${meses.map(m=>`
-          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
-            <div style="width:100%;display:flex;gap:3px;align-items:flex-end;height:150px;">
-              <div style="flex:1;background:#2E7D32;border-radius:4px 4px 0 0;height:${Math.max(2,Math.round(m.entradas/maxVal*140))}px;" title="${fmtV(m.entradas)}"></div>
-              <div style="flex:1;background:#B85A4A;border-radius:4px 4px 0 0;height:${Math.max(2,Math.round(m.saidas/maxVal*140))}px;" title="${fmtV(m.saidas)}"></div>
-            </div>
-            <div style="font-size:10px;color:#888;text-align:center;">${m.label}</div>
-          </div>`).join('')}
+    <!-- ═══ ACUMULADO 6 MESES ═══ -->
+    <div style="background:linear-gradient(135deg,#1a2332,#2C4A6E);border-radius:14px;padding:20px;margin-bottom:20px;color:white;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:14px;opacity:.9;">📊 Acumulado — Últimos 6 Meses</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
+        <div>
+          <div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.5px;">Faturamento</div>
+          <div style="font-size:20px;font-weight:900;color:#7FD4A0;">${fmtV(acumEntradas)}</div>
+        </div>
+        <div>
+          <div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.5px;">Custo Operacional</div>
+          <div style="font-size:20px;font-weight:900;color:#F4957A;">${fmtV(acumCustoOp)}</div>
+        </div>
+        <div>
+          <div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.5px;">Lucro Operacional</div>
+          <div style="font-size:20px;font-weight:900;color:${acumLucro>=0?'#D4AF6E':'#F4957A'};">${acumLucro>=0?'':'-'}${fmtV(Math.abs(acumLucro))}</div>
+          <div style="font-size:11px;opacity:.7;margin-top:2px;">Margem ${fmtPct(acumMargem)}</div>
+        </div>
+        <div>
+          <div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.5px;">Resultado Líquido</div>
+          <div style="font-size:20px;font-weight:900;color:${acumLucroLiq>=0?'#B8A0E8':'#F4957A'};">${acumLucroLiq>=0?'':'-'}${fmtV(Math.abs(acumLucroLiq))}</div>
+          <div style="font-size:11px;opacity:.7;margin-top:2px;">dívidas: ${fmtV(acumDividas)}</div>
+        </div>
       </div>
     </div>
 
-    <!-- Faturamento por mês em tabela -->
-    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
-      <div style="background:var(--stone);color:white;padding:12px 18px;font-size:13px;font-weight:700;">📋 Resumo por Mês</div>
-      <table style="width:100%;border-collapse:collapse;">
-        <thead>
-          <tr style="background:#f8f8f8;">
-            <th style="padding:10px 16px;text-align:left;font-size:12px;color:#888;">Mês</th>
-            <th style="padding:10px 16px;text-align:right;font-size:12px;color:#2E7D32;">Entradas</th>
-            <th style="padding:10px 16px;text-align:right;font-size:12px;color:#B85A4A;">Saídas</th>
-            <th style="padding:10px 16px;text-align:right;font-size:12px;color:#555;">Resultado</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${meses.map(m=>`
-            <tr style="border-bottom:1px solid #f0f0f0;">
-              <td style="padding:10px 16px;font-size:13px;font-weight:600;">${m.label}</td>
-              <td style="padding:10px 16px;text-align:right;font-size:13px;color:#2E7D32;font-weight:700;">${fmtV(m.entradas)}</td>
-              <td style="padding:10px 16px;text-align:right;font-size:13px;color:#B85A4A;font-weight:700;">${fmtV(m.saidas)}</td>
-              <td style="padding:10px 16px;text-align:right;font-size:13px;font-weight:700;color:${m.resultado>=0?'#2E7D32':'#B85A4A'};">
-                ${m.resultado>=0?'+':''}${fmtV(m.resultado)}
-              </td>
-            </tr>`).join('')}
-        </tbody>
-      </table>
+    <!-- ═══ GRÁFICOS LADO A LADO ═══ -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+
+      <!-- Gráfico Faturamento vs Custo vs Lucro -->
+      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;">
+        <div style="font-size:13px;font-weight:700;color:var(--stone);margin-bottom:4px;">📊 Faturamento × Custo × Lucro</div>
+        <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><span style="width:12px;height:12px;background:#2E7D32;border-radius:2px;display:inline-block;"></span>Faturamento</div>
+          <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><span style="width:12px;height:12px;background:#B85A4A;border-radius:2px;display:inline-block;"></span>Custo Op.</div>
+          <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><span style="width:12px;height:12px;background:#D4AF6E;border-radius:2px;display:inline-block;"></span>Lucro</div>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:6px;height:150px;">
+          ${meses.map(m=>{
+            const hE = Math.max(2, Math.round(m.entradas/maxVal*130));
+            const hC = Math.max(2, Math.round(m.custoOp/maxVal*130));
+            const hL = m.lucro>=0 ? Math.max(2, Math.round(m.lucro/maxVal*130)) : 0;
+            return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+              <div style="width:100%;display:flex;gap:2px;align-items:flex-end;height:130px;">
+                <div style="flex:1;background:#2E7D32;border-radius:3px 3px 0 0;height:${hE}px;" title="Fat: ${fmtV(m.entradas)}"></div>
+                <div style="flex:1;background:#B85A4A;border-radius:3px 3px 0 0;height:${hC}px;" title="Custo: ${fmtV(m.custoOp)}"></div>
+                <div style="flex:1;background:${m.lucro>=0?'#D4AF6E':'#B85A4A'};border-radius:3px 3px 0 0;height:${hL}px;" title="Lucro: ${fmtV(m.lucro)}"></div>
+              </div>
+              <div style="font-size:9px;color:#888;">${m.label}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- Gráfico Margem por mês -->
+      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;">
+        <div style="font-size:13px;font-weight:700;color:var(--stone);margin-bottom:4px;">📈 Margem de Lucro por Mês</div>
+        <div style="font-size:11px;color:#aaa;margin-bottom:14px;">Lucro operacional ÷ Faturamento</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          ${meses.map(m=>{
+            const pct = Math.max(0, Math.min(100, m.margem));
+            const cor = m.margem>=20?'#2E7D32':m.margem>=10?'#D4AF6E':m.margem>=0?'#B8760A':'#B85A4A';
+            return `<div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                <span style="font-size:11px;color:#666;font-weight:600;">${m.label}</span>
+                <span style="font-size:12px;font-weight:700;color:${cor};">${fmtPct(m.margem)}</span>
+              </div>
+              <div style="background:#f0f0f0;border-radius:4px;height:8px;overflow:hidden;">
+                <div style="height:100%;width:${pct}%;background:${cor};border-radius:4px;transition:width .3s;"></div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ CUSTOS DO MÊS ATUAL + TABELA ═══ -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+      <!-- Top custos por categoria -->
+      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
+        <div style="background:var(--stone);color:white;padding:12px 18px;font-size:13px;font-weight:700;">🏭 Maiores Custos — ${mesAtual.label}</div>
+        <div style="padding:4px 0;">
+          ${topCats.length ? topCats.map(([cat,val])=>{
+            const pct = mesAtual.custoOp > 0 ? (val/mesAtual.custoOp*100) : 0;
+            return `<div style="padding:10px 16px;border-bottom:1px solid #f5f5f5;">
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span style="font-size:12px;color:#444;font-weight:600;">${cat}</span>
+                <span style="font-size:12px;font-weight:700;color:#B85A4A;">${fmtV(val)}</span>
+              </div>
+              <div style="background:#f0f0f0;border-radius:3px;height:5px;">
+                <div style="height:100%;width:${Math.min(100,pct)}%;background:#B85A4A;border-radius:3px;opacity:.7;"></div>
+              </div>
+              <div style="font-size:10px;color:#aaa;margin-top:2px;">${pct.toFixed(0)}% do custo operacional</div>
+            </div>`;
+          }).join('') : '<div style="padding:20px;color:#aaa;text-align:center;">Sem dados</div>'}
+        </div>
+      </div>
+
+      <!-- Tabela mês a mês -->
+      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
+        <div style="background:var(--stone);color:white;padding:12px 18px;font-size:13px;font-weight:700;">📋 Resultado por Mês</div>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="background:#f8f8f8;">
+              <th style="padding:8px 12px;text-align:left;font-size:11px;color:#888;">Mês</th>
+              <th style="padding:8px 8px;text-align:right;font-size:11px;color:#2E7D32;">Fat.</th>
+              <th style="padding:8px 8px;text-align:right;font-size:11px;color:#B85A4A;">Custo</th>
+              <th style="padding:8px 8px;text-align:right;font-size:11px;color:#B8760A;">Lucro</th>
+              <th style="padding:8px 8px;text-align:right;font-size:11px;color:#888;">Mg%</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${meses.map(m=>`
+              <tr style="border-bottom:1px solid #f5f5f5;">
+                <td style="padding:8px 12px;font-size:12px;font-weight:600;">${m.label}</td>
+                <td style="padding:8px 8px;text-align:right;font-size:12px;color:#2E7D32;font-weight:700;">${fmtV(m.entradas)}</td>
+                <td style="padding:8px 8px;text-align:right;font-size:12px;color:#B85A4A;font-weight:700;">${fmtV(m.custoOp)}</td>
+                <td style="padding:8px 8px;text-align:right;font-size:12px;font-weight:700;color:${m.lucro>=0?'#2E7D32':'#B85A4A'};">
+                  ${m.lucro>=0?'+':''}${fmtV(m.lucro)}
+                </td>
+                <td style="padding:8px 8px;text-align:right;font-size:12px;font-weight:700;color:${m.margem>=20?'#2E7D32':m.margem>=0?'#B8760A':'#B85A4A'};">
+                  ${fmtPct(m.margem)}
+                </td>
+              </tr>`).join('')}
+            <tr style="background:#f8f8f8;font-weight:700;">
+              <td style="padding:8px 12px;font-size:12px;color:#555;">Total</td>
+              <td style="padding:8px 8px;text-align:right;font-size:12px;color:#2E7D32;">${fmtV(acumEntradas)}</td>
+              <td style="padding:8px 8px;text-align:right;font-size:12px;color:#B85A4A;">${fmtV(acumCustoOp)}</td>
+              <td style="padding:8px 8px;text-align:right;font-size:12px;color:${acumLucro>=0?'#2E7D32':'#B85A4A'};">${acumLucro>=0?'+':''}${fmtV(Math.abs(acumLucro))}</td>
+              <td style="padding:8px 8px;text-align:right;font-size:12px;color:${acumMargem>=20?'#2E7D32':acumMargem>=0?'#B8760A':'#B85A4A'};">${fmtPct(acumMargem)}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="padding:10px 14px;font-size:10px;color:#aaa;border-top:1px solid #f0f0f0;">
+          * Lucro Operacional = Faturamento − Custos (excluindo dívidas/juros bancários)
+        </div>
+      </div>
     </div>
   `;
 }

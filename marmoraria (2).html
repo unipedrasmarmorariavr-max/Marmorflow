@@ -566,22 +566,37 @@
       <div class="form-section">Desenho da Medição</div>
       <div class="form-group">
         <label class="form-label">Fotos do Croqui / Planta</label>
-        <div class="upload-area" onclick="document.getElementById('upload-croqui').click()">
-          <div class="upload-icon">📐</div>
-          <div class="upload-text">Clique para <strong>adicionar fotos</strong> do croqui</div>
-          <div class="upload-text" style="margin-top:4px;">Cliente vê mas não pode baixar</div>
-          <input type="file" id="upload-croqui" accept="image/*" multiple style="display:none;" onchange="handleUpload(event,'croqui')">
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <button type="button" onclick="document.getElementById('upload-croqui-camera').click()"
+            style="flex:1;background:#006382;color:white;border:none;padding:12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;">
+            📷 Câmera
+          </button>
+          <button type="button" onclick="document.getElementById('upload-croqui-galeria').click()"
+            style="flex:1;background:var(--cream-dark);color:var(--stone);border:1px solid var(--vein);padding:12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;">
+            🖼️ Galeria
+          </button>
         </div>
+        <input type="file" id="upload-croqui-camera" accept="image/*" capture="environment" multiple style="display:none;" onchange="handleUpload(event,'croqui')">
+        <input type="file" id="upload-croqui-galeria" accept="image/*" multiple style="display:none;" onchange="handleUpload(event,'croqui')">
+        <div style="font-size:11px;color:#888;margin-bottom:6px;text-align:center;">Pode adicionar quantas fotos quiser — cliente vê mas não pode baixar</div>
         <div class="preview-grid" id="preview-croqui"></div>
       </div>
       <div class="form-section">Fotos do Local</div>
       <div class="form-group">
         <label class="form-label">Fotos para o Instalador</label>
-        <div class="upload-area" onclick="document.getElementById('upload-local').click()">
-          <div class="upload-icon">📷</div>
-          <div class="upload-text">Clique para <strong>adicionar fotos</strong> do local</div>
-          <input type="file" id="upload-local" accept="image/*" multiple style="display:none;" onchange="handleUpload(event,'local')">
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <button type="button" onclick="document.getElementById('upload-local-camera').click()"
+            style="flex:1;background:#006382;color:white;border:none;padding:12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;">
+            📷 Câmera
+          </button>
+          <button type="button" onclick="document.getElementById('upload-local-galeria').click()"
+            style="flex:1;background:var(--cream-dark);color:var(--stone);border:1px solid var(--vein);padding:12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;">
+            🖼️ Galeria
+          </button>
         </div>
+        <input type="file" id="upload-local-camera" accept="image/*" capture="environment" multiple style="display:none;" onchange="handleUpload(event,'local')">
+        <input type="file" id="upload-local-galeria" accept="image/*" multiple style="display:none;" onchange="handleUpload(event,'local')">
+        <div style="font-size:11px;color:#888;margin-bottom:6px;text-align:center;">Pode adicionar quantas fotos quiser</div>
         <div class="preview-grid" id="preview-local"></div>
       </div>
     </div>
@@ -1092,9 +1107,19 @@ async function abrirVerProjeto(id) {
       
       ${podeCroqui ? `
       <div style="border:2px dashed #006382;border-radius:8px;padding:10px;background:#f0f8ff;">
-        <div style="font-size:12px;color:#006382;font-weight:600;margin-bottom:6px;">📸 Atualizar croqui</div>
-        <input type="file" id="novo-croqui-input" accept="image/*" multiple
-          style="width:100%;font-size:12px;" onchange="previewNovoCroqui()">
+        <div style="font-size:12px;color:#006382;font-weight:600;margin-bottom:8px;">📸 Adicionar fotos ao croqui</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <button type="button" onclick="document.getElementById('novo-croqui-camera').click()"
+            style="flex:1;background:#006382;color:white;border:none;padding:10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">
+            📷 Câmera
+          </button>
+          <button type="button" onclick="document.getElementById('novo-croqui-galeria').click()"
+            style="flex:1;background:#e8f4f8;color:#006382;border:1px solid #006382;padding:10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">
+            🖼️ Galeria
+          </button>
+        </div>
+        <input type="file" id="novo-croqui-camera" accept="image/*" capture="environment" multiple style="display:none;" onchange="previewNovoCroqui()">
+        <input type="file" id="novo-croqui-galeria" accept="image/*" multiple style="display:none;" onchange="previewNovoCroqui()">
         <div id="novo-croqui-preview" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"></div>
       </div>` : ''}
     </div>
@@ -1132,11 +1157,17 @@ async function abrirVerProjeto(id) {
 }
 
 function previewNovoCroqui() {
-  const inp = document.getElementById('novo-croqui-input');
   const prev = document.getElementById('novo-croqui-preview');
-  if (!inp || !prev) return;
-  prev.innerHTML = '';
-  Array.from(inp.files).forEach(f => {
+  if (!prev) return;
+  // Lê dos dois inputs (câmera e galeria) e acumula no preview
+  const inpCamera = document.getElementById('novo-croqui-camera');
+  const inpGaleria = document.getElementById('novo-croqui-galeria');
+  const allFiles = [
+    ...Array.from(inpCamera?.files || []),
+    ...Array.from(inpGaleria?.files || [])
+  ];
+  if (allFiles.length === 0) return;
+  allFiles.forEach(f => {
     const r = new FileReader();
     r.onload = e => {
       prev.innerHTML += `<img src="${e.target.result}" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:2px solid #006382;">`;
@@ -1146,8 +1177,13 @@ function previewNovoCroqui() {
 }
 
 async function salvarNovoCroqui(id) {
-  const inp = document.getElementById('novo-croqui-input');
-  if (!inp || !inp.files || inp.files.length === 0) {
+  const inpCamera = document.getElementById('novo-croqui-camera');
+  const inpGaleria = document.getElementById('novo-croqui-galeria');
+  const allFiles = [
+    ...Array.from(inpCamera?.files || []),
+    ...Array.from(inpGaleria?.files || [])
+  ];
+  if (allFiles.length === 0) {
     showNotif('Selecione ao menos uma foto!', 'error'); return;
   }
   const MAX_PX = 1200, QUALITY = 0.75;
@@ -1172,7 +1208,7 @@ async function salvarNovoCroqui(id) {
   });
 
   showLoading('Salvando croqui...');
-  const novasFotos = await Promise.all(Array.from(inp.files).map(lerCompress));
+  const novasFotos = await Promise.all(allFiles.map(lerCompress));
   const o = orders.find(x => x.id === id);
   const fotosAntigas = Array.isArray(o?.croqui) ? o.croqui : (o?.croqui ? [o.croqui] : []);
   const todasFotos = [...fotosAntigas, ...novasFotos];

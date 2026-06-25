@@ -4406,7 +4406,7 @@ function cardMedicao(m, isHoje, passada) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
       <button onclick="concluirMedicao('${m.id}')"
         style="background:#2E7D32;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;">
-        ✅ Concluído
+        ✅ Concluir
       </button>
       <button onclick="solicitarRevisita('${m.id}')"
         style="background:#B85A4A;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;">
@@ -4444,7 +4444,7 @@ function cardMedicao(m, isHoje, passada) {
         ${statusNorm==='pendente' || statusNorm==='revisitar' ? `
         <button onclick="concluirMedicao('${m.id}')"
           style="background:#2E7D32;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
-          ✅ Concluído
+          ✅ Concluir
         </button>
         <button onclick="solicitarRevisita('${m.id}')"
           style="background:#B85A4A;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
@@ -4487,7 +4487,7 @@ function cardMedicao(m, isHoje, passada) {
         ${isPerfMedidor && statusNorm === 'pendente' ? `
         <button onclick="concluirMedicao('${m.id}')"
           style="background:#2E7D32;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
-          ✅ Concluído
+          ✅ Concluir
         </button>
         <button onclick="solicitarRevisita('${m.id}')"
           style="background:#B85A4A;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">

@@ -4696,10 +4696,10 @@ async function concluirMedicao(id) {
       </div>
     </div>
 
-    <!-- inputs hidden para câmera e galeria -->
-    <input type="file" id="foto-camera-croqui" accept="image/*" capture="environment" style="display:none;" onchange="adicionarFotoMedicao(event,'croqui')">
+    <!-- inputs hidden — SEM capture para evitar reload no Android -->
+    <input type="file" id="foto-camera-croqui" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'croqui')">
     <input type="file" id="foto-galeria-croqui" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'croqui')">
-    <input type="file" id="foto-camera-local" accept="image/*" capture="environment" style="display:none;" onchange="adicionarFotoMedicao(event,'local')">
+    <input type="file" id="foto-camera-local" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'local')">
     <input type="file" id="foto-galeria-local" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'local')">
 
     <!-- Mini modal de opção câmera/galeria -->
@@ -4708,16 +4708,10 @@ async function concluirMedicao(id) {
       <div id="opcao-foto-box" onclick="event.stopPropagation()"
         style="background:white;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;">
         <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:16px;text-align:center;" id="opcao-foto-titulo">Adicionar foto</div>
-        <div style="display:flex;gap:12px;margin-bottom:16px;">
-          <button onclick="escolherFoto('camera')"
-            style="flex:1;background:#006382;color:white;border:none;padding:16px;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:6px;">
-            📷<span>Câmera</span>
-          </button>
-          <button onclick="escolherFoto('galeria')"
-            style="flex:1;background:#f0f8ff;color:#006382;border:2px solid #006382;padding:16px;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:6px;">
-            🖼️<span>Galeria</span>
-          </button>
-        </div>
+        <button onclick="escolherFoto()"
+          style="width:100%;background:#006382;color:white;border:none;padding:16px;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;margin-bottom:10px;">
+          📷 Câmera ou Galeria
+        </button>
         <button onclick="fecharOpcaoFoto()"
           style="width:100%;background:#f5f5f5;color:#666;border:none;padding:12px;border-radius:8px;cursor:pointer;font-size:14px;">
           Cancelar
@@ -4762,6 +4756,10 @@ async function concluirMedicao(id) {
         this.closest('label').style.background='#e8f4f8';
       });
     });
+    // Inicializa previews de fotos com botão "+"
+    _fotosTemp = { croqui: [], local: [] };
+    renderFotosMedicao('croqui');
+    renderFotosMedicao('local');
   }, 100);
 
   openModal('modal-detail');
@@ -4769,6 +4767,7 @@ async function concluirMedicao(id) {
 
 // ── Foto medição: mini modal câmera/galeria ──────────────────────────────
 let _fotoTipoAtivo = 'croqui'; // qual seção está recebendo foto
+let _fotosTemp = { croqui: [], local: [] }; // armazena fotos em memória durante a sessão
 
 function abrirOpcaoFoto(tipo) {
   _fotoTipoAtivo = tipo;
@@ -4784,17 +4783,16 @@ function fecharOpcaoFoto() {
   if (overlay) overlay.style.display = 'none';
 }
 
-function escolherFoto(origem) {
+function escolherFoto() {
   fecharOpcaoFoto();
-  const inputId = 'foto-' + origem + '-' + _fotoTipoAtivo;
+  // Usa o mesmo input para ambos — o seletor nativo do Android já oferece câmera + galeria
+  const inputId = 'foto-camera-' + _fotoTipoAtivo;
   const inp = document.getElementById(inputId);
   if (inp) inp.click();
 }
 
 function adicionarFotoMedicao(event, tipo) {
   const MAX_PX = 1200, QUALITY = 0.75;
-  const prv = document.getElementById('med-' + tipo + '-prev');
-  if (!prv) return;
   Array.from(event.target.files).forEach(file => {
     const reader = new FileReader();
     reader.onload = ev => {
@@ -4809,28 +4807,43 @@ function adicionarFotoMedicao(event, tipo) {
         c.width = w; c.height = h;
         c.getContext('2d').drawImage(img, 0, 0, w, h);
         const base64 = c.toDataURL('image/jpeg', QUALITY);
-        // Insere a foto antes do botão "+"
-        const btnAdd = prv.querySelector('div[onclick]');
-        const imgEl = document.createElement('div');
-        imgEl.style.cssText = 'position:relative;flex-shrink:0;';
-        imgEl.innerHTML = `
-          <img src="${base64}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:2px solid #006382;display:block;">
-          <button onclick="this.parentElement.remove()" style="position:absolute;top:-6px;right:-6px;background:#E53935;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">✕</button>`;
-        if (btnAdd) prv.insertBefore(imgEl, btnAdd);
-        else prv.appendChild(imgEl);
+        // Salva em memória persistente
+        _fotosTemp[tipo].push(base64);
+        // Atualiza o preview
+        renderFotosMedicao(tipo);
       };
       img.src = ev.target.result;
     };
     reader.readAsDataURL(file);
   });
-  event.target.value = ''; // limpa o input para permitir a mesma foto novamente
+  event.target.value = '';
+}
+
+function renderFotosMedicao(tipo) {
+  const prv = document.getElementById('med-' + tipo + '-prev');
+  if (!prv) return;
+  const cor = tipo === 'croqui' ? '#006382' : '#888';
+  const html = _fotosTemp[tipo].map((src, i) => `
+    <div style="position:relative;flex-shrink:0;">
+      <img src="${src}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:2px solid ${cor};display:block;">
+      <button onclick="removerFotoMedicao('${tipo}',${i})" style="position:absolute;top:-6px;right:-6px;background:#E53935;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;line-height:1;">✕</button>
+    </div>`).join('');
+  const btnAdd = `
+    <div onclick="abrirOpcaoFoto('${tipo}')"
+      style="width:70px;height:70px;border:2px dashed ${cor};border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:${tipo==='croqui'?'#f0f8ff':'#fafafa'};flex-shrink:0;">
+      <span style="font-size:28px;color:${cor};font-weight:300;">+</span>
+    </div>`;
+  prv.innerHTML = html + btnAdd;
+}
+
+function removerFotoMedicao(tipo, idx) {
+  _fotosTemp[tipo].splice(idx, 1);
+  renderFotosMedicao(tipo);
 }
 
 // ── Coleta fotos do modal de conclusão ───────────────────────────────────
 function coletarFotosMedicao(tipo) {
-  const prv = document.getElementById('med-' + tipo + '-prev');
-  if (!prv) return [];
-  return Array.from(prv.querySelectorAll('img')).map(img => img.src);
+  return _fotosTemp[tipo] || [];
 }
 
 async function finalizarMedicao() {

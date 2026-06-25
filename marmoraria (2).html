@@ -4676,18 +4676,52 @@ async function concluirMedicao(id) {
       <textarea class="form-input" id="med-obs-final" rows="3" placeholder="Detalhes: nível do piso, local da cuba, paredes, cor..."></textarea>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
-      <div>
-        <label class="form-label">📐 FOTO DO CROQUI</label>
-        <input type="file" id="med-foto-croqui" accept="image/*" multiple capture="environment"
-          style="width:100%;padding:8px;border:2px dashed #ccc;border-radius:8px;cursor:pointer;font-size:12px;background:#fafafa;">
-        <div id="med-croqui-prev" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"></div>
+    <div style="margin-bottom:14px;">
+      <label class="form-label">📐 FOTO DO CROQUI</label>
+      <div id="med-croqui-prev" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+        <div onclick="abrirOpcaoFoto('croqui')"
+          style="width:70px;height:70px;border:2px dashed #006382;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:#f0f8ff;flex-shrink:0;">
+          <span style="font-size:28px;color:#006382;font-weight:300;">+</span>
+        </div>
       </div>
-      <div>
-        <label class="form-label">📸 FOTO DO LOCAL</label>
-        <input type="file" id="med-foto-local" accept="image/*" multiple capture="environment"
-          style="width:100%;padding:8px;border:2px dashed #ccc;border-radius:8px;cursor:pointer;font-size:12px;background:#fafafa;">
-        <div id="med-local-prev" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"></div>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label class="form-label">📸 FOTO DO LOCAL</label>
+      <div id="med-local-prev" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+        <div onclick="abrirOpcaoFoto('local')"
+          style="width:70px;height:70px;border:2px dashed #888;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:#fafafa;flex-shrink:0;">
+          <span style="font-size:28px;color:#888;font-weight:300;">+</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- inputs hidden para câmera e galeria -->
+    <input type="file" id="foto-camera-croqui" accept="image/*" capture="environment" style="display:none;" onchange="adicionarFotoMedicao(event,'croqui')">
+    <input type="file" id="foto-galeria-croqui" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'croqui')">
+    <input type="file" id="foto-camera-local" accept="image/*" capture="environment" style="display:none;" onchange="adicionarFotoMedicao(event,'local')">
+    <input type="file" id="foto-galeria-local" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'local')">
+
+    <!-- Mini modal de opção câmera/galeria -->
+    <div id="opcao-foto-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:flex-end;justify-content:center;"
+      onclick="fecharOpcaoFoto()">
+      <div id="opcao-foto-box" onclick="event.stopPropagation()"
+        style="background:white;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;">
+        <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:16px;text-align:center;" id="opcao-foto-titulo">Adicionar foto</div>
+        <div style="display:flex;gap:12px;margin-bottom:16px;">
+          <button onclick="escolherFoto('camera')"
+            style="flex:1;background:#006382;color:white;border:none;padding:16px;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:6px;">
+            📷<span>Câmera</span>
+          </button>
+          <button onclick="escolherFoto('galeria')"
+            style="flex:1;background:#f0f8ff;color:#006382;border:2px solid #006382;padding:16px;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:6px;">
+            🖼️<span>Galeria</span>
+          </button>
+        </div>
+        <button onclick="fecharOpcaoFoto()"
+          style="width:100%;background:#f5f5f5;color:#666;border:none;padding:12px;border-radius:8px;cursor:pointer;font-size:14px;">
+          Cancelar
+        </button>
       </div>
     </div>
 
@@ -4728,22 +4762,75 @@ async function concluirMedicao(id) {
         this.closest('label').style.background='#e8f4f8';
       });
     });
-    ['croqui','local'].forEach(t => {
-      const inp = document.getElementById('med-foto-'+t);
-      const prv = document.getElementById('med-'+t+'-prev');
-      if (!inp||!prv) return;
-      inp.addEventListener('change', function() {
-        prv.innerHTML='';
-        Array.from(this.files).forEach(f => {
-          const r=new FileReader();
-          r.onload=e=>{ prv.innerHTML+=`<img src="${e.target.result}" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:2px solid #ddd;">`; };
-          r.readAsDataURL(f);
-        });
-      });
-    });
   }, 100);
 
   openModal('modal-detail');
+}
+
+// ── Foto medição: mini modal câmera/galeria ──────────────────────────────
+let _fotoTipoAtivo = 'croqui'; // qual seção está recebendo foto
+
+function abrirOpcaoFoto(tipo) {
+  _fotoTipoAtivo = tipo;
+  const titulo = tipo === 'croqui' ? '📐 Adicionar foto do Croqui' : '📸 Adicionar foto do Local';
+  const el = document.getElementById('opcao-foto-titulo');
+  if (el) el.textContent = titulo;
+  const overlay = document.getElementById('opcao-foto-overlay');
+  if (overlay) overlay.style.display = 'flex';
+}
+
+function fecharOpcaoFoto() {
+  const overlay = document.getElementById('opcao-foto-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function escolherFoto(origem) {
+  fecharOpcaoFoto();
+  const inputId = 'foto-' + origem + '-' + _fotoTipoAtivo;
+  const inp = document.getElementById(inputId);
+  if (inp) inp.click();
+}
+
+function adicionarFotoMedicao(event, tipo) {
+  const MAX_PX = 1200, QUALITY = 0.75;
+  const prv = document.getElementById('med-' + tipo + '-prev');
+  if (!prv) return;
+  Array.from(event.target.files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > MAX_PX || h > MAX_PX) {
+          if (w > h) { h = Math.round(h*MAX_PX/w); w = MAX_PX; }
+          else { w = Math.round(w*MAX_PX/h); h = MAX_PX; }
+        }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        const base64 = c.toDataURL('image/jpeg', QUALITY);
+        // Insere a foto antes do botão "+"
+        const btnAdd = prv.querySelector('div[onclick]');
+        const imgEl = document.createElement('div');
+        imgEl.style.cssText = 'position:relative;flex-shrink:0;';
+        imgEl.innerHTML = `
+          <img src="${base64}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:2px solid #006382;display:block;">
+          <button onclick="this.parentElement.remove()" style="position:absolute;top:-6px;right:-6px;background:#E53935;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">✕</button>`;
+        if (btnAdd) prv.insertBefore(imgEl, btnAdd);
+        else prv.appendChild(imgEl);
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  event.target.value = ''; // limpa o input para permitir a mesma foto novamente
+}
+
+// ── Coleta fotos do modal de conclusão ───────────────────────────────────
+function coletarFotosMedicao(tipo) {
+  const prv = document.getElementById('med-' + tipo + '-prev');
+  if (!prv) return [];
+  return Array.from(prv.querySelectorAll('img')).map(img => img.src);
 }
 
 async function finalizarMedicao() {
@@ -4779,43 +4866,12 @@ async function finalizarMedicao() {
     return;
   }
 
-  // Lê e comprime fotos (max 1200px, qualidade 0.75) antes de salvar
-  const lerFotosBase64 = (inputId) => new Promise(resolve => {
-    const inp = document.getElementById(inputId);
-    if (!inp || !inp.files || inp.files.length === 0) { resolve([]); return; }
-    const results = [];
-    let done = 0;
-    const MAX_PX = 1200;
-    const QUALITY = 0.75;
-    Array.from(inp.files).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = e => {
-        const img = new Image();
-        img.onload = () => {
-          // Redimensiona mantendo proporção
-          let w = img.width, h = img.height;
-          if (w > MAX_PX || h > MAX_PX) {
-            if (w > h) { h = Math.round(h * MAX_PX / w); w = MAX_PX; }
-            else       { w = Math.round(w * MAX_PX / h); h = MAX_PX; }
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = w; canvas.height = h;
-          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-          results.push(canvas.toDataURL('image/jpeg', QUALITY));
-          done++;
-          if (done === inp.files.length) resolve(results);
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
-  });
-
   // Cria pedido em "Aguardando Orçamento"
   showLoading('Lendo fotos...');
   try {
-    const fotosCroqui = await lerFotosBase64('med-foto-croqui');
-    const fotosLocal  = await lerFotosBase64('med-foto-local');
+    // Fotos já foram comprimidas ao adicionar via adicionarFotoMedicao — lê direto do preview
+    const fotosCroqui = coletarFotosMedicao('croqui');
+    const fotosLocal  = coletarFotosMedicao('local');
 
     showLoading('Gerando ID...');
     const novoId = await nextId();

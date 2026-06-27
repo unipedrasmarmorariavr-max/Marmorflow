@@ -477,7 +477,6 @@
     <button class="tab-btn" onclick="showTab('produtos')" id="tab-produtos" style="display:none;">🪨 Produtos</button>
     <button class="tab-btn" onclick="showTab('financeiro')" id="tab-financeiro">💰 Financeiro</button>
     <button class="tab-btn" onclick="showTab('dashboard')" id="tab-dashboard" style="display:none;">📊 Dashboard</button>
-    <button class="tab-btn" onclick="showTab('historico')" id="tab-historico">📏 Histórico de Medidas</button>
     <button class="tab-btn" onclick="showTab('portal')" id="tab-portal">🔗 Link Cliente</button>
     <button class="tab-btn" onclick="showTab('configuracoes')" id="tab-configuracoes" style="display:none;">⚙️ Configurações</button>
   </div>
@@ -516,7 +515,6 @@
     <div class="panel" id="panel-orcamento-pedido">
       <div id="orcamento-pedido-content"></div>
     </div>
-    <div class="panel" id="panel-historico"><div id="historico-content" style="padding:16px;"></div></div>
     <div class="panel" id="panel-portal">
       <div class="portal-wrap">
         <div class="portal-search">
@@ -980,7 +978,6 @@ function showTab(tab) {
   if (tab==='agenda') renderAgenda();
   if (tab==='produtos') renderProdutos();
   if (tab==='configuracoes') renderConfiguracoes();
-  if (tab==='historico') renderHistorico();
 }
 
 
@@ -988,6 +985,15 @@ function showTab(tab) {
 // Controle de debounce e paginação do histórico
 let _histDebounce = null;
 const _HIST_POR_PAGINA = 20;
+
+function _renderHistoricoNaAgenda(busca) {
+  // Renderiza o histórico dentro do painel da agenda
+  const painel = document.getElementById('painel-agenda-historico');
+  if (!painel) return;
+  // Cria container temporário e injeta conteúdo
+  painel.innerHTML = '<div id="historico-content"></div>';
+  renderHistorico(busca);
+}
 
 function renderHistorico(busca) {
   clearTimeout(_histDebounce);
@@ -1990,8 +1996,6 @@ function ativarSessao(perfil) {
   var isComercial = perfil==='comercial';
   var isProducao = perfil==='producao';
   var isMedidor = perfil==='medidor';
-  var tabHist = document.getElementById('tab-historico');
-  if (tabHist) tabHist.style.display = (isDono||isMedidor||isComercial||isFinanceiro) ? 'block' : 'none';
   if (tabDash) tabDash.style.display = isDono ? 'block' : 'none';
   if (tabMat) tabMat.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
   if (tabFin) tabFin.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
@@ -5492,19 +5496,25 @@ async function renderAgenda() {
         style="padding:10px 24px;border:none;background:${abaAtiva==='instalacao'?'var(--gold)':'var(--cream-dark)'};color:${abaAtiva==='instalacao'?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
         🔧 Instalações
       </button>
+      <button onclick="switchAgendaAba('historico')" id="aba-historico"
+        style="padding:10px 24px;border:none;background:${abaAtiva==='historico'?'var(--gold)':'var(--cream-dark)'};color:${abaAtiva==='historico'?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
+        📏 Histórico
+      </button>
     </div>
     
     <div id="painel-agenda-medicao" style="display:${abaAtiva==='medicao'?'block':'none'}"></div>
     <div id="painel-agenda-instalacao" style="display:${abaAtiva==='instalacao'?'block':'none'}"></div>
+    <div id="painel-agenda-historico" style="display:${abaAtiva==='historico'?'block':'none'}"></div>
   </div>`;
 
   if (abaAtiva === 'medicao') await renderAgendaMedicao();
-  else renderAgendaInstalacao();
+  else if (abaAtiva === 'instalacao') renderAgendaInstalacao();
+  else if (abaAtiva === 'historico') _renderHistoricoNaAgenda();
 }
 
 async function switchAgendaAba(aba) {
   localStorage.setItem('agenda_aba', aba);
-  ['medicao','instalacao'].forEach(a => {
+  ['medicao','instalacao','historico'].forEach(a => {
     const btn = document.getElementById('aba-'+a);
     const panel = document.getElementById('painel-agenda-'+a);
     if (btn) {
@@ -5514,7 +5524,8 @@ async function switchAgendaAba(aba) {
     if (panel) panel.style.display = a===aba ? 'block' : 'none';
   });
   if (aba === 'medicao') await renderAgendaMedicao();
-  else renderAgendaInstalacao();
+  else if (aba === 'instalacao') renderAgendaInstalacao();
+  else if (aba === 'historico') _renderHistoricoNaAgenda();
 }
 
 // ─── AGENDA DE MEDIÇÕES ───────────────────────────────────────────────────────

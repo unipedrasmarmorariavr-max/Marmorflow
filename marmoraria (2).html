@@ -1063,7 +1063,8 @@ async function _carregarHistorico(termoBusca, pagina) {
   const carregados = inicio + medicoes.length;
   if (elMais) {
     if (carregados < total) {
-      elMais.innerHTML = '<button onclick="_carregarHistorico('' + termoBusca.replace(/'/g,"\'") + '',' + (pagina+1) + ')" style="background:var(--stone);color:white;border:none;padding:12px 32px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Ver mais (' + (total - carregados) + ' restantes)</button>';
+      var termoEsc = termoBusca.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      elMais.innerHTML = '<button onclick="_carregarHistorico(\'' + termoEsc + '\',' + (pagina+1) + ')" style="background:var(--stone);color:white;border:none;padding:12px 32px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Ver mais (' + (total - carregados) + ' restantes)</button>';
     } else if (total > 0) {
       elMais.innerHTML = '<div style="font-size:12px;color:#aaa;padding:8px;">Todos os ' + total + ' registros carregados</div>';
     }
@@ -1097,7 +1098,7 @@ function renderCardHistorico(m) {
     + (m.Telefone ? '<div style="display:flex;gap:8px;align-items:center;"><span style="font-size:16px;">📞</span><a href="tel:' + m.Telefone + '" style="font-size:13px;color:#006382;text-decoration:none;">' + m.Telefone + '</a></div>' : '')
     + (pedidoId
       ? '<div style="background:#f8f8f8;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><div style="font-size:12px;color:#888;font-weight:600;">STATUS DO PEDIDO</div><div style="font-size:13px;font-weight:700;color:' + stageCor + ';">' + stageLabel + '</div></div>'
-        + '<button onclick="abrirPedidoDoHistorico('' + pedidoId + '')" style="background:var(--gold);color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;">📋 Abrir Pedido ' + pedidoId + '</button>'
+        + '<button onclick="abrirPedidoDoHistorico(\'' + pedidoId + '\')" style="background:var(--gold);color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;">📋 Abrir Pedido ' + pedidoId + '</button>'
       : '<div style="background:#fff5f5;border-radius:8px;padding:10px 14px;font-size:12px;color:#B85A4A;font-weight:600;text-align:center;">⚠️ Pedido não vinculado</div>')
     + '</div></div>';
 }

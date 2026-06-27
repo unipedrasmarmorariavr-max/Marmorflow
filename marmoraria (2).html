@@ -1914,9 +1914,20 @@ function selPerfil(p) {
   var ids = ['dono','medidor','comercial','producao','financeiro'];
   for (var i = 0; i < ids.length; i++) {
     var el = document.getElementById('pb-' + ids[i]);
-    if (el) el.style.cssText = ids[i] === p ? 'cursor:pointer;border:2px solid #B8965A;background:#FBF8F2;border-radius:12px;padding:14px 10px;text-align:center;' : 'cursor:pointer;border:2px solid #EDE9E1;background:#F7F4EF;border-radius:12px;padding:14px 10px;text-align:center;';
+    if (!el) continue;
+    if (ids[i] === p) {
+      el.classList.add('selected');
+    } else {
+      el.classList.remove('selected');
+    }
   }
-  var labels = {dono:'👑 Dono selecionado', medidor:'📐 Medidor selecionado', comercial:'💼 Comercial selecionado', producao:'⚙️ Produção selecionado'};
+  var labels = {
+    dono:       '👑 Dono selecionado',
+    medidor:    '📐 Medidor selecionado',
+    comercial:  '💼 Comercial selecionado',
+    producao:   '⚙️ Produção selecionada',
+    financeiro: '💰 Financeiro selecionado'
+  };
   var lbl = document.getElementById('perfil-label');
   if (lbl) lbl.textContent = labels[p] || p;
 }

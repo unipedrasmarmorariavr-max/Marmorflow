@@ -1135,8 +1135,10 @@ function renderKanban(filter='') {
 function createCard(o) {
   const div=document.createElement('div');
   div.className='card'+(o.urgente==='sim'?' card-urgente':'');
-  div.draggable=true; div.dataset.id=o.id;
-  div.ondragstart=e=>e.dataTransfer.setData('text/plain',o.id);
+  const _canDrag = (currentUser !== 'financeiro');
+  div.draggable=_canDrag; div.dataset.id=o.id;
+  if (_canDrag) div.ondragstart=e=>e.dataTransfer.setData('text/plain',o.id);
+  else div.style.cursor='default';
   const dias=getDiasRestantes(o);
   const urg=getUrgencia(dias);
   const p=PROFILES[currentUser];
@@ -1480,6 +1482,7 @@ async function drop(e,stage) {
   const order=orders.find(o=>o.id===id);
   if (!order||order.stage===stage) return;
   const p=PROFILES[currentUser];
+  if (currentUser==='financeiro') { showNotif('Financeiro não pode mover pedidos.','error'); return; }
   if (!p.canMoveAll) {
     if (currentUser==='medidor'&&!['medicao','aguardando','negociacao'].includes(stage)){showNotif('Medidor: apenas Medição e Aguardando Orçamento','error');return;}
     if (currentUser==='producao') {
@@ -1996,7 +1999,7 @@ function ativarSessao(perfil) {
   var isComercial = perfil==='comercial';
   var isProducao = perfil==='producao';
   var isMedidor = perfil==='medidor';
-  if (tabDash) tabDash.style.display = isDono ? 'block' : 'none';
+  if (tabDash) tabDash.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
   if (tabMat) tabMat.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
   if (tabFin) tabFin.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
   if (tabPortal) tabPortal.style.display = (isDono||isComercial||isFinanceiro) ? 'block' : 'none';
@@ -2870,7 +2873,7 @@ function renderMateriais() {
         <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);">📦 Estoque de Chapas</div>
         <div style="font-size:13px;color:#888;margin-top:4px;">Verificação peça a peça — pedidos Fechados, Em Corte e Acabamento</div>
       </div>
-      <button onclick="abrirModalChapa()" style="background:var(--gold);color:white;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">+ Adicionar Chapa</button>
+      ${currentUser!=='financeiro'?'<button onclick="abrirModalChapa()" style="background:var(--gold);color:white;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">+ Adicionar Chapa</button>':''}
     </div>
 
     ${Object.keys(analise).length === 0 && chapas.length === 0 ? `
@@ -2878,7 +2881,7 @@ function renderMateriais() {
       <div style="font-size:48px;margin-bottom:16px;">📦</div>
       <div style="font-size:16px;font-weight:600;color:#333;">Nenhuma chapa cadastrada</div>
       <div style="font-size:13px;color:#888;margin-top:8px;">Cadastre as chapas que você tem no galpão</div>
-      <button onclick="abrirModalChapa()" style="margin-top:20px;background:var(--gold);color:white;border:none;padding:12px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">+ Adicionar Primeira Chapa</button>
+      ${currentUser!=='financeiro'?'<button onclick="abrirModalChapa()" style="margin-top:20px;background:var(--gold);color:white;border:none;padding:12px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">+ Adicionar Primeira Chapa</button>':''}
     </div>` : ''}
 
     ${Object.keys(analise).length === 0 && chapas.length > 0 ? `
@@ -2910,7 +2913,7 @@ function renderMateriais() {
               ? `<div style="background:#f0fff4;color:#2E7D32;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:700;">✅ Tem material para tudo</div>`
               : `<div style="background:#fff5f5;color:#dc3545;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:700;">❌ Falta chapa para ${pecasFaltando} peça(s)</div>`
             }
-            <button onclick="abrirModalChapa('${matId}')" style="background:#f0f0f0;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Chapa</button>
+            ${currentUser!=='financeiro'?'<button onclick="abrirModalChapa(\'${matId}\')" style="background:#f0f0f0;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Chapa</button>':''}
           </div>
         </div>
 
@@ -2937,7 +2940,7 @@ function renderMateriais() {
                     <div style="font-size:10px;color:#888;margin-top:2px;">${pctUsado.toFixed(0)}% comprometido</div>
                   </div>
                   <div style="display:flex;gap:6px;">
-                    <button onclick="editarChapa('${ch.id}')" style="background:#e8f4f7;color:#006382;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px;">✏️</button>
+                    ${currentUser!=='financeiro'?'<button onclick="editarChapa(\'${ch.id}\')" style="background:#e8f4f7;color:#006382;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px;">✏️</button>':''}
                     <button onclick="removerChapa('${ch.id}')" style="background:#fdeaea;color:#dc3545;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px;">🗑</button>
                   </div>
                 </div>`;
@@ -2994,7 +2997,7 @@ function renderMateriais() {
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <div style="background:#f0fff4;color:#2E7D32;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:700;">✅ Disponível</div>
-            <button onclick="abrirModalChapa('${matId}')" style="background:#f0f0f0;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Chapa</button>
+            ${currentUser!=='financeiro'?'<button onclick="abrirModalChapa(\'${matId}\')" style="background:#f0f0f0;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Chapa</button>':''}
           </div>
         </div>
         <div style="padding:0 20px 14px;">
@@ -3004,7 +3007,7 @@ function renderMateriais() {
             <div style="font-size:13px;color:#555;">${ch.largura.toFixed(2).replace('.',',')} × ${ch.comprimento.toFixed(2).replace('.',',')} m</div>
             <div style="font-size:12px;color:#888;">${(ch.largura*ch.comprimento).toFixed(2).replace('.',',')} m²</div>
             <div style="display:flex;gap:6px;margin-left:auto;">
-              <button onclick="editarChapa('${ch.id}')" style="background:#e8f4f7;color:#006382;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px;">✏️</button>
+              ${currentUser!=='financeiro'?'<button onclick="editarChapa(\'${ch.id}\')" style="background:#e8f4f7;color:#006382;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px;">✏️</button>':''}
               <button onclick="removerChapa('${ch.id}')" style="background:#fdeaea;color:#dc3545;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px;">🗑</button>
             </div>
           </div>`).join('')}

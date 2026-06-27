@@ -2436,6 +2436,26 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
       <div style="font-size:12px;color:#aaa;white-space:nowrap;">${tituloFiltro}</div>
     </div>
 
+    <!-- BANNER TOTAL GERAL (sempre visível) -->
+    <div style="background:linear-gradient(135deg,#1a2332,#2C3E50);border-radius:14px;padding:20px 24px;margin-bottom:16px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;box-shadow:0 4px 20px rgba(0,0,0,.2);">
+      <div style="flex:1;min-width:160px;">
+        <div style="font-size:11px;color:#D4AF6E;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">💰 Faturamento Total (todos os meses)</div>
+        <div style="font-size:28px;font-weight:900;color:white;">${fmtV(allMeses.reduce((s,k)=>s+(dadosPorMes[k]?.entradas||0),0))}</div>
+      </div>
+      <div style="flex:1;min-width:140px;">
+        <div style="font-size:11px;color:#D4AF6E;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">📈 Lucro Operacional Total</div>
+        <div style="font-size:24px;font-weight:900;color:${allMeses.reduce((s,k)=>s+(dadosPorMes[k]?.lucro||0),0)>=0?'#4CAF50':'#ff6b6b'};">${(()=>{const v=allMeses.reduce((s,k)=>s+(dadosPorMes[k]?.lucro||0),0);return (v>=0?'':'-')+fmtV(Math.abs(v));})()}</div>
+      </div>
+      <div style="flex:1;min-width:140px;">
+        <div style="font-size:11px;color:#D4AF6E;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">💳 Resultado Líquido Total</div>
+        <div style="font-size:24px;font-weight:900;color:${allMeses.reduce((s,k)=>s+(dadosPorMes[k]?.lucroLiq||0),0)>=0?'#a78bfa':'#ff6b6b'};">${(()=>{const v=allMeses.reduce((s,k)=>s+(dadosPorMes[k]?.lucroLiq||0),0);return (v>=0?'':'-')+fmtV(Math.abs(v));})()}</div>
+      </div>
+      <div style="flex:0 0 auto;">
+        <div style="font-size:11px;color:#D4AF6E;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">📅 Meses</div>
+        <div style="font-size:24px;font-weight:900;color:white;">${allMeses.length}</div>
+      </div>
+    </div>
+
     <!-- 4 CARDS -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
       <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid #2E7D32;">
@@ -3978,8 +3998,53 @@ async function importarSaidasJunho2026() {
   renderFinanceiro();
 }
 
-function abrirModalLancamento(t) {
-  const mesAtual = localStorage.getItem('fin_mes') || new Date().toISOString().substring(0,7);
+function abrirModalNovoMes() {
+  const hoje = new Date();
+  const mesAtual = hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0');
+  
+  let modal = document.getElementById('modal-novo-mes');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modal-novo-mes';
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
+    document.body.appendChild(modal);
+  }
+
+  // Gerar opcoes de meses: mes atual + proximos 12
+  const meses = [];
+  for (let i = 0; i <= 12; i++) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
+    const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const label = d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+    meses.push({ key, label });
+  }
+
+  modal.innerHTML = '<div style="background:white;border-radius:16px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.3);">'
+    + '<div style="background:var(--stone);color:white;padding:18px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center;">'
+    + '<div style="font-size:16px;font-weight:700;">➕ Abrir Novo Mês</div>'
+    + '<button onclick="document.getElementById(\'modal-novo-mes\').remove()" style="background:none;border:none;color:white;font-size:22px;cursor:pointer;">×</button>'
+    + '</div>'
+    + '<div style="padding:20px;display:flex;flex-direction:column;gap:14px;">'
+    + '<div style="font-size:13px;color:#666;">Selecione o mês que deseja abrir para lançamentos manuais:</div>'
+    + '<select id="sel-novo-mes" style="padding:12px;border:1.5px solid var(--cream-dark);border-radius:8px;font-size:15px;">'
+    + meses.map(function(m){ return '<option value="'+m.key+'">'+m.label+'</option>'; }).join('')
+    + '</select>'
+    + '<button onclick="abrirMesParaLancamento()" style="background:var(--gold);color:white;border:none;padding:14px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;">✅ Abrir Mês</button>'
+    + '</div></div>';
+  modal.style.display = 'flex';
+}
+
+function abrirMesParaLancamento() {
+  const mes = document.getElementById('sel-novo-mes').value;
+  document.getElementById('modal-novo-mes').remove();
+  // Salvar o mês selecionado como filtro ativo no financeiro
+  localStorage.setItem('fin_mes', mes);
+  // Abrir o modal de lançamento já com a data do mês selecionado
+  abrirModalLancamento(null, mes);
+}
+
+function abrirModalLancamento(t, mesForcado) {
+  const mesAtual = mesForcado || localStorage.getItem('fin_mes') || new Date().toISOString().substring(0,7);
   const dataDefault = t ? t.data : mesAtual + '-01';
   const isEdit = !!t;
   const cats = ['Recebimento de Cliente','Folha de Pagamento','Fornecedor','Insumos de Instalacao',
@@ -4104,7 +4169,9 @@ async function renderFinanceiro() {
             <button onclick="document.getElementById('menu-importar').style.display='none';importarEntradasMarco2026();setTimeout(importarMarco2026,500)" style="display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:none;color:#f0e8d8;font-size:13px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.06);">📅 Março (Caixa + Sicredi)</button>
             <button onclick="document.getElementById('menu-importar').style.display='none';importarEntradasAbril2026();setTimeout(importarAbril2026,500)" style="display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:none;color:#f0e8d8;font-size:13px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.06);">📅 Abril (Caixa + Sicredi)</button>
             <button onclick="document.getElementById('menu-importar').style.display='none';importarEntradasMaio2026();setTimeout(importarMaio2026,500)" style="display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:none;color:#f0e8d8;font-size:13px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.06);">📅 Maio (Caixa + Sicredi)</button>
-            <button onclick="document.getElementById('menu-importar').style.display='none';importarSaidasJunho2026()" style="display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:none;color:#f0e8d8;font-size:13px;cursor:pointer;">📅 Junho — só saídas (Sicredi)</button>
+            <button onclick="document.getElementById('menu-importar').style.display='none';importarSaidasJunho2026()" style="display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:none;color:#f0e8d8;font-size:13px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.06);">📅 Junho — só saídas (Sicredi)</button>
+            <div style="padding:8px 14px;font-size:10px;color:#D4AF6E;font-weight:700;letter-spacing:1px;border-bottom:1px solid rgba(212,175,110,0.2);border-top:1px solid rgba(212,175,110,0.2);margin-top:4px;">LANÇAMENTO MANUAL POR MÊS</div>
+            <button onclick="document.getElementById('menu-importar').style.display='none';abrirModalNovoMes()" style="display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:none;color:#D4AF6E;font-size:13px;cursor:pointer;font-weight:700;">➕ Abrir novo mês para lançamentos</button>
           </div>
         </div>` : ''}
       </div>

@@ -5825,9 +5825,9 @@ async function concluirMedicao(id) {
     </div>
 
     <!-- inputs hidden: câmera com capture, galeria sem capture -->
-    <input type="file" id="foto-camera-croqui" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'croqui')">
+    <input type="file" id="foto-camera-croqui" accept="image/*" capture="environment" style="display:none;" onchange="adicionarFotoMedicao(event,'croqui')">
     <input type="file" id="foto-galeria-croqui" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'croqui')">
-    <input type="file" id="foto-camera-local" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'local')">
+    <input type="file" id="foto-camera-local" accept="image/*" capture="environment" style="display:none;" onchange="adicionarFotoMedicao(event,'local')">
     <input type="file" id="foto-galeria-local" accept="image/*" style="display:none;" onchange="adicionarFotoMedicao(event,'local')">
 
     <!-- Mini modal câmera/galeria -->
@@ -5836,9 +5836,13 @@ async function concluirMedicao(id) {
       <div onclick="event.stopPropagation()"
         style="background:white;border-radius:16px 16px 0 0;padding:24px 20px;width:100%;max-width:480px;">
         <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:16px;text-align:center;" id="opcao-foto-titulo">Adicionar foto</div>
-        <button onclick="escolherFoto()"
+        <button onclick="escolherFotoCamera()"
           style="width:100%;background:#006382;color:white;border:none;padding:18px;border-radius:12px;cursor:pointer;font-size:15px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
-          📷 Câmera ou Galeria
+          📷 Tirar Foto (Câmera)
+        </button>
+        <button onclick="escolherFotoGaleria()"
+          style="width:100%;background:#4A9B6B;color:white;border:none;padding:18px;border-radius:12px;cursor:pointer;font-size:15px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
+          🖼️ Escolher da Galeria
         </button>
         <button onclick="fecharOpcaoFoto()"
           style="width:100%;background:#f0f0f0;color:#666;border:none;padding:14px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;">
@@ -5916,12 +5920,138 @@ function fecharOpcaoFoto() {
   if (overlay) overlay.style.display = 'none';
 }
 
-function escolherFoto() {
+// ── CÂMERA NATIVA via getUserMedia (funciona em qualquer Android/iOS) ────────
+// Fallback para input file se getUserMedia não disponível
+
+let _streamCamera = null; // guarda o stream ativo para poder parar depois
+
+function escolherFotoCamera() {
   fecharOpcaoFoto();
-  const inputId = 'foto-camera-' + _fotoTipoAtivo;
-  const inp = document.getElementById(inputId);
-  if (inp) inp.click();
+  // Tenta getUserMedia primeiro (mais compatível que capture="environment")
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    _abrirCameraNativa();
+  } else {
+    // Fallback: input file com capture
+    _abrirInputCamera();
+  }
 }
+
+function _abrirCameraNativa() {
+  // Cria overlay de câmera na tela cheia
+  let camOverlay = document.getElementById('cam-overlay-nativa');
+  if (camOverlay) camOverlay.remove();
+
+  camOverlay = document.createElement('div');
+  camOverlay.id = 'cam-overlay-nativa';
+  camOverlay.style.cssText = 'position:fixed;inset:0;background:#000;z-index:99999;display:flex;flex-direction:column;';
+  camOverlay.innerHTML =
+    '<video id="cam-video" autoplay playsinline muted style="flex:1;width:100%;object-fit:cover;"></video>'
+    + '<canvas id="cam-canvas" style="display:none;"></canvas>'
+    + '<div style="background:#000;padding:20px;display:flex;justify-content:space-around;align-items:center;">'
+    + '<button onclick="_fecharCameraNativa()" style="background:#333;color:white;border:none;padding:14px 24px;border-radius:10px;font-size:14px;cursor:pointer;">✕ Cancelar</button>'
+    + '<button onclick="_capturarFotoCameraNativa()" style="width:70px;height:70px;border-radius:50%;background:white;border:4px solid #D4AF6E;font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;">📷</button>'
+    + '<button onclick="_trocarCameraNativa()" style="background:#333;color:white;border:none;padding:14px 24px;border-radius:10px;font-size:14px;cursor:pointer;">🔄 Girar</button>'
+    + '</div>';
+  document.body.appendChild(camOverlay);
+
+  _facingMode = 'environment'; // começa com câmera traseira
+  _iniciarStreamCamera();
+}
+
+let _facingMode = 'environment';
+
+function _iniciarStreamCamera() {
+  // Para stream anterior se existir
+  if (_streamCamera) {
+    _streamCamera.getTracks().forEach(function(t) { t.stop(); });
+    _streamCamera = null;
+  }
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: _facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
+    audio: false
+  }).then(function(stream) {
+    _streamCamera = stream;
+    const video = document.getElementById('cam-video');
+    if (video) { video.srcObject = stream; }
+  }).catch(function(err) {
+    // Se falhar getUserMedia, fecha overlay e usa input file
+    _fecharCameraNativa();
+    console.warn('getUserMedia falhou, usando input file:', err);
+    _abrirInputCamera();
+  });
+}
+
+function _trocarCameraNativa() {
+  _facingMode = _facingMode === 'environment' ? 'user' : 'environment';
+  _iniciarStreamCamera();
+}
+
+function _capturarFotoCameraNativa() {
+  const video = document.getElementById('cam-video');
+  const canvas = document.getElementById('cam-canvas');
+  if (!video || !canvas) return;
+
+  const MAX_PX = 1200, QUALITY = 0.80;
+  let w = video.videoWidth, h = video.videoHeight;
+  if (!w || !h) { showNotif('Câmera ainda carregando, tente novamente.', 'error'); return; }
+
+  if (w > MAX_PX || h > MAX_PX) {
+    if (w > h) { h = Math.round(h * MAX_PX / w); w = MAX_PX; }
+    else { w = Math.round(w * MAX_PX / h); h = MAX_PX; }
+  }
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+  const base64 = canvas.toDataURL('image/jpeg', QUALITY);
+  canvas.width = 0; canvas.height = 0;
+
+  _fecharCameraNativa();
+
+  // Adiciona a foto ao tipo ativo
+  const tipo = _fotoTipoAtivo;
+  _fotosTemp[tipo].push(base64);
+  try { sessionStorage.setItem('mf_fotos_temp', JSON.stringify(_fotosTemp)); } catch(e) {}
+  renderFotosMedicao(tipo);
+  showNotif('Foto adicionada!', 'success');
+}
+
+function _fecharCameraNativa() {
+  if (_streamCamera) {
+    _streamCamera.getTracks().forEach(function(t) { t.stop(); });
+    _streamCamera = null;
+  }
+  const el = document.getElementById('cam-overlay-nativa');
+  if (el) el.remove();
+}
+
+function _abrirInputCamera() {
+  // Fallback: input file dinâmico com capture="environment"
+  const tipoAtivo = _fotoTipoAtivo;
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/*';
+  inp.setAttribute('capture', 'environment');
+  inp.style.display = 'none';
+  inp.addEventListener('change', function(e) { adicionarFotoMedicao(e, tipoAtivo); });
+  document.body.appendChild(inp);
+  setTimeout(function() { inp.click(); inp.addEventListener('change', function() { document.body.removeChild(inp); }); }, 50);
+}
+
+function escolherFotoGaleria() {
+  fecharOpcaoFoto();
+  const tipoAtivo = _fotoTipoAtivo;
+  // Input sem capture = abre galeria em todos os dispositivos
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/*';
+  inp.multiple = true;
+  inp.style.display = 'none';
+  inp.addEventListener('change', function(e) { adicionarFotoMedicao(e, tipoAtivo); document.body.removeChild(inp); });
+  document.body.appendChild(inp);
+  setTimeout(function() { inp.click(); }, 50);
+}
+
+// Mantém compatibilidade com chamadas antigas
+function escolherFoto() { escolherFotoCamera(); }
 
 function adicionarFotoMedicao(event, tipo) {
   // Resolução máxima bem menor para não estourar RAM em Androids com pouca memória livre

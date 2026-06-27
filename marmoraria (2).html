@@ -984,123 +984,121 @@ function showTab(tab) {
 
 
 // ============ HISTÓRICO DE MEDIDAS ============
-async function renderHistorico(busca) {
+// Controle de debounce e paginação do histórico
+let _histDebounce = null;
+const _HIST_POR_PAGINA = 20;
+
+function renderHistorico(busca) {
+  clearTimeout(_histDebounce);
+  const termo = busca !== undefined ? busca : (document.getElementById('hist-busca')?.value || '');
   const el = document.getElementById('historico-content');
   if (!el) return;
+  // Monta esqueleto se ainda não existe
+  if (!document.getElementById('hist-lista')) {
+    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">'
+      + '<div style="font-size:18px;font-weight:800;color:var(--stone);">📏 Histórico de Medidas</div>'
+      + '<div id="hist-total" style="font-size:13px;color:#888;"></div>'
+      + '</div>'
+      + '<div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:14px 16px;margin-bottom:16px;">'
+      + '<div style="display:flex;gap:10px;align-items:center;">'
+      + '<span style="font-size:18px;">🔍</span>'
+      + '<input id="hist-busca" type="text" placeholder="Buscar por nome do cliente, pedido ou endereço..." oninput="renderHistorico(this.value)" style="flex:1;border:none;outline:none;font-size:14px;color:var(--stone);background:transparent;">'
+      + '<span id="hist-clear" style="display:none;cursor:pointer;font-size:18px;color:#aaa;" onclick="document.getElementById(\'hist-busca\').value=\'\';renderHistorico(\'\');">✕</span>'
+      + '</div></div>'
+      + '<div id="hist-lista"><div style="padding:40px;text-align:center;color:#888;">Carregando...</div></div>'
+      + '<div id="hist-mais" style="text-align:center;margin-top:16px;padding-bottom:24px;"></div>';
+  }
+  // Atualiza valor e botão limpar
+  const inp = document.getElementById('hist-busca');
+  if (inp && inp.value !== termo) inp.value = termo;
+  const clr = document.getElementById('hist-clear');
+  if (clr) clr.style.display = termo ? 'inline' : 'none';
 
-  const termoBusca = busca !== undefined ? busca : (document.getElementById('hist-busca')?.value || '');
+  _histDebounce = setTimeout(() => _carregarHistorico(termo, 0), 400);
+}
 
-  el.innerHTML = '<div style="padding:40px;text-align:center;color:#888;">Carregando...</div>';
+async function _carregarHistorico(termoBusca, pagina) {
+  const lista = document.getElementById('hist-lista');
+  const elTotal = document.getElementById('hist-total');
+  const elMais = document.getElementById('hist-mais');
+  if (!lista) return;
 
-  // Busca todas as medições concluídas
-  const { data: meds } = await getSB().from('medicoes').select('*').eq('Status', 'concluido').order('Data', { ascending: false });
+  if (pagina === 0) lista.innerHTML = '<div style="padding:30px;text-align:center;color:#aaa;font-size:13px;">🔍 Buscando...</div>';
+  if (elMais) elMais.innerHTML = '';
+
+  const inicio = pagina * _HIST_POR_PAGINA;
+  const fim = inicio + _HIST_POR_PAGINA - 1;
+
+  let query = getSB().from('medicoes')
+    .select('*', { count: 'exact' })
+    .eq('Status', 'concluido')
+    .order('Data', { ascending: false })
+    .range(inicio, fim);
+
+  if (termoBusca && termoBusca.trim()) {
+    const t = termoBusca.trim();
+    query = query.or('Cliente.ilike.*' + t + '*,Pedido_id.ilike.*' + t + '*,Endereco.ilike.*' + t + '*');
+  }
+
+  const { data: meds, count } = await query;
   const medicoes = meds || [];
+  const total = count || 0;
 
-  // Filtra por busca
-  const filtradas = termoBusca
-    ? medicoes.filter(m => (m.Cliente||'').toLowerCase().includes(termoBusca.toLowerCase())
-        || (m.Pedido_id||'').toLowerCase().includes(termoBusca.toLowerCase())
-        || (m.Endereco||'').toLowerCase().includes(termoBusca.toLowerCase()))
-    : medicoes;
+  if (elTotal) elTotal.textContent = total + ' medição(ões) concluída(s)';
 
-  el.innerHTML = `
-    <!-- HEADER -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
-      <div style="font-size:18px;font-weight:800;color:var(--stone);">📏 Histórico de Medidas</div>
-      <div style="font-size:13px;color:#888;">${filtradas.length} medição(ões) concluída(s)</div>
-    </div>
+  if (pagina === 0) {
+    if (medicoes.length === 0) {
+      lista.innerHTML = '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:60px 20px;text-align:center;color:#aaa;">'
+        + '<div style="font-size:48px;margin-bottom:12px;">📏</div>'
+        + '<div style="font-size:16px;font-weight:600;margin-bottom:8px;">' + (termoBusca ? 'Nenhum resultado para "' + termoBusca + '"' : 'Nenhuma medição concluída ainda') + '</div>'
+        + '<div style="font-size:13px;">As medições concluídas aparecem aqui</div></div>';
+    } else {
+      lista.innerHTML = medicoes.map(renderCardHistorico).join('');
+    }
+  } else {
+    lista.innerHTML += medicoes.map(renderCardHistorico).join('');
+  }
 
-    <!-- BUSCA -->
-    <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:14px 16px;margin-bottom:16px;">
-      <div style="display:flex;gap:10px;align-items:center;">
-        <span style="font-size:18px;">🔍</span>
-        <input
-          id="hist-busca"
-          type="text"
-          placeholder="Buscar por nome do cliente, pedido ou endereço..."
-          value="${termoBusca}"
-          oninput="renderHistorico(this.value)"
-          style="flex:1;border:none;outline:none;font-size:14px;color:var(--stone);background:transparent;"
-        >
-        ${termoBusca ? `<button onclick="document.getElementById('hist-busca').value='';renderHistorico('')" style="background:none;border:none;font-size:18px;cursor:pointer;color:#aaa;">✕</button>` : ''}
-      </div>
-    </div>
+  const carregados = inicio + medicoes.length;
+  if (elMais) {
+    if (carregados < total) {
+      elMais.innerHTML = '<button onclick="_carregarHistorico('' + termoBusca.replace(/'/g,"\'") + '',' + (pagina+1) + ')" style="background:var(--stone);color:white;border:none;padding:12px 32px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Ver mais (' + (total - carregados) + ' restantes)</button>';
+    } else if (total > 0) {
+      elMais.innerHTML = '<div style="font-size:12px;color:#aaa;padding:8px;">Todos os ' + total + ' registros carregados</div>';
+    }
+  }
+}
 
-    <!-- LISTA -->
-    ${filtradas.length === 0 ? `
-      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:60px 20px;text-align:center;color:#aaa;">
-        <div style="font-size:48px;margin-bottom:12px;">📏</div>
-        <div style="font-size:16px;font-weight:600;margin-bottom:8px;">${termoBusca ? 'Nenhum resultado para "' + termoBusca + '"' : 'Nenhuma medição concluída ainda'}</div>
-        <div style="font-size:13px;">As medições concluídas pelo medidor aparecem aqui</div>
-      </div>
-    ` : filtradas.map(m => {
-      const pedidoId = m.Pedido_id || '';
-      const pedido = pedidoId ? orders.find(o => String(o.id) === String(pedidoId)) : null;
-      const dataFmt = m.Data ? m.Data.substring(8,10)+'/'+m.Data.substring(5,7)+'/'+m.Data.substring(0,4) : '—';
-      const endereco = [m.Endereco, m.Numero, m.Bairro, m.Complemento, m.Cidade].filter(Boolean).join(', ');
-      const stage = pedido ? pedido.stage : null;
-      const stageLabel = {
-        'aguardando':'⏳ Aguardando Orçamento','negociacao':'💬 Negociação',
-        'fechado':'✅ Pedido Fechado','corte':'🪚 Em Corte',
-        'acabamento':'✨ Acabamento','pronto':'📦 Pronto p/ Entrega','entregue':'🚚 Entregue'
-      }[stage] || (pedidoId ? stage : '—');
-      const stageCor = {
-        'aguardando':'#8B6914','negociacao':'#006382','fechado':'#2E7D32',
-        'corte':'#B85A4A','acabamento':'#9C27B0','pronto':'#006382','entregue':'#2E7D32'
-      }[stage] || '#aaa';
+function renderCardHistorico(m) {
+  const pedidoId = m.Pedido_id || '';
+  const pedido = pedidoId ? orders.find(function(o){ return String(o.id) === String(pedidoId); }) : null;
+  const dataFmt = m.Data ? m.Data.substring(8,10)+'/'+m.Data.substring(5,7)+'/'+m.Data.substring(0,4) : '—';
+  const endereco = [m.Endereco, m.Numero, m.Bairro, m.Complemento, m.Cidade].filter(Boolean).join(', ');
+  const stage = pedido ? pedido.stage : null;
+  const stageLabels = {'aguardando':'⏳ Aguardando Orçamento','negociacao':'💬 Negociação','fechado':'✅ Pedido Fechado','corte':'🪚 Em Corte','acabamento':'✨ Acabamento','pronto':'📦 Pronto p/ Entrega','entregue':'🚚 Entregue'};
+  const stageCores = {'aguardando':'#8B6914','negociacao':'#006382','fechado':'#2E7D32','corte':'#B85A4A','acabamento':'#9C27B0','pronto':'#006382','entregue':'#2E7D32'};
+  const stageLabel = stageLabels[stage] || (pedidoId ? stage : '—');
+  const stageCor = stageCores[stage] || '#aaa';
 
-      return `
-      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden;">
-        <!-- Cabeçalho do card -->
-        <div style="background:var(--stone);color:white;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-          <div>
-            <div style="font-size:15px;font-weight:700;">${m.Cliente||'—'}</div>
-            <div style="font-size:11px;opacity:.8;margin-top:2px;">📅 Medido em ${dataFmt} ${m.Horario ? '· '+m.Horario : ''} ${m.Created_by ? '· por '+m.Created_by : ''}</div>
-          </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-            <div style="background:rgba(255,255,255,0.15);padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;">✅ Concluída</div>
-            ${pedidoId ? `<div style="font-size:11px;opacity:.8;">Pedido: ${pedidoId}</div>` : ''}
-          </div>
-        </div>
-
-        <!-- Corpo do card -->
-        <div style="padding:16px 18px;display:flex;flex-direction:column;gap:10px;">
-
-          ${endereco ? `
-          <div style="display:flex;gap:8px;align-items:flex-start;">
-            <span style="font-size:16px;flex-shrink:0;">📍</span>
-            <div style="font-size:13px;color:#555;">${endereco}</div>
-          </div>` : ''}
-
-          ${m.Obs ? `
-          <div style="display:flex;gap:8px;align-items:flex-start;">
-            <span style="font-size:16px;flex-shrink:0;">📝</span>
-            <div style="font-size:13px;color:#555;">${m.Obs}</div>
-          </div>` : ''}
-
-          ${m.Telefone ? `
-          <div style="display:flex;gap:8px;align-items:center;">
-            <span style="font-size:16px;">📞</span>
-            <a href="tel:${m.Telefone}" style="font-size:13px;color:#006382;text-decoration:none;">${m.Telefone}</a>
-          </div>` : ''}
-
-          <!-- Status do pedido -->
-          ${pedidoId ? `
-          <div style="background:#f8f8f8;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
-            <div style="font-size:12px;color:#888;font-weight:600;">STATUS DO PEDIDO</div>
-            <div style="font-size:13px;font-weight:700;color:${stageCor};">${stageLabel}</div>
-          </div>
-          <button onclick="abrirPedidoDoHistorico('${pedidoId}')"
-            style="background:var(--gold);color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;">
-            📋 Abrir Pedido ${pedidoId}
-          </button>` : `
-          <div style="background:#fff5f5;border-radius:8px;padding:10px 14px;font-size:12px;color:#B85A4A;font-weight:600;text-align:center;">
-            ⚠️ Pedido não vinculado
-          </div>`}
-        </div>
-      </div>`;
-    }).join('')}
-  `;
+  return '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden;">'
+    + '<div style="background:var(--stone);color:white;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'
+    + '<div>'
+    + '<div style="font-size:15px;font-weight:700;">' + (m.Cliente||'—') + '</div>'
+    + '<div style="font-size:11px;opacity:.8;margin-top:2px;">📅 ' + dataFmt + (m.Horario?' · '+m.Horario:'') + (m.Created_by?' · por '+m.Created_by:'') + '</div>'
+    + '</div>'
+    + '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">'
+    + '<div style="background:rgba(255,255,255,0.15);padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;">✅ Concluída</div>'
+    + (pedidoId ? '<div style="font-size:11px;opacity:.8;">Pedido: ' + pedidoId + '</div>' : '')
+    + '</div></div>'
+    + '<div style="padding:16px 18px;display:flex;flex-direction:column;gap:10px;">'
+    + (endereco ? '<div style="display:flex;gap:8px;align-items:flex-start;"><span style="font-size:16px;flex-shrink:0;">📍</span><div style="font-size:13px;color:#555;">' + endereco + '</div></div>' : '')
+    + (m.Obs ? '<div style="display:flex;gap:8px;align-items:flex-start;"><span style="font-size:16px;flex-shrink:0;">📝</span><div style="font-size:13px;color:#555;">' + m.Obs + '</div></div>' : '')
+    + (m.Telefone ? '<div style="display:flex;gap:8px;align-items:center;"><span style="font-size:16px;">📞</span><a href="tel:' + m.Telefone + '" style="font-size:13px;color:#006382;text-decoration:none;">' + m.Telefone + '</a></div>' : '')
+    + (pedidoId
+      ? '<div style="background:#f8f8f8;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><div style="font-size:12px;color:#888;font-weight:600;">STATUS DO PEDIDO</div><div style="font-size:13px;font-weight:700;color:' + stageCor + ';">' + stageLabel + '</div></div>'
+        + '<button onclick="abrirPedidoDoHistorico('' + pedidoId + '')" style="background:var(--gold);color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;">📋 Abrir Pedido ' + pedidoId + '</button>'
+      : '<div style="background:#fff5f5;border-radius:8px;padding:10px 14px;font-size:12px;color:#B85A4A;font-weight:600;text-align:center;">⚠️ Pedido não vinculado</div>')
+    + '</div></div>';
 }
 
 function abrirPedidoDoHistorico(pedidoId) {

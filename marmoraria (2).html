@@ -224,6 +224,9 @@
     50% { opacity:0.6; }
   }
 
+  .acabamentos-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; }
+  .custos-adicionais-grid { display:grid; grid-template-columns: repeat(2,1fr); gap:8px; }
+
   @media(max-width:768px){
 
     /* ══ RESET GLOBAL MOBILE ══════════════════════════════════════════ */
@@ -759,7 +762,7 @@ const TIPO_LABELS = { entrega_instalacao:'🚚 Entrega+Instal.', so_instalacao:'
 let currentUser = null, selectedProfile = null;
 
 // ── MOBILE PATCHER ─────────────────────────────────────────
-const isMobile = () => window.innerWidth <= 768;
+const isMobile = () => (window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth) <= 768;
 
 function aplicarEstilosMobile() {
   if (!isMobile()) return;
@@ -2622,27 +2625,27 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
     </div>
 
     <!-- BANNER TOTAL GERAL (sempre visível) -->
-    <div style="background:linear-gradient(135deg,#1a2332,#2C3E50);border-radius:14px;padding:20px 24px;margin-bottom:16px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;box-shadow:0 4px 20px rgba(0,0,0,.2);">
-      <div style="flex:1;min-width:160px;">
+    <div style="background:linear-gradient(135deg,#1a2332,#2C3E50);border-radius:14px;padding:16px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.2);">
+      <div>
         <div style="font-size:11px;color:#D4AF6E;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">💰 Faturamento Total (todos os meses)</div>
         <div style="font-size:28px;font-weight:900;color:white;">${fmtV(allMeses.reduce((s,k)=>s+(dadosPorMes[k]?.entradas||0),0))}</div>
       </div>
-      <div style="flex:1;min-width:140px;">
+      <div>
         <div style="font-size:11px;color:#D4AF6E;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">📈 Lucro Operacional Total</div>
         <div style="font-size:24px;font-weight:900;color:${allMeses.reduce((s,k)=>s+(dadosPorMes[k]?.lucro||0),0)>=0?'#4CAF50':'#ff6b6b'};">${(()=>{const v=allMeses.reduce((s,k)=>s+(dadosPorMes[k]?.lucro||0),0);return (v>=0?'':'-')+fmtV(Math.abs(v));})()}</div>
       </div>
-      <div style="flex:1;min-width:140px;">
+      <div>
         <div style="font-size:11px;color:#D4AF6E;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">💳 Resultado Líquido Total</div>
         <div style="font-size:24px;font-weight:900;color:${allMeses.reduce((s,k)=>s+(dadosPorMes[k]?.lucroLiq||0),0)>=0?'#a78bfa':'#ff6b6b'};">${(()=>{const v=allMeses.reduce((s,k)=>s+(dadosPorMes[k]?.lucroLiq||0),0);return (v>=0?'':'-')+fmtV(Math.abs(v));})()}</div>
       </div>
-      <div style="flex:0 0 auto;">
+      <div>
         <div style="font-size:11px;color:#D4AF6E;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">📅 Meses</div>
         <div style="font-size:24px;font-weight:900;color:white;">${allMeses.length}</div>
       </div>
     </div>
 
     <!-- 4 CARDS -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
       <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid #2E7D32;">
         <div style="font-size:10px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">💰 Faturamento</div>
         <div style="font-size:22px;font-weight:900;color:#2E7D32;">${fmtV(acumEntradas)}</div>
@@ -2666,7 +2669,7 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
     </div>
 
     <!-- GRÁFICOS -->
-    <div style="display:grid;grid-template-columns:${filtroAtual==='todos'?'1fr 1fr':'1fr'};gap:16px;margin-bottom:16px;">
+    <div style="display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:16px;">
       <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;">
         <div style="font-size:13px;font-weight:700;color:var(--stone);margin-bottom:4px;">📊 Faturamento × Custo × Lucro</div>
         <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
@@ -2712,7 +2715,7 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
     </div>
 
     <!-- CUSTOS + TABELA -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div style="display:grid;grid-template-columns:1fr;gap:16px;">
       <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
         <div style="background:var(--stone);color:white;padding:12px 18px;font-size:13px;font-weight:700;">🏭 Custos por Categoria — ${tituloFiltro}</div>
         <div style="padding:4px 0;">
@@ -2900,7 +2903,7 @@ function renderMateriais() {
     .filter(mid => !analise[mid]);
 
   el.innerHTML = `
-  <div style="padding:24px;max-width:1100px;margin:0 auto;">
+  <div style="padding:12px;max-width:100%;margin:0 auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
       <div>
         <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);">📦 Estoque de Chapas</div>
@@ -4330,15 +4333,15 @@ async function renderFinanceiro() {
   <div style="padding:24px;max-width:1100px;margin:0 auto;">
 
     <!-- HEADER -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
-      <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);">💰 Financeiro</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div style="font-family:'DM Serif Display',serif;font-size:22px;color:var(--stone);">💰 Financeiro</div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         <input type="month" class="form-input" style="padding:8px 12px;font-size:13px;width:160px;"
           value="${filtroMes}" onchange="localStorage.setItem('fin_mes',this.value);renderFinanceiro()">
         <button onclick="abrirModalTransacao('entrada')"
-          style="background:#2E7D32;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">+ Entrada</button>
+          style="background:#2E7D32;color:white;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">+ Entrada</button>
         <button onclick="abrirModalTransacao('saida')"
-          style="background:#B85A4A;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">+ Saída</button>
+          style="background:#B85A4A;color:white;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">+ Saída</button>
         <button onclick="abrirModalContaPagar()"
           style="background:#8B6914;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">+ Conta a Pagar</button>
         ${(currentUser==='dono'||currentUser==='financeiro') ? `
@@ -4431,7 +4434,7 @@ async function renderFinanceiro() {
     })()}
 
     <!-- TABS -->
-    <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid var(--cream-dark);">
+    <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid var(--cream-dark);overflow-x:auto;-webkit-overflow-scrolling:touch;">
       ${[['geral','📊 Lançamentos'],['receber','📋 A Receber'],['pagar','📤 Contas a Pagar'],['analise','📈 Análise']].map(([aba,label]) => `
       <button onclick="finSwitchAba('${aba}')" id="fin-aba-${aba}"
         style="padding:10px 20px;border:none;background:${abaFin===aba?'var(--gold)':'var(--cream-dark)'};color:${abaFin===aba?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
@@ -8922,7 +8925,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
       </div>
 
       <!-- CAMPOS ACABAMENTO — 5 colunas, igual Marmoprice -->
-      <div class="acabamentos-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">
+      <div class="acabamentos-grid" style="display:grid;gap:8px;margin-bottom:12px;">
         ${[
           ['Comprimento de Acabamento 45° Saia (m)', 'compCorte45'],
           ['Comprimento Polimento Reto 2cm Manual (m)', 'compPolimentoManual'],

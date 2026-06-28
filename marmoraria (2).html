@@ -224,8 +224,9 @@
     50% { opacity:0.6; }
   }
 
+  #fin-cards-resumo { grid-template-columns: repeat(5,1fr); }
   .acabamentos-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; }
-  .custos-adicionais-grid { display:grid; grid-template-columns: repeat(2,1fr); gap:8px; }
+  .custos-adicionais-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; }
 
   @media(max-width:768px){
 
@@ -341,8 +342,8 @@
     [id^="pecas-lista-"] input { font-size: 14px !important; padding: 6px !important; }
 
     /* Acabamentos e custos adicionais */
-    .acabamentos-grid { grid-template-columns: 1fr 1fr !important; gap: 6px !important; }
-    .custos-adicionais-grid { grid-template-columns: 1fr 1fr !important; gap: 6px !important; }
+    .acabamentos-grid { grid-template-columns: 1fr !important; gap: 6px !important; }
+    .custos-adicionais-grid { grid-template-columns: 1fr !important; gap: 6px !important; }
 
     /* Rodapé fixo */
     .orc-rodape-fixo { position: fixed !important; bottom: 0 !important; left: 0 !important; right: 0 !important; z-index: 200 !important; background: white !important; border-top: 2px solid #eee !important; padding: 8px 10px !important; display: flex !important; flex-direction: column !important; gap: 6px !important; }
@@ -2425,7 +2426,7 @@ function renderDashComercial() {
     <div style="font-size:16px;font-weight:700;color:var(--stone);margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid var(--cream-dark);">
       🔄 Pipeline Atual
     </div>
-    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:24px;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,45%),1fr));gap:12px;margin-bottom:24px;">
       ${[
         ['medicao','🔍','Medição','#7A7268'],
         ['aguardando','📝','Ag. Orçamento','#5B7B9C'],
@@ -2486,7 +2487,7 @@ function renderDashProducao() {
   const maxVal = Math.max(...meses.map(m=>m.total), 1);
 
   el.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,45%),1fr));gap:12px;margin-bottom:24px;">
       ${[
         ['🔪','Em Corte', emCorte.length,'pedido(s)','#006382'],
         ['✨','Acabamento', emAcabamento.length,'pedido(s)','#8B6914'],
@@ -4366,7 +4367,7 @@ async function renderFinanceiro() {
     </div>
 
     <!-- CARDS RESUMO -->
-    <div id="fin-cards-resumo" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;">
+    <div id="fin-cards-resumo" style="display:grid;gap:12px;margin-bottom:20px;">
       <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid #2E7D32;">
         <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Entradas</div>
         <div style="font-size:20px;font-weight:800;color:#2E7D32;">${fmtV(totalEntradas)}</div>
@@ -8236,7 +8237,7 @@ function renderItemOrcamento(item, idx, pedras, cfg) {
     </div>
     ${calc ? `
     <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--cream-dark);">
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:10px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,45%),1fr));gap:8px;margin-bottom:10px;">
         <div style="font-size:11px;color:var(--stone-light);">Área base: <strong>${calc.areaBase.toFixed(2)} m²</strong></div>
         <div style="font-size:11px;color:var(--stone-light);">c/ Quebra: <strong>${calc.areaComQuebra.toFixed(2)} m²</strong></div>
         <div style="font-size:11px;color:var(--stone-light);">Material: <strong>${fmt(calc.custoMaterial)}</strong></div>
@@ -8673,7 +8674,7 @@ function renderTelaOrcamentoPedido(order) {
             <input type="radio" name="sim-modo" value="margem" onchange="simularPreco(${custoTotal})" style="accent-color:#006382;"> Pela Margem
           </label>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,45%),1fr));gap:12px;margin-bottom:14px;">
           <div><div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600;">CUSTO TOTAL</div>
             <input class="form-input" id="sim-custo-edit" value="${custoTotal.toFixed(2).replace('.',',')}" 
               style="font-weight:700;border-color:#8B6914;border-width:2px;" 
@@ -8690,7 +8691,7 @@ function renderTelaOrcamentoPedido(order) {
         </div>
         <div id="sim-resultado" style="display:none;border-radius:8px;padding:14px;border-left:4px solid #ccc;">
           <div style="font-size:13px;font-weight:700;margin-bottom:8px;" id="sim-titulo"></div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(130px,45%),1fr));gap:8px;">
             <div><div style="font-size:10px;color:#666;">MEU CUSTO</div><div style="font-size:15px;font-weight:700;" id="sim-r-custo"></div></div>
             <div><div style="font-size:10px;color:#666;">VALOR COBRADO</div><div style="font-size:15px;font-weight:700;" id="sim-r-valor"></div></div>
             <div><div style="font-size:10px;color:#666;">LUCRO / PREJUÍZO</div><div style="font-size:17px;font-weight:900;" id="sim-r-lucro"></div></div>
@@ -8988,7 +8989,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
       <!-- CUSTOS ADICIONAIS -->
       <div style="margin-bottom:16px;padding:12px;background:#fffbf0;border-radius:6px;border:1px solid #f0e0a0;">
         <div style="font-size:11px;font-weight:700;color:#8B6914;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">💰 Custos Adicionais (R$)</div>
-        <div class="custos-adicionais-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
+        <div class="custos-adicionais-grid" style="display:grid;gap:8px;">
           ${[
             ['Custos de Acessórios (R$)', 'custoAcessorios'],
             ['Insumos de Instalação (R$)', 'custoInsumoInstal'],

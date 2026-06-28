@@ -281,6 +281,39 @@
     .materiais-grid { grid-template-columns: 1fr !important; }
     .produto-card { padding: 12px !important; }
 
+    /* Tabela de produtos → cards no mobile */
+    .produtos-table-header { display: none !important; }
+    .produto-row {
+      display: flex !important;
+      flex-direction: row !important;
+      flex-wrap: wrap !important;
+      gap: 4px 10px !important;
+      padding: 12px 14px !important;
+      border-bottom: 1px solid #f0f0f0 !important;
+      align-items: center !important;
+    }
+    .produto-nome { flex: 1 1 100% !important; font-size: 14px !important; margin-bottom: 4px !important; }
+    .produto-custo { font-size: 14px !important; font-weight: 700 !important; flex: 0 0 auto !important; }
+    .produto-quebra, .produto-margem { font-size: 12px !important; color: #555 !important; flex: 0 0 auto !important; }
+    .produto-grupo { font-size: 11px !important; color: #888 !important; flex: 1 1 auto !important; }
+    .produto-row-btns { flex: 0 0 auto !important; margin-left: auto !important; }
+    .produto-row-top {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: flex-start !important;
+    }
+    .produto-row-mid {
+      display: flex !important;
+      gap: 12px !important;
+      font-size: 12px !important;
+      color: #666 !important;
+      flex-wrap: wrap !important;
+    }
+    .produto-row-btns {
+      display: flex !important;
+      gap: 6px !important;
+    }
+
     /* ── CONFIGURAÇÕES ──────────────────────────────── */
     #panel-configuracoes { padding: 10px !important; }
     .config-grid { grid-template-columns: 1fr !important; }
@@ -398,6 +431,77 @@
     /* Simulador de preço */
     #sim-resultado > div[style*="grid-template-columns:repeat"] {
       grid-template-columns: 1fr 1fr !important;
+    }
+
+    /* ── ORÇAMENTO MOBILE — correções extras ──────────── */
+    /* Cabeçalho do orçamento — 1 coluna, sem overflow horizontal */
+    #orc-campos-header,
+    #orc-campos-linha2,
+    #orc-campos-linha4 {
+      grid-template-columns: 1fr !important;
+      overflow: visible !important;
+    }
+
+    /* Grid de trânsito — coluna única */
+    #orc-campos-linha2 > div:nth-child(3) > div {
+      flex-wrap: wrap !important;
+      gap: 8px !important;
+    }
+
+    /* Peça a peça: nome + medidas em coluna */
+    [id^="pecas-lista-"] > div {
+      grid-template-columns: 1fr 90px 48px 36px !important;
+      gap: 4px !important;
+    }
+
+    /* Acabamentos: sempre 2 colunas no mobile */
+    .acabamentos-grid {
+      grid-template-columns: 1fr 1fr !important;
+      gap: 8px !important;
+    }
+
+    /* Item orçamento: 2 colunas */
+    .item-orcamento-grid {
+      grid-template-columns: 1fr 1fr !important;
+      gap: 8px !important;
+    }
+
+    /* Impede overflow horizontal na tela de orçamento */
+    #orcamento-pedido-content,
+    #panel-orcamento-pedido {
+      overflow-x: hidden !important;
+      max-width: 100vw !important;
+    }
+
+    /* Botões do rodapé do orçamento */
+    .orc-rodape-fixo {
+      position: fixed !important;
+      bottom: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      z-index: 200 !important;
+      background: white !important;
+      border-top: 1px solid #ddd !important;
+      padding: 8px 10px !important;
+      flex-direction: row !important;
+      flex-wrap: wrap !important;
+      gap: 6px !important;
+    }
+    .orc-rodape-btns-wrap {
+      display: flex !important;
+      gap: 6px !important;
+      flex: 1 !important;
+    }
+    .orc-rodape-btns-wrap button {
+      flex: 1 !important;
+      font-size: 12px !important;
+      padding: 10px 6px !important;
+    }
+
+    /* Dashboard financeiro — banner total em coluna */
+    #panel-dashboard > div > div[style*="linear-gradient"] {
+      flex-direction: column !important;
+      gap: 12px !important;
     }
 
     /* ── MODAL DE MEDIÇÃO — mobile ──────────────────── */
@@ -10167,20 +10271,20 @@ function renderProdutos() {
     </div>` : ''}
 
     <div style="background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);overflow:hidden;">
-      <div style="display:grid;grid-template-columns:2.5fr 1fr 1fr 1fr 2fr 100px;gap:8px;padding:10px 16px;background:var(--stone);color:white;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">
+      <div class="produtos-table-header" style="display:grid;grid-template-columns:2.5fr 1fr 1fr 1fr 2fr 100px;gap:8px;padding:10px 16px;background:var(--stone);color:white;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">
         <div>Nome</div><div>Custo/m²</div><div>Quebra</div><div>Margem</div><div>Grupo</div><div>Ações</div>
       </div>
       ${pedras.length === 0 && !semResultado
         ? `<div style="padding:40px;text-align:center;color:#999;font-size:14px;">Nenhuma chapa cadastrada. Faça login para carregar as chapas automaticamente.</div>`
         : pedras.map(p => {
             const grupo = grupos.find(g => g.id === p.grupoId);
-            return `<div style="display:grid;grid-template-columns:2.5fr 1fr 1fr 1fr 2fr 100px;gap:8px;padding:11px 16px;border-bottom:1px solid #f0f0f0;align-items:center;font-size:13px;">
-              <div style="font-weight:600;color:#222;">${p.nome}</div>
-              <div style="font-weight:700;color:#006382;">R$ ${(p.custoM2||0).toFixed(2).replace('.',',')}</div>
-              <div>${p.quebra??10}%</div>
-              <div>${p.margem||30}%</div>
-              <div style="font-size:11px;color:#666;">${grupo?.nome||'—'}</div>
-              <div style="display:flex;gap:6px;">
+            return `<div class="produto-row" style="display:grid;grid-template-columns:2.5fr 1fr 1fr 1fr 2fr 100px;gap:8px;padding:11px 16px;border-bottom:1px solid #f0f0f0;align-items:center;font-size:13px;">
+              <div class="produto-nome" style="font-weight:600;color:#222;">${p.nome}</div>
+              <div class="produto-custo" style="font-weight:700;color:#006382;">R$ ${(p.custoM2||0).toFixed(2).replace('.',',')}</div>
+              <div class="produto-quebra">${p.quebra??10}%</div>
+              <div class="produto-margem">${p.margem||30}%</div>
+              <div class="produto-grupo" style="font-size:11px;color:#666;">${grupo?.nome||'—'}</div>
+              <div class="produto-row-btns" style="display:flex;gap:6px;">
                 <button onclick="abrirFormProduto('${p.id}')" style="background:#006382;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;">✏️</button>
                 <button onclick="deletarProduto('${p.id}')" style="background:#dc3545;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;">🗑</button>
               </div>

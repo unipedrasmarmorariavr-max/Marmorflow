@@ -8047,6 +8047,8 @@ function renderFormOrcamento() {
       <div class="form-grid">
         <div class="form-group"><label class="form-label">Cliente *</label>
           <input class="form-input" id="orc-cliente" value="${orc.cliente||''}" oninput="orcamentoAtual.cliente=this.value;document.getElementById('titulo-novo-orc').textContent=this.value||'Novo Orçamento'"></div>
+        <div class="form-group"><label class="form-label">Telefone</label>
+          <input class="form-input" id="orc-telefone" value="${orc.telefone||''}" placeholder="(24) 99999-9999" oninput="orcamentoAtual.telefone=this.value"></div>
         <div class="form-group"><label class="form-label">Distância (km)</label>
           <input class="form-input" id="orc-distancia" value="${orc.distancia||0}" oninput="orcamentoAtual.distancia=parseFloat(this.value)||0;recalcularOrcamento()"></div>
         <div class="form-group"><label class="form-label">Status</label>
@@ -8061,6 +8063,16 @@ function renderFormOrcamento() {
             <option value="rapido" ${orc.transito==='rapido'?'selected':''}>Rápido</option>
           </select>
         </div>
+      </div>
+      <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group"><label class="form-label">Endereço da Obra</label>
+          <input class="form-input" id="orc-endereco" value="${orc.enderecoObra||''}" placeholder="Rua, número, bairro..." oninput="orcamentoAtual.enderecoObra=this.value"></div>
+        <div class="form-group"><label class="form-label">Cidade</label>
+          <input class="form-input" id="orc-cidade" value="${orc.cidade||''}" placeholder="Volta Redonda" oninput="orcamentoAtual.cidade=this.value"></div>
+        <div class="form-group"><label class="form-label">Observações Gerais</label>
+          <input class="form-input" id="orc-obs-geral" value="${orc.obsGeral||''}" placeholder="Ex: Apto, 3º andar..." oninput="orcamentoAtual.obsGeral=this.value"></div>
+        <div class="form-group"><label class="form-label">Data Prevista</label>
+          <input class="form-input" type="date" id="orc-data-prev" value="${orc.dataPrevista||''}" oninput="orcamentoAtual.dataPrevista=this.value"></div>
       </div>
     </div>
 
@@ -9695,9 +9707,10 @@ function imprimirOrcamento() {
     + '<td style="padding:5px 0;width:140px;color:#888;font-size:11px;">Distância de Entrega</td>'
     + '<td style="padding:5px 0;font-weight:700;">' + (orc.distancia||0) + ' km</td>'
     + '</tr>'
-    + (orc.telefone ? '<tr><td style="padding:5px 0;color:#888;font-size:11px;">Telefone(s)</td><td style="padding:5px 0;font-weight:700;" colspan="3">' + orc.telefone + '</td></tr>' : '')
-    + (orc.enderecoObra ? '<tr><td style="padding:5px 0;color:#888;font-size:11px;">Endereço</td><td style="padding:5px 0;font-weight:600;" colspan="3">' + orc.enderecoObra + '</td></tr>' : '')
-    + (orc.dataPrevista ? '<tr><td style="padding:5px 0;color:#888;font-size:11px;">Data Prevista</td><td style="padding:5px 0;font-weight:600;" colspan="3">' + orc.dataPrevista + '</td></tr>' : '')
+    + (orc.telefone ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">Telefone(s)</td><td style="padding:6px 0;font-weight:700;" colspan="3">' + orc.telefone + '</td></tr>' : '')
+    + (orc.enderecoObra ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">Endereço da Obra</td><td style="padding:6px 0;font-weight:600;" colspan="3">' + orc.enderecoObra + (orc.cidade ? ' — ' + orc.cidade : '') + '</td></tr>' : '')
+    + (orc.obsGeral ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">Observações</td><td style="padding:6px 0;font-weight:600;" colspan="3">' + orc.obsGeral + '</td></tr>' : '')
+    + (orc.dataPrevista ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">Data Prevista</td><td style="padding:6px 0;font-weight:600;" colspan="3">' + orc.dataPrevista + '</td></tr>' : '')
     + '</table></div>'
 
     // AMBIENTES

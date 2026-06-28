@@ -8489,7 +8489,7 @@ function renderTelaOrcamentoPedido(order) {
           <div id="hdr-llh" style="font-size:15px;font-weight:700;color:#A8D5A2;">${fmt(llh)}</div>
         </div>
         <button onclick="limparOrcamentoAtual()" style="background:#6c757d;color:white;border:none;padding:9px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;" title="Apagar todo o orçamento e começar do zero">🗑 Limpar</button>
-        <button onclick="imprimirOrcamento()" style="background:#006382;color:white;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">🖨️ Salvar e Imprimir</button>
+        <button onclick="salvarEImprimir()" style="background:#006382;color:white;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">🖨️ Salvar e Imprimir</button>
         <button onclick="salvarOrcamentoPedido()" style="background:#2E7D32;color:white;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">💾 Salvar</button>
         <button id="hdr-btn-fechar" onclick="salvarEFecharPedido()" style="background:var(--gold);color:white;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;${totalGeral>0?'':'display:none;'}">✅ Fechar Pedido</button>
       </div>
@@ -9585,6 +9585,12 @@ const CONDICOES = `• CONDIÇÕES DE PAGAMENTO A COMBINAR;
 • O PRAZO DE ENTREGA DEVERÁ SER COMBINADO COM A EMPRESA, SENDO QUE O MESMO SERÁ AMPLIADO CASO OS ACESSÓRIOS NÃO ESTEJAM DISPONÍVEIS NA CONFERÊNCIA DAS MEDIDAS.
 • PEÇAS QUE NÃO PASSAREM NO ELEVADOR DEVERÃO SER AJUSTADAS - CASO NECESSÁRIO GUINDASTE SERÁ POR CONTA DO CLIENTE.
 • AS IMAGENS DOS MATERIAIS QUE CONSTAM NO FINAL DO ORÇAMENTO SÃO ILUSTRATIVAS PODENDO VARIAR DE ACORDO COM O LOTE DISPONÍVEL. CONSULTE A DISPONIBILIDADE!`;
+
+async function salvarEImprimir() {
+  // Salva primeiro, depois imprime
+  await salvarOrcamentoPedido(true); // silencioso = sem notificação
+  imprimirOrcamento();
+}
 
 function imprimirOrcamento() {
   const orc = orcamentoAtual;

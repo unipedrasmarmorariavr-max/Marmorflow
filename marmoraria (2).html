@@ -225,6 +225,8 @@
   }
 
   #fin-cards-resumo { grid-template-columns: repeat(5,1fr); }
+  .item-orcamento-grid { grid-template-columns: 1.5fr 1.5fr 1fr 2fr; }
+  .peca-row { grid-template-columns: 2fr 1.2fr 0.6fr auto; }
   .acabamentos-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; }
   .custos-adicionais-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; }
 
@@ -335,10 +337,10 @@
     #orc-campos-header, #orc-campos-linha2, #orc-campos-linha4 { grid-template-columns: 1fr !important; }
 
     /* Item do orçamento */
-    .item-orcamento-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+    .item-orcamento-grid { grid-template-columns: 1fr !important; gap: 6px !important; }
 
     /* Peça a Peça */
-    [id^="pecas-lista-"] > div { grid-template-columns: 1fr 90px 44px 34px !important; gap: 4px !important; }
+    .peca-row { grid-template-columns: 1fr 90px 44px 34px !important; gap: 4px !important; }
     [id^="pecas-lista-"] input { font-size: 14px !important; padding: 6px !important; }
 
     /* Acabamentos e custos adicionais */
@@ -8873,7 +8875,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
     <!-- Cabeçalho do item -->
     <div style="background:#f8f8f8;border-bottom:1px solid #e0e0e0;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
       <div style="font-size:13px;font-weight:700;color:#333;min-width:60px;">ITEM ${idx+1}</div>
-      <div class="item-orcamento-grid" style="flex:1;display:grid;grid-template-columns:1.5fr 1.5fr 1fr 2fr;gap:8px;align-items:center;">
+      <div class="item-orcamento-grid" style="flex:1;display:grid;gap:8px;align-items:center;">
         <div><label style="font-size:10px;color:#666;">Nome do Item *</label>
           <input class="form-input" style="padding:6px 10px;" value="${item.nome||''}" placeholder="bancada, pia..."
             oninput="orcamentoAtual.itens[${idx}].nome=this.value"></div>
@@ -8902,7 +8904,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
         <div style="font-size:12px;font-weight:700;color:#333;margin-bottom:8px;">Peça a Peça ✏️ «</div>
         <div id="pecas-lista-${idx}">
           ${(item.pecas||[{nome:'',medidas:'',qtd:'1'}]).map((peca,pi) => `
-          <div style="display:grid;grid-template-columns:2fr 1.2fr 0.6fr auto;gap:6px;margin-bottom:6px;align-items:center;">
+          <div class="peca-row" style="display:grid;gap:6px;margin-bottom:6px;align-items:center;">
             <input class="form-input" style="padding:6px 10px;" placeholder="Nome da peça" value="${peca.nome||''}"
               oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].nome=this.value"
               onkeydown="pKD(event,this,${idx},'${orderId}')">
@@ -9445,7 +9447,7 @@ function adicionarPecaItem(idx, orderId) {
   if (!lista) return;
 
   var row = document.createElement('div');
-  row.style.cssText = 'display:grid;grid-template-columns:2fr 1.2fr 0.6fr auto;gap:6px;margin-bottom:6px;align-items:center;';
+  row.className = 'peca-row'; row.style.cssText = 'display:grid;gap:6px;margin-bottom:6px;align-items:center;';
 
   function inp(style, type, placeholder, val) {
     var el = document.createElement('input');
@@ -9523,7 +9525,7 @@ function duplicarPecaItem(idx, pi, orderId) {
   if (!lista) { recalcularTelaOrc(orderId); return; }
 
   var row = document.createElement('div');
-  row.style.cssText = 'display:grid;grid-template-columns:2fr 1.2fr 0.6fr auto;gap:6px;margin-bottom:6px;align-items:center;';
+  row.className = 'peca-row'; row.style.cssText = 'display:grid;gap:6px;margin-bottom:6px;align-items:center;';
 
   function inp(style, type, placeholder, val) {
     var el = document.createElement('input');

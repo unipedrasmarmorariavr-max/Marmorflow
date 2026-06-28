@@ -9589,6 +9589,17 @@ const CONDICOES = `• CONDIÇÕES DE PAGAMENTO A COMBINAR;
 function imprimirOrcamento() {
   const orc = orcamentoAtual;
   if (!orc) return;
+
+  // Preencher dados do pedido como fallback nos campos vazios
+  if (pedidoOrcAtual) {
+    const order = orders.find(o => o.id === pedidoOrcAtual);
+    if (order) {
+      if (!orc.telefone) orc.telefone = order.telefone || '';
+      if (!orc.enderecoObra) orc.enderecoObra = order.endereco || '';
+      if (!orc.cliente) orc.cliente = order.cliente || '';
+    }
+  }
+
   const pedras = getPedrasCadastradas();
   const cfg = getConfigOrc();
 

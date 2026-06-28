@@ -756,112 +756,91 @@ const STAGES = [
 ];
 const TIPO_LABELS = { entrega_instalacao:'🚚 Entrega+Instal.', so_instalacao:'🔧 Só Instalação', so_entrega:'📦 Só Entrega', retirada:'🏭 Retirada' };
 
+let currentUser = null, selectedProfile = null;
 
-// ── HELPER MOBILE ──────────────────────────────────────────
+// ── MOBILE PATCHER ─────────────────────────────────────────
 const isMobile = () => window.innerWidth <= 768;
-const mGrid = (desktop, mobile) => isMobile() ? mobile : desktop;
-// Re-renderizar ao girar o celular
-let _resizeTimer = null;
-window.addEventListener('resize', () => {
-  clearTimeout(_resizeTimer);
-  _resizeTimer = setTimeout(() => {
-    const tab = document.querySelector('.tab-btn.active')?.id?.replace('tab-','');
-    if (tab === 'financeiro') renderFinanceiro();
-    else if (tab === 'produtos') renderProdutos();
-    else if (tab === 'kanban') renderKanban();
-    else if (tab === 'dashboard') renderDashboard(localStorage.getItem('dash_aba')||'geral');
-  }, 300);
-});
-// ───────────────────────────────────────────────────────────
 
-
-// ── MOBILE PATCHER — aplica estilos após renderização ────────
 function aplicarEstilosMobile() {
   if (!isMobile()) return;
-  
-  // Financeiro - cards resumo
-  const finCards = document.getElementById('fin-cards-resumo');
-  if (finCards) {
-    finCards.style.gridTemplateColumns = '1fr 1fr';
-    finCards.style.gap = '8px';
+
+  // FINANCEIRO - 5 cards → 2 colunas
+  const fc = document.getElementById('fin-cards-resumo');
+  if (fc) { fc.style.gridTemplateColumns='1fr 1fr'; fc.style.gap='8px'; }
+
+  // FINANCEIRO - header flex-wrap
+  const fh = document.querySelector('#financeiro-content > div > div:first-child');
+  if (fh) { fh.style.flexDirection='column'; fh.style.gap='10px'; }
+
+  // ORÇAMENTO - campos header 4 col → 1 col
+  const oh = document.getElementById('orc-campos-header');
+  if (oh) { oh.style.gridTemplateColumns='1fr'; }
+
+  // ORÇAMENTO - linha2 5 col → 2 col
+  const ol2 = document.getElementById('orc-campos-linha2');
+  if (ol2) { ol2.style.gridTemplateColumns='1fr 1fr'; }
+
+  // ORÇAMENTO - linha4 2 col → 1 col
+  const ol4 = document.getElementById('orc-campos-linha4');
+  if (ol4) { ol4.style.gridTemplateColumns='1fr'; }
+
+  // ORÇAMENTO - header top em coluna
+  const ot = document.getElementById('orc-header-top');
+  if (ot) {
+    ot.style.flexDirection = 'column';
+    ot.style.padding = '8px 10px';
+    // botões: scroll horizontal
+    const btns = ot.querySelector('div:last-child');
+    if (btns) { btns.style.overflowX='auto'; btns.style.flexWrap='nowrap'; }
   }
-  
-  // Financeiro - header
-  const finHeader = document.querySelector('#panel-financeiro .content > div, #financeiro-content > div');
-  
-  // Orçamento - campos header
-  const orcHeader = document.getElementById('orc-campos-header');
-  if (orcHeader) { orcHeader.style.gridTemplateColumns = '1fr'; }
-  
-  const orcLinha2 = document.getElementById('orc-campos-linha2');
-  if (orcLinha2) { orcLinha2.style.gridTemplateColumns = '1fr 1fr'; }
-  
-  const orcLinha4 = document.getElementById('orc-campos-linha4');
-  if (orcLinha4) { orcLinha4.style.gridTemplateColumns = '1fr'; }
-  
-  // Orçamento - header top
-  const orcTop = document.getElementById('orc-header-top');
-  if (orcTop) {
-    orcTop.style.flexDirection = 'column';
-    orcTop.style.padding = '8px 10px';
-  }
-  
-  // Orçamento - botões do header
-  const orcBtns = orcTop ? orcTop.querySelector('div:nth-child(2)') : null;
-  if (orcBtns) {
-    orcBtns.style.overflowX = 'auto';
-    orcBtns.style.flexWrap = 'nowrap';
-    orcBtns.style.webkitOverflowScrolling = 'touch';
-  }
-  
-  // Orçamento - max-width container
-  const orcContent = document.querySelector('#orcamento-pedido-content div[style*="max-width:1300px"], #orcamento-pedido-content div[style*="max-width:100%"]');
-  if (orcContent) { orcContent.style.padding = '8px'; orcContent.style.maxWidth = '100%'; }
-  
-  // Orçamento - item grid
+
+  // ORÇAMENTO - max-width container
+  document.querySelectorAll('#orcamento-pedido-content div').forEach(el => {
+    if (el.style.maxWidth === '1300px') {
+      el.style.maxWidth = '100%';
+      el.style.padding = '8px';
+    }
+  });
+
+  // ORÇAMENTO - item grid 4 col → 2 col
   document.querySelectorAll('.item-orcamento-grid').forEach(el => {
     el.style.gridTemplateColumns = '1fr 1fr';
   });
-  
-  // Rodapé orçamento
-  const rodape = document.querySelector('.orc-rodape-campos');
-  if (rodape) { rodape.style.gridTemplateColumns = '1fr'; }
-  
-  // Produtos - tabela header
-  const prodHeader = document.querySelector('.produtos-table-header');
-  if (prodHeader) { prodHeader.style.display = 'none'; }
-  
-  // Produtos - linhas viram cards
-  document.querySelectorAll('.produto-row').forEach(el => {
-    el.style.display = 'flex';
-    el.style.flexWrap = 'wrap';
-    el.style.gap = '4px 10px';
-    el.style.padding = '12px';
-    el.style.gridTemplateColumns = 'none';
+
+  // ORÇAMENTO - rodapé campos
+  const rc = document.querySelector('.orc-rodape-campos');
+  if (rc) { rc.style.gridTemplateColumns='1fr'; }
+
+  // PRODUTOS - esconder header da tabela
+  const ph = document.querySelector('.produtos-table-header');
+  if (ph) { ph.style.display='none'; }
+
+  // PRODUTOS - linhas → cards flex
+  document.querySelectorAll('.produto-row').forEach(row => {
+    row.style.cssText = 'display:flex!important;flex-wrap:wrap!important;gap:6px 10px!important;padding:12px!important;border-bottom:1px solid #eee!important;';
   });
   document.querySelectorAll('.produto-nome').forEach(el => {
-    el.style.flex = '1 1 100%';
-    el.style.fontSize = '14px';
-    el.style.fontWeight = '700';
-    el.style.marginBottom = '4px';
+    el.style.cssText = 'flex:1 1 100%!important;font-size:14px!important;font-weight:700!important;margin-bottom:2px!important;';
   });
   document.querySelectorAll('.produto-custo').forEach(el => {
-    el.style.flex = '0 0 auto';
-    el.style.fontSize = '14px';
+    el.style.cssText = 'flex:0 0 auto!important;font-size:14px!important;font-weight:700!important;color:#006382!important;';
   });
-  document.querySelectorAll('.produto-quebra, .produto-margem').forEach(el => {
-    el.style.fontSize = '12px';
-    el.style.color = '#666';
-    el.style.flex = '0 0 auto';
+  document.querySelectorAll('.produto-quebra,.produto-margem').forEach(el => {
+    el.style.cssText = 'flex:0 0 auto!important;font-size:12px!important;color:#666!important;';
+  });
+  document.querySelectorAll('.produto-grupo').forEach(el => {
+    el.style.cssText = 'flex:1 1 auto!important;font-size:11px!important;color:#888!important;';
   });
   document.querySelectorAll('.produto-row-btns').forEach(el => {
-    el.style.marginLeft = 'auto';
-    el.style.flex = '0 0 auto';
+    el.style.cssText = 'flex:0 0 auto!important;margin-left:auto!important;display:flex!important;gap:6px!important;';
   });
 }
-// ─────────────────────────────────────────────────────────────
 
-let currentUser = null, selectedProfile = null;
+// Aplicar no resize também
+window.addEventListener('resize', () => { setTimeout(aplicarEstilosMobile, 100); });
+// ───────────────────────────────────────────────────────────
+
+
 let orders = [], editingId = null, fechandoId = null;
 let tempImages = { croqui:[], local:[] };
 
@@ -2643,7 +2622,7 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
     </div>
 
     <!-- BANNER TOTAL GERAL (sempre visível) -->
-    <div style="background:linear-gradient(135deg,#1a2332,#2C3E50);border-radius:14px;padding:${isMobile()?'14px':'20px 24px'};margin-bottom:16px;display:flex;flex-direction:${isMobile()?'column':'row'};align-items:${isMobile()?'stretch':'center'};gap:${isMobile()?'12px':'24px'};flex-wrap:wrap;box-shadow:0 4px 20px rgba(0,0,0,.2);">
+    <div style="background:linear-gradient(135deg,#1a2332,#2C3E50);border-radius:14px;padding:20px 24px;margin-bottom:16px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;box-shadow:0 4px 20px rgba(0,0,0,.2);">
       <div style="flex:1;min-width:160px;">
         <div style="font-size:11px;color:#D4AF6E;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">💰 Faturamento Total (todos os meses)</div>
         <div style="font-size:28px;font-weight:900;color:white;">${fmtV(allMeses.reduce((s,k)=>s+(dadosPorMes[k]?.entradas||0),0))}</div>
@@ -4384,7 +4363,7 @@ async function renderFinanceiro() {
     </div>
 
     <!-- CARDS RESUMO -->
-    <div id="fin-cards-resumo" style="display:grid;grid-template-columns:${isMobile()?'1fr 1fr':'repeat(5,1fr)'};gap:${isMobile()?'8px':'12px'};margin-bottom:${isMobile()?'12px':'20px'};">
+    <div id="fin-cards-resumo" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;">
       <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid #2E7D32;">
         <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Entradas</div>
         <div style="font-size:20px;font-weight:800;color:#2E7D32;">${fmtV(totalEntradas)}</div>
@@ -4463,7 +4442,7 @@ async function renderFinanceiro() {
     <!-- PAINEL LANÇAMENTOS -->
     <div id="fin-painel-geral" style="display:${abaFin==='geral'?'block':'none'}">
       <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
-        <div style="background:var(--stone);color:white;padding:${isMobile()?'10px 12px':'14px 20px'};display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div style="background:var(--stone);color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
           <div style="font-size:14px;font-weight:700;">Lançamentos de ${filtroMes.substring(5,7)}/${filtroMes.substring(0,4)}</div>
           <div style="display:flex;align-items:center;gap:12px;"><div style="font-size:12px;opacity:.7;">${txMes.length} registros</div><button onclick="abrirModalLancamento()" style="background:var(--gold);color:white;border:none;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">+ Lançamento</button></div>
         </div>
@@ -4686,8 +4665,8 @@ async function renderFinanceiro() {
     const el = document.getElementById('fin-analise-inner');
     if (el) el.innerHTML = renderAnaliseFinanceiro(txMes, filtroMes);
   }, 50);
-
-  setTimeout(aplicarEstilosMobile, 50);}
+}
+setTimeout(aplicarEstilosMobile,50);
 
 function renderAnaliseFinanceiro(txMes, filtroMes) {
   const saidas = txMes.filter(function(t){ return t.tipo === 'saida'; });
@@ -8518,7 +8497,7 @@ function renderTelaOrcamentoPedido(order) {
   <div style="min-height:100vh;background:#f5f5f5;padding-bottom:80px;">
 
     <!-- HEADER FIXO -->
-    <div id="orc-header-top" style="background:#1a2332;color:white;padding:${isMobile()?'8px 10px':'12px 24px'};display:flex;flex-direction:${isMobile()?'column':'row'};align-items:${isMobile()?'stretch':'center'};justify-content:space-between;gap:${isMobile()?'6px':'12px'};flex-wrap:wrap;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.3);">
+    <div id="orc-header-top" style="background:#1a2332;color:white;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.3);">
       <div style="display:flex;align-items:center;gap:16px;">
         <button onclick="fecharTelaOrcamentoPedido()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:white;padding:7px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">← Voltar</button>
         <div>
@@ -8526,12 +8505,12 @@ function renderTelaOrcamentoPedido(order) {
           <div style="font-size:11px;opacity:0.6;">${order.id} · ${order.peca||''} · Custo/h: ${fmt(custoHoraEmpresa)}</div>
         </div>
       </div>
-      <div style="display:flex;gap:${isMobile()?'4px':'8px'};align-items:center;flex-wrap:nowrap;overflow-x:${isMobile()?'auto':'visible'};-webkit-overflow-scrolling:touch;padding-bottom:${isMobile()?'2px':'0'};">
-        <div id="hdr-custo-wrap" style="text-align:right;background:rgba(255,255,255,0.08);padding:${isMobile()?'5px 8px':'8px 16px'};border-radius:8px;flex-shrink:0;min-width:${isMobile()?'60px':'auto'};${totalGeral>0?'':'display:none;'}">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div id="hdr-custo-wrap" style="text-align:right;background:rgba(255,255,255,0.08);padding:8px 16px;border-radius:8px;${totalGeral>0?'':'display:none;'}">
           <div style="font-size:10px;opacity:0.6;text-transform:uppercase;">Custo Total</div>
           <div id="hdr-custo" style="font-size:15px;font-weight:700;">${fmt(custoTotal)}</div>
         </div>
-        <div id="hdr-valor-wrap" style="text-align:right;background:rgba(255,255,255,0.08);padding:${isMobile()?'5px 8px':'8px 16px'};border-radius:8px;flex-shrink:0;${totalGeral>0?'':'display:none;'}">
+        <div id="hdr-valor-wrap" style="text-align:right;background:rgba(255,255,255,0.08);padding:8px 16px;border-radius:8px;${totalGeral>0?'':'display:none;'}">
           <div style="font-size:10px;opacity:0.6;text-transform:uppercase;">Valor de Venda</div>
           <div id="hdr-valor" style="font-size:18px;font-weight:900;color:#FFD700;">${fmt(totalGeral)}</div>
         </div>
@@ -8539,24 +8518,24 @@ function renderTelaOrcamentoPedido(order) {
           <div style="font-size:10px;opacity:0.8;text-transform:uppercase;">Margem</div>
           <div id="hdr-margem" style="font-size:16px;font-weight:700;">${margem.toFixed(1)}%</div>
         </div>
-        <div id="hdr-llh-wrap" style="text-align:right;background:rgba(255,255,255,0.08);padding:${isMobile()?'5px 8px':'8px 16px'};border-radius:8px;flex-shrink:0;${totalGeral>0?'':'display:none;'}">
+        <div id="hdr-llh-wrap" style="text-align:right;background:rgba(255,255,255,0.08);padding:8px 16px;border-radius:8px;${totalGeral>0?'':'display:none;'}">
           <div style="font-size:10px;opacity:0.6;text-transform:uppercase;">LLH</div>
           <div id="hdr-llh" style="font-size:15px;font-weight:700;color:#A8D5A2;">${fmt(llh)}</div>
         </div>
-        <button onclick="limparOrcamentoAtual()" style="background:#6c757d;color:white;border:none;padding:9px 14px;border-radius:6px;cursor:pointer;font-size:${isMobile()?'11px':'13px'};font-weight:600;flex-shrink:0;white-space:nowrap;" title="Apagar todo o orçamento e começar do zero">🗑 Limpar</button>
-        <button onclick="salvarEImprimir()" style="background:#006382;color:white;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:${isMobile()?'11px':'13px'};font-weight:600;flex-shrink:0;white-space:nowrap;">🖨️ Salvar e Imprimir</button>
+        <button onclick="limparOrcamentoAtual()" style="background:#6c757d;color:white;border:none;padding:9px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;" title="Apagar todo o orçamento e começar do zero">🗑 Limpar</button>
+        <button onclick="salvarEImprimir()" style="background:#006382;color:white;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">🖨️ Salvar e Imprimir</button>
         <button onclick="salvarOrcamentoPedido()" style="background:#2E7D32;color:white;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">💾 Salvar</button>
-        <button id="hdr-btn-fechar" onclick="salvarEFecharPedido()" style="background:var(--gold);color:white;border:none;padding:${isMobile()?'7px 10px':'9px 18px'};border-radius:6px;cursor:pointer;font-size:${isMobile()?'11px':'13px'};font-weight:600;flex-shrink:0;white-space:nowrap;${totalGeral>0?'':'display:none;'}">✅ Fechar Pedido</button>
+        <button id="hdr-btn-fechar" onclick="salvarEFecharPedido()" style="background:var(--gold);color:white;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;${totalGeral>0?'':'display:none;'}">✅ Fechar Pedido</button>
       </div>
     </div>
 
-    <div style="max-width:${isMobile()?'100%':'1300px'};margin:0 auto;padding:${isMobile()?'8px':'20px'};">
+    <div style="max-width:1300px;margin:0 auto;padding:20px;">
 
       <!-- CABEÇALHO DO ORÇAMENTO -->
-      <div style="background:white;border-radius:8px;padding:${isMobile()?'12px':'20px'};margin-bottom:${isMobile()?'10px':'16px'};box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+      <div style="background:white;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
 
         <!-- Linha 1: Cliente · Telefone · Endereço · Status -->
-        <div id="orc-campos-header" style="display:grid;grid-template-columns:${isMobile()?'1fr':'2fr 1.2fr 2fr 1fr'};gap:12px;margin-bottom:14px;">
+        <div id="orc-campos-header" style="display:grid;grid-template-columns:2fr 1.2fr 2fr 1fr;gap:12px;margin-bottom:14px;">
           <div>
             <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">CLIENTE *</label>
             <input class="form-input" value="${orc.cliente||order.cliente||''}" oninput="orcamentoAtual.cliente=this.value" style="font-weight:600;">
@@ -8578,7 +8557,7 @@ function renderTelaOrcamentoPedido(order) {
         </div>
 
         <!-- Linha 2: Distância · Idas · Trânsito · Origem · Data -->
-        <div id="orc-campos-linha2" style="display:grid;grid-template-columns:${isMobile()?'1fr 1fr':'1fr 1fr 1.6fr 1.6fr 1.2fr'};gap:${isMobile()?'8px':'12px'};margin-bottom:14px;align-items:start;">
+        <div id="orc-campos-linha2" style="display:grid;grid-template-columns:1fr 1fr 1.6fr 1.6fr 1.2fr;gap:12px;margin-bottom:14px;align-items:start;">
           <div>
             <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">DISTÂNCIA (km) *</label>
             <input class="form-input" type="number" id="orc-distancia-tela"
@@ -8633,7 +8612,7 @@ function renderTelaOrcamentoPedido(order) {
         </div>
 
         <!-- Linha 4: Profissional · Responsável -->
-        <div id="orc-campos-linha4" style="display:grid;grid-template-columns:${isMobile()?'1fr':'1fr 1fr'};gap:12px;">
+        <div id="orc-campos-linha4" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
             <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">PROFISSIONAL DO PROJETO <span style="font-size:9px;color:#999;font-weight:400;">(arquiteto, designer...)</span></label>
             <input class="form-input" value="${orc.profissional||order.origemNome||''}"
@@ -8736,7 +8715,7 @@ function renderTelaOrcamentoPedido(order) {
         <span style="font-size:18px;">🧮</span>
         <span style="font-size:12px;font-weight:600;color:#333;">Desconto<br>Geral</span>
       </div>
-      <div class="orc-rodape-campos" style="flex:1;display:grid;grid-template-columns:${isMobile()?'1fr':'2fr 1fr 1fr'};gap:8px;">
+      <div class="orc-rodape-campos" style="flex:1;display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;">
         <div><label style="font-size:10px;color:#666;">Observações gerais</label><input class="form-input" style="padding:6px 10px;" value="${orc.obsGeral||''}" oninput="orcamentoAtual.obsGeral=this.value"></div>
         <div><label style="font-size:10px;color:#666;">Prazo de Entrega</label><input class="form-input" style="padding:6px 10px;" value="${orc.prazoEntrega||''}" oninput="orcamentoAtual.prazoEntrega=this.value"></div>
         <div><label style="font-size:10px;color:#666;">Desconto (%)</label><input class="form-input" style="padding:6px 10px;" type="number" value="${orc.desconto||0}" oninput="orcamentoAtual.desconto=parseFloat(this.value)||0"></div>
@@ -8756,8 +8735,8 @@ function renderTelaOrcamentoPedido(order) {
   }
   // Inicializa autocompletes após render
   setTimeout(inicializarAutocompletes, 50);
-
-  setTimeout(aplicarEstilosMobile, 50);}
+}
+setTimeout(aplicarEstilosMobile,50);
 
 function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
   const pedra = resolverPedra(pedras, item);
@@ -8890,7 +8869,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
     <!-- Cabeçalho do item -->
     <div style="background:#f8f8f8;border-bottom:1px solid #e0e0e0;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
       <div style="font-size:13px;font-weight:700;color:#333;min-width:60px;">ITEM ${idx+1}</div>
-      <div class="item-orcamento-grid" style="flex:1;display:grid;grid-template-columns:${isMobile()?'1fr 1fr':'1.5fr 1.5fr 1fr 2fr'};gap:8px;align-items:center;">
+      <div class="item-orcamento-grid" style="flex:1;display:grid;grid-template-columns:1.5fr 1.5fr 1fr 2fr;gap:8px;align-items:center;">
         <div><label style="font-size:10px;color:#666;">Nome do Item *</label>
           <input class="form-input" style="padding:6px 10px;" value="${item.nome||''}" placeholder="bancada, pia..."
             oninput="orcamentoAtual.itens[${idx}].nome=this.value"></div>
@@ -10230,13 +10209,13 @@ function renderProdutos() {
         ? `<div style="padding:40px;text-align:center;color:#999;font-size:14px;">Nenhuma chapa cadastrada. Faça login para carregar as chapas automaticamente.</div>`
         : pedras.map(p => {
             const grupo = grupos.find(g => g.id === p.grupoId);
-            return `<div class="produto-row" style="${isMobile()?'display:flex;flex-wrap:wrap;gap:4px 10px;padding:12px 14px;border-bottom:1px solid #eee;align-items:center;':'display:grid;grid-template-columns:2.5fr 1fr 1fr 1fr 2fr 100px;gap:8px;padding:11px 16px;border-bottom:1px solid #f0f0f0;align-items:center;'};font-size:13px;">
-              <div class="produto-nome" style="${isMobile()?'flex:1 1 100%;font-size:14px;font-weight:700;margin-bottom:2px;':'font-weight:600;'};color:#222;">${p.nome}</div>
-              <div class="produto-custo" style="font-weight:700;color:#006382;${isMobile()?'flex:0 0 auto;':''}">${isMobile()?'R$ '+((p.custoM2||0).toFixed(2).replace('.',',')):'R$ '+((p.custoM2||0).toFixed(2).replace('.',','))}</div>
-              <div class="produto-quebra" style="${isMobile()?'font-size:12px;color:#666;':''}">${isMobile()?'Quebra: '+((p.quebra??10)+'%'):(p.quebra??10)+'%'}</div>
-              <div class="produto-margem" style="${isMobile()?'font-size:12px;color:#666;':''}">${isMobile()?'Margem: '+((p.margem||30)+'%'):(p.margem||30)+'%'}</div>
-              <div class="produto-grupo" style="font-size:11px;color:#888;${isMobile()?'flex:1 1 auto;':''}">${isMobile()&&grupo?.nome?'Grupo: '+grupo.nome:(grupo?.nome||'—')}</div>
-              <div class="produto-row-btns" style="display:flex;gap:6px;${isMobile()?'margin-left:auto;':''}">
+            return `<div class="produto-row" style="display:grid;grid-template-columns:2.5fr 1fr 1fr 1fr 2fr 100px;gap:8px;padding:11px 16px;border-bottom:1px solid #f0f0f0;align-items:center;font-size:13px;">
+              <div class="produto-nome" style="font-weight:600;color:#222;">${p.nome}</div>
+              <div class="produto-custo" style="font-weight:700;color:#006382;">R$ ${(p.custoM2||0).toFixed(2).replace('.',',')}</div>
+              <div class="produto-quebra">${p.quebra??10}%</div>
+              <div class="produto-margem">${p.margem||30}%</div>
+              <div class="produto-grupo" style="font-size:11px;color:#666;">${grupo?.nome||'—'}</div>
+              <div class="produto-row-btns" style="display:flex;gap:6px;">
                 <button onclick="abrirFormProduto('${p.id}')" style="background:#006382;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;">✏️</button>
                 <button onclick="deletarProduto('${p.id}')" style="background:#dc3545;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;">🗑</button>
               </div>
@@ -10248,8 +10227,8 @@ function renderProdutos() {
 
   const inputEl = document.getElementById('busca-produto-input');
   if (inputEl) { const v=inputEl.value; inputEl.focus(); inputEl.setSelectionRange(v.length, v.length); }
-  setTimeout(aplicarEstilosMobile, 0);
 }
+setTimeout(aplicarEstilosMobile,50);
 
 function buscarProduto(texto) {
   _buscaProdutoTexto = texto;

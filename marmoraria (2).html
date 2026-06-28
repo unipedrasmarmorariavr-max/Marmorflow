@@ -7998,6 +7998,11 @@ function novoOrcamento() {
   orcamentoAtual = {
     id: 'ORC-' + Date.now(),
     cliente: '',
+    telefone: '',
+    enderecoObra: '',
+    cidade: '',
+    obsGeral: '',
+    dataPrevista: '',
     distancia: 0,
     transito: 'rapido',
     status: 'Em aberto',
@@ -8011,6 +8016,12 @@ function novoOrcamento() {
 function editarOrcamento(id) {
   const orcs = getOrcamentos();
   orcamentoAtual = JSON.parse(JSON.stringify(orcs.find(o => o.id === id)));
+  // Garante campos novos em orçamentos antigos
+  if (!orcamentoAtual.telefone) orcamentoAtual.telefone = '';
+  if (!orcamentoAtual.enderecoObra) orcamentoAtual.enderecoObra = '';
+  if (!orcamentoAtual.cidade) orcamentoAtual.cidade = '';
+  if (!orcamentoAtual.obsGeral) orcamentoAtual.obsGeral = '';
+  if (!orcamentoAtual.dataPrevista) orcamentoAtual.dataPrevista = '';
   renderFormOrcamento();
   openModal('modal-novo-orc');
 }
@@ -8489,11 +8500,15 @@ function renderTelaOrcamentoPedido(order) {
       <!-- CABEÇALHO DO ORÇAMENTO -->
       <div style="background:white;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
 
-        <!-- Linha 1: Cliente · Endereço · Status -->
-        <div id="orc-campos-header" style="display:grid;grid-template-columns:2fr 2fr 1fr;gap:12px;margin-bottom:14px;">
+        <!-- Linha 1: Cliente · Telefone · Endereço · Status -->
+        <div id="orc-campos-header" style="display:grid;grid-template-columns:2fr 1.2fr 2fr 1fr;gap:12px;margin-bottom:14px;">
           <div>
             <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">CLIENTE *</label>
             <input class="form-input" value="${orc.cliente||order.cliente||''}" oninput="orcamentoAtual.cliente=this.value" style="font-weight:600;">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">TELEFONE</label>
+            <input class="form-input" value="${orc.telefone||order.telefone||''}" oninput="orcamentoAtual.telefone=this.value" placeholder="(24) 99999-9999">
           </div>
           <div>
             <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">ENDEREÇO DA OBRA</label>
@@ -9707,7 +9722,7 @@ function imprimirOrcamento() {
     + '<td style="padding:5px 0;width:140px;color:#888;font-size:11px;">Distância de Entrega</td>'
     + '<td style="padding:5px 0;font-weight:700;">' + (orc.distancia||0) + ' km</td>'
     + '</tr>'
-    + (orc.telefone ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">Telefone(s)</td><td style="padding:6px 0;font-weight:700;" colspan="3">' + orc.telefone + '</td></tr>' : '')
+    + ((orc.telefone||orc.tel) ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">Telefone(s)</td><td style="padding:6px 0;font-weight:700;" colspan="3">' + (orc.telefone||orc.tel) + '</td></tr>' : '')
     + (orc.enderecoObra ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">Endereço da Obra</td><td style="padding:6px 0;font-weight:600;" colspan="3">' + orc.enderecoObra + (orc.cidade ? ' — ' + orc.cidade : '') + '</td></tr>' : '')
     + (orc.obsGeral ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">Observações</td><td style="padding:6px 0;font-weight:600;" colspan="3">' + orc.obsGeral + '</td></tr>' : '')
     + (orc.dataPrevista ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">Data Prevista</td><td style="padding:6px 0;font-weight:600;" colspan="3">' + orc.dataPrevista + '</td></tr>' : '')

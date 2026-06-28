@@ -774,6 +774,93 @@ window.addEventListener('resize', () => {
 });
 // ───────────────────────────────────────────────────────────
 
+
+// ── MOBILE PATCHER — aplica estilos após renderização ────────
+function aplicarEstilosMobile() {
+  if (!isMobile()) return;
+  
+  // Financeiro - cards resumo
+  const finCards = document.getElementById('fin-cards-resumo');
+  if (finCards) {
+    finCards.style.gridTemplateColumns = '1fr 1fr';
+    finCards.style.gap = '8px';
+  }
+  
+  // Financeiro - header
+  const finHeader = document.querySelector('#panel-financeiro .content > div, #financeiro-content > div');
+  
+  // Orçamento - campos header
+  const orcHeader = document.getElementById('orc-campos-header');
+  if (orcHeader) { orcHeader.style.gridTemplateColumns = '1fr'; }
+  
+  const orcLinha2 = document.getElementById('orc-campos-linha2');
+  if (orcLinha2) { orcLinha2.style.gridTemplateColumns = '1fr 1fr'; }
+  
+  const orcLinha4 = document.getElementById('orc-campos-linha4');
+  if (orcLinha4) { orcLinha4.style.gridTemplateColumns = '1fr'; }
+  
+  // Orçamento - header top
+  const orcTop = document.getElementById('orc-header-top');
+  if (orcTop) {
+    orcTop.style.flexDirection = 'column';
+    orcTop.style.padding = '8px 10px';
+  }
+  
+  // Orçamento - botões do header
+  const orcBtns = orcTop ? orcTop.querySelector('div:nth-child(2)') : null;
+  if (orcBtns) {
+    orcBtns.style.overflowX = 'auto';
+    orcBtns.style.flexWrap = 'nowrap';
+    orcBtns.style.webkitOverflowScrolling = 'touch';
+  }
+  
+  // Orçamento - max-width container
+  const orcContent = document.querySelector('#orcamento-pedido-content div[style*="max-width:1300px"], #orcamento-pedido-content div[style*="max-width:100%"]');
+  if (orcContent) { orcContent.style.padding = '8px'; orcContent.style.maxWidth = '100%'; }
+  
+  // Orçamento - item grid
+  document.querySelectorAll('.item-orcamento-grid').forEach(el => {
+    el.style.gridTemplateColumns = '1fr 1fr';
+  });
+  
+  // Rodapé orçamento
+  const rodape = document.querySelector('.orc-rodape-campos');
+  if (rodape) { rodape.style.gridTemplateColumns = '1fr'; }
+  
+  // Produtos - tabela header
+  const prodHeader = document.querySelector('.produtos-table-header');
+  if (prodHeader) { prodHeader.style.display = 'none'; }
+  
+  // Produtos - linhas viram cards
+  document.querySelectorAll('.produto-row').forEach(el => {
+    el.style.display = 'flex';
+    el.style.flexWrap = 'wrap';
+    el.style.gap = '4px 10px';
+    el.style.padding = '12px';
+    el.style.gridTemplateColumns = 'none';
+  });
+  document.querySelectorAll('.produto-nome').forEach(el => {
+    el.style.flex = '1 1 100%';
+    el.style.fontSize = '14px';
+    el.style.fontWeight = '700';
+    el.style.marginBottom = '4px';
+  });
+  document.querySelectorAll('.produto-custo').forEach(el => {
+    el.style.flex = '0 0 auto';
+    el.style.fontSize = '14px';
+  });
+  document.querySelectorAll('.produto-quebra, .produto-margem').forEach(el => {
+    el.style.fontSize = '12px';
+    el.style.color = '#666';
+    el.style.flex = '0 0 auto';
+  });
+  document.querySelectorAll('.produto-row-btns').forEach(el => {
+    el.style.marginLeft = 'auto';
+    el.style.flex = '0 0 auto';
+  });
+}
+// ─────────────────────────────────────────────────────────────
+
 let currentUser = null, selectedProfile = null;
 let orders = [], editingId = null, fechandoId = null;
 let tempImages = { croqui:[], local:[] };
@@ -4599,7 +4686,8 @@ async function renderFinanceiro() {
     const el = document.getElementById('fin-analise-inner');
     if (el) el.innerHTML = renderAnaliseFinanceiro(txMes, filtroMes);
   }, 50);
-}
+
+  setTimeout(aplicarEstilosMobile, 50);}
 
 function renderAnaliseFinanceiro(txMes, filtroMes) {
   const saidas = txMes.filter(function(t){ return t.tipo === 'saida'; });
@@ -8668,7 +8756,8 @@ function renderTelaOrcamentoPedido(order) {
   }
   // Inicializa autocompletes após render
   setTimeout(inicializarAutocompletes, 50);
-}
+
+  setTimeout(aplicarEstilosMobile, 50);}
 
 function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
   const pedra = resolverPedra(pedras, item);
@@ -10159,6 +10248,7 @@ function renderProdutos() {
 
   const inputEl = document.getElementById('busca-produto-input');
   if (inputEl) { const v=inputEl.value; inputEl.focus(); inputEl.setSelectionRange(v.length, v.length); }
+  setTimeout(aplicarEstilosMobile, 0);
 }
 
 function buscarProduto(texto) {

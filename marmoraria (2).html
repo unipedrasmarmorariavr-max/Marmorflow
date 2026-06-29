@@ -5338,6 +5338,18 @@ async function renderFinanceiro() {
       </div>
     </div>
 
+    <!-- CONTAS A RECEBER MANUAIS -->
+    <div id="fin-contas-receber" style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;margin-top:16px;">
+      <div style="background:#2E7D32;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:14px;font-weight:700;">💰 Contas a Receber — Lançamentos Manuais</div>
+          <div style="font-size:12px;opacity:.8;" id="cr-subtitulo">Carregando...</div>
+        </div>
+        <button onclick="abrirModalContaReceber()" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Nova</button>
+      </div>
+      <div id="cr-lista">Carregando...</div>
+    </div>
+
     <!-- PAINEL CONTAS A PAGAR -->
     <div id="fin-painel-pagar" style="display:${abaFin==='pagar'?'block':'none'}">
       ${contasVencidas.length>0?`
@@ -5528,6 +5540,7 @@ function finSwitchAba(aba) {
     if (btn) { btn.style.background = a===aba?'var(--gold)':'var(--cream-dark)'; btn.style.color = a===aba?'white':'var(--stone)'; }
     if (panel) panel.style.display = a===aba?'block':'none';
   });
+  if (aba === 'receber') setTimeout(renderContasReceber, 200);
 }
 
 function abrirConfirmarRecebimento(pedidoId, cliente, valorEsperado) {
@@ -11707,3 +11720,131 @@ function toggleOrigemOrc() {
 
 </body>
 </html>
+<script>
+// CONTAS A RECEBER MANUAIS
+async function carregarContasReceber() {
+  try {
+    const { data } = await getSB().from('contas_receber').select('*').order('vencimento', { ascending: true });
+    return data || [];
+  } catch(e) { return []; }
+}
+
+async function renderContasReceber() {
+  const lista = document.getElementById('cr-lista');
+  const subtitulo = document.getElementById('cr-subtitulo');
+  if (!lista) return;
+  const contas = await carregarContasReceber();
+  const pendentes = contas.filter(c => c.status === 'pendente');
+  const totalPendente = pendentes.reduce((s,c) => s+(parseFloat(c.valor)||0), 0);
+  const fmtV = v => 'R$ '+(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  const fmtDt = d => d ? d.substring(8,10)+'/'+d.substring(5,7)+'/'+d.substring(0,4) : '-';
+  if (subtitulo) subtitulo.textContent = pendentes.length + ' pendente(s) · ' + fmtV(totalPendente);
+  const hoje = new Date().toISOString().substring(0,10);
+  if (!contas.length) {
+    lista.innerHTML = '<div style="padding:30px;text-align:center;color:#888;">Nenhuma conta a receber lançada. Clique em + Nova para adicionar.</div>';
+    return;
+  }
+  lista.innerHTML = contas.map(c => {
+    const vencida = c.status === 'pendente' && c.vencimento && c.vencimento < hoje;
+    const cor = c.status === 'recebido' ? '#2E7D32' : vencida ? '#B85A4A' : '#8B6914';
+    const label = c.status === 'recebido' ? '✅ Recebido' : vencida ? '⚠️ Vencida' : '🕐 Pendente';
+    return `<div style="padding:14px 20px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:160px;">
+        <div style="font-size:14px;font-weight:700;color:#333;">${c.cliente}</div>
+        <div style="font-size:12px;color:#888;">${c.descricao||''}</div>
+        ${c.vencimento ? `<div style="font-size:11px;color:#888;margin-top:2px;">📅 Venc: ${fmtDt(c.vencimento)}</div>` : ''}
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:17px;font-weight:800;color:#333;">${fmtV(parseFloat(c.valor))}</div>
+        <span style="background:${cor}22;color:${cor};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;">${label}</span>
+      </div>
+      <div style="display:flex;gap:6px;">
+        ${c.status === 'pendente' ? `<button onclick="baixarContaReceber('${c.id}')" style="background:#2E7D32;color:white;border:none;padding:7px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">💵 Recebido</button>` : ''}
+        <button onclick="excluirContaReceber('${c.id}')" style="background:#eee;color:#666;border:none;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:12px;">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function abrirModalContaReceber() {
+  let m = document.getElementById('modal-conta-receber');
+  if (m) m.remove();
+  m = document.createElement('div');
+  m.id = 'modal-conta-receber';
+  m.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
+  m.innerHTML = `
+    <div style="background:white;border-radius:16px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+      <div style="background:#2E7D32;color:white;padding:16px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:15px;font-weight:700;">💰 Nova Conta a Receber</div>
+        <button onclick="document.getElementById('modal-conta-receber').remove()" style="background:none;border:none;color:white;font-size:22px;cursor:pointer;">×</button>
+      </div>
+      <div style="padding:20px;">
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px;font-weight:600;color:#333;display:block;margin-bottom:6px;">Cliente *</label>
+          <input id="cr-cliente" type="text" placeholder="Nome do cliente" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px;font-weight:600;color:#333;display:block;margin-bottom:6px;">Descrição</label>
+          <input id="cr-descricao" type="text" placeholder="Ex: Pedido cozinha, bancada banheiro..." style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px;font-weight:600;color:#333;display:block;margin-bottom:6px;">Valor *</label>
+          <input id="cr-valor" type="number" step="0.01" placeholder="0,00" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:20px;">
+          <label style="font-size:13px;font-weight:600;color:#333;display:block;margin-bottom:6px;">Vencimento</label>
+          <input id="cr-vencimento" type="date" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;">
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button onclick="salvarContaReceber()" style="flex:1;background:#2E7D32;color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✅ Salvar</button>
+          <button onclick="document.getElementById('modal-conta-receber').remove()" style="background:#eee;color:#333;border:none;padding:12px 16px;border-radius:8px;font-size:14px;cursor:pointer;">Cancelar</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(m);
+}
+
+async function salvarContaReceber() {
+  const cliente = document.getElementById('cr-cliente').value.trim();
+  const descricao = document.getElementById('cr-descricao').value.trim();
+  const valor = parseFloat(document.getElementById('cr-valor').value);
+  const vencimento = document.getElementById('cr-vencimento').value;
+  if (!cliente || !valor) { alert('Preencha cliente e valor!'); return; }
+  const { error } = await getSB().from('contas_receber').insert({ cliente, descricao, valor, vencimento: vencimento||null, status: 'pendente' });
+  if (error) { showNotif('Erro ao salvar.', 'error'); return; }
+  document.getElementById('modal-conta-receber').remove();
+  showNotif('✅ Conta a receber salva!', 'success');
+  renderContasReceber();
+}
+
+async function baixarContaReceber(id) {
+  if (!confirm('Confirmar recebimento?\nIsso vai lançar uma entrada no financeiro.')) return;
+  const { data: conta } = await getSB().from('contas_receber').select('*').eq('id', id).single();
+  if (!conta) return;
+  const hoje = new Date().toISOString().substring(0,10);
+  await getSB().from('transacoes').insert({
+    tipo: 'entrada', valor: conta.valor,
+    descricao: 'Recebimento — ' + conta.cliente + (conta.descricao ? ' (' + conta.descricao + ')' : ''),
+    data: hoje, categoria: 'Recebimento de Cliente', banco: 'Sicredi', forma: 'pix', created_by: 'dono'
+  });
+  await getSB().from('contas_receber').update({ status: 'recebido' }).eq('id', id);
+  showNotif('✅ Recebimento registrado e entrada lançada!', 'success');
+  renderContasReceber();
+  renderFinanceiro();
+}
+
+async function excluirContaReceber(id) {
+  if (!confirm('Excluir esta conta a receber?')) return;
+  await getSB().from('contas_receber').delete().eq('id', id);
+  showNotif('Conta excluída.', 'success');
+  renderContasReceber();
+}
+
+// Carregar contas a receber quando abrir aba
+const _origRenderFin = typeof renderFinanceiro === 'function' ? renderFinanceiro : null;
+document.addEventListener('click', function(e) {
+  if (e.target && e.target.textContent && e.target.textContent.includes('A Receber')) {
+    setTimeout(renderContasReceber, 300);
+  }
+});
+</script>

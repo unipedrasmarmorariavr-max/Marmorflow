@@ -4632,8 +4632,13 @@ async function confirmarImportacaoCaixa() {
   if (!confirm(`Importar ${sel.length} lançamentos da Caixa?\n\n${saiQtd} saídas: R$ ${totalSai.toLocaleString('pt-BR',{minimumFractionDigits:2})}\n${entQtd} entradas: R$ ${totalEnt.toLocaleString('pt-BR',{minimumFractionDigits:2})}\n\nEsta ação não pode ser desfeita.`)) return;
   document.getElementById('modal-caixa').remove();
   showLoading('Importando lançamentos da Caixa...');
-  let ok = 0, err = 0;
+  let ok = 0, err = 0, dup = 0;
+  // Busca lançamentos existentes da Caixa para evitar duplicatas
+  const { data: existentes } = await getSB().from('transacoes').select('data,valor,tipo').eq('banco','Caixa');
+  const chaves = new Set((existentes||[]).map(e => e.data+'|'+parseFloat(e.valor).toFixed(2)+'|'+e.tipo));
   for (const t of sel) {
+    const chave = t.data+'|'+t.valor.toFixed(2)+'|'+(t.tipo||'saida');
+    if (chaves.has(chave)) { dup++; continue; }
     const { error } = await getSB().from('transacoes').insert({
       tipo: t.tipo || 'saida', valor: t.valor, descricao: t.desc,
       data: t.data, categoria: t.cat,
@@ -4642,8 +4647,10 @@ async function confirmarImportacaoCaixa() {
     if (error) err++; else ok++;
   }
   hideLoading();
-  if (err === 0) showNotif(`✅ ${ok} lançamentos da Caixa importados!`, 'success');
-  else showNotif(`⚠️ ${ok} importados, ${err} com erro.`, 'error');
+  let msg = `✅ ${ok} lançamentos da Caixa importados!`;
+  if (dup > 0) msg += ` (${dup} duplicatas ignoradas)`;
+  if (err > 0) msg += ` ⚠️ ${err} com erro`;
+  showNotif(msg, err===0?'success':'error');
   renderFinanceiro();
 }
 

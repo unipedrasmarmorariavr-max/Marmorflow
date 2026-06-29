@@ -10652,13 +10652,12 @@ function renderGastos() {
             ${sg.itens.map((it, iti) => {
               const pctItem = totalGeral > 0 ? (it.valor/totalGeral*100).toFixed(1) : '0.0';
               return `
-              <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-bottom:1px solid var(--cream-dark);">
+              <div style="display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">
                 <input class="form-input" style="flex:1;min-width:0;padding:5px 6px;font-size:11px;" value="${it.nome}"
                   onblur="atualizarGasto('${grupoKey}',${sgi},${iti},'nome',this.value)">
-                <input class="form-input" style="width:80px;padding:5px 6px;font-size:11px;text-align:right;" value="R$ ${(it.valor||0).toFixed(2).replace('.',',')}"
+                <input class="form-input" style="width:90px;flex-shrink:0;padding:5px 6px;font-size:11px;text-align:right;" value="R$ ${(it.valor||0).toFixed(2).replace('.',',')}"
                   onblur="atualizarGastoValor('${grupoKey}',${sgi},${iti},this.value)">
-                <span style="font-size:10px;color:var(--stone-light);width:28px;text-align:right;flex-shrink:0;">${pctItem}</span>
-                <button onclick="deletarItemGasto('${grupoKey}',${sgi},${iti})" style="background:#FDEAEA;border:none;color:#B85A4A;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;">🗑</button>
+                <button onclick="deletarItemGasto('${grupoKey}',${sgi},${iti})" style="background:#FDEAEA;border:none;color:#B85A4A;padding:4px 6px;border-radius:4px;cursor:pointer;font-size:11px;flex-shrink:0;">🗑</button>
               </div>`;
             }).join('')}
             <div style="padding:8px 12px;background:var(--cream);display:flex;justify-content:space-between;align-items:center;">

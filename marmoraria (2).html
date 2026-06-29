@@ -4294,6 +4294,299 @@ async function importarSaidasJunho2026() {
 }
 
 // ============================================================
+// IMPORTADOR TEXTO CAIXA — classificação automática
+// ============================================================
+function abrirImportadorCaixa() {
+  let modal = document.getElementById('modal-caixa');
+  if (modal) modal.remove();
+  modal = document.createElement('div');
+  modal.id = 'modal-caixa';
+  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
+  modal.innerHTML = `
+    <div style="background:white;border-radius:16px;width:100%;max-width:580px;box-shadow:0 20px 60px rgba(0,0,0,.4);max-height:90vh;overflow-y:auto;">
+      <div style="background:#1565C0;color:white;padding:18px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:1;">
+        <div style="font-size:16px;font-weight:700;">🏦 Importar extrato Caixa</div>
+        <button onclick="document.getElementById('modal-caixa').remove()" style="background:none;border:none;color:white;font-size:22px;cursor:pointer;">×</button>
+      </div>
+      <div style="padding:20px;">
+        <p style="color:#555;font-size:14px;margin:0 0 12px;">Abra o extrato da Caixa no navegador, selecione tudo (Ctrl+A), copie (Ctrl+C) e cole abaixo:</p>
+        <textarea id="caixa-texto" placeholder="Cole o texto do extrato aqui..." style="width:100%;height:180px;border:1px solid #ddd;border-radius:8px;padding:10px;font-size:12px;resize:vertical;box-sizing:border-box;font-family:monospace;"></textarea>
+        <button onclick="processarCaixa()" style="margin-top:10px;background:#1565C0;color:white;border:none;padding:10px 24px;border-radius:8px;font-size:14px;cursor:pointer;width:100%;">🔍 Analisar extrato</button>
+        <div id="caixa-preview" style="display:none;margin-top:16px;">
+          <div id="caixa-stats" style="background:#e3f2fd;border-radius:8px;padding:12px;margin-bottom:12px;font-size:13px;"></div>
+          <div style="max-height:280px;overflow-y:auto;border:1px solid #eee;border-radius:8px;">
+            <table id="caixa-table" style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead style="background:#f5f5f5;position:sticky;top:0;">
+                <tr>
+                  <th style="padding:8px;text-align:left;border-bottom:1px solid #eee;">Data</th>
+                  <th style="padding:8px;text-align:left;border-bottom:1px solid #eee;">Descrição</th>
+                  <th style="padding:8px;text-align:right;border-bottom:1px solid #eee;">Valor</th>
+                  <th style="padding:8px;text-align:left;border-bottom:1px solid #eee;">Categoria</th>
+                  <th style="padding:8px;text-align:center;border-bottom:1px solid #eee;">✓</th>
+                </tr>
+              </thead>
+              <tbody id="caixa-tbody"></tbody>
+            </table>
+          </div>
+          <div style="margin-top:16px;display:flex;gap:10px;">
+            <button onclick="confirmarImportacaoCaixa()" style="flex:1;background:#1565C0;color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✅ Importar selecionados</button>
+            <button onclick="document.getElementById('modal-caixa').remove()" style="background:#eee;color:#333;border:none;padding:12px 16px;border-radius:8px;font-size:14px;cursor:pointer;">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+let caixaTransacoes = [];
+
+function processarCaixa() {
+  const texto = document.getElementById('caixa-texto').value.trim();
+  if (!texto) { alert('Cole o texto do extrato primeiro.'); return; }
+
+  const linhas = texto.split('\n').map(l => l.trim()).filter(l => l);
+  const transacoes = [];
+  const meses = { JAN:'01',FEV:'02',MAR:'03',ABR:'04',MAI:'05',JUN:'06',JUL:'07',AGO:'08',SET:'09',OUT:'10',NOV:'11',DEZ:'12' };
+
+  // Detecta ano do extrato
+  const anoMatch = texto.match(/\b(202\d)\b/);
+  const ano = anoMatch ? anoMatch[1] : '2026';
+
+  let i = 0;
+  while (i < linhas.length) {
+    const linha = linhas[i];
+
+    // Detecta valor (ex: -R$ 192,32 ou R$ 8.000,00)
+    const valorMatch = linha.match(/^(-?)R\$\s*([\d.]+,\d{2})$/);
+    if (!valorMatch) { i++; continue; }
+
+    const negativo = valorMatch[1] === '-';
+    const valorStr = valorMatch[2].replace(/\./g,'').replace(',','.');
+    const valor = parseFloat(valorStr);
+    if (isNaN(valor)) { i++; continue; }
+
+    // Detecta data na linha seguinte (ex: 30JAN ou 05MAR)
+    const dataMatch = (linhas[i+1] || '').match(/^(\d{2})([A-Z]{3})$/);
+    if (!dataMatch) { i++; continue; }
+
+    const dia = dataMatch[1];
+    const mesAbr = dataMatch[2];
+    const mes = meses[mesAbr] || '01';
+    const data = `${ano}-${mes}-${dia}`;
+
+    // Busca descrição: linha antes do valor
+    // Padrão: TIPO\nNOME\nVALOR\nDATA ou TIPO\nVALOR\nDATA
+    let desc = '';
+    let tipo = '';
+    if (i >= 2) {
+      // Linha i-1 pode ser nome do favorecido, linha i-2 o tipo
+      const possNome = linhas[i-1] || '';
+      const possTipo = linhas[i-2] || '';
+      // Se possNome parece nome (não é tipo de transação conhecido)
+      const tiposConhecidos = /^(Pix Enviado|Pix Recebido|Deb Pix Chave|Cred Pix Chave|Tar Pix|Compra Cartao Debito|Pag Boleto IBC|Pag Luz|Db DARF|Cobranca de Juros|Debito de IOF|Mensalidade|Pagamento Agua|Ston|Saldo do dia)/i;
+      if (!tiposConhecidos.test(possNome) && tiposConhecidos.test(possTipo)) {
+        tipo = possTipo;
+        desc = possNome;
+      } else if (tiposConhecidos.test(possNome)) {
+        tipo = possNome;
+        desc = '';
+      }
+    }
+
+    const textoCompleto = (tipo + ' ' + desc).trim();
+
+    // Só saídas
+    if (!negativo) { i += 2; continue; }
+    // Ignorar Tar Pix (tarifas mínimas)
+    if (/^Tar Pix$/i.test(tipo)) { i += 2; continue; }
+    // Ignorar Saldo do dia
+    if (/Saldo do dia/i.test(tipo)) { i += 2; continue; }
+    // Ignorar transferências para Unipedras (interno)
+    if (/UNIPEDRAS BENEFIC/i.test(desc)) { i += 2; continue; }
+    // Ignorar Eduarda/Kely R$200 exatos (dívida)
+    if (/EDUARDA LETICIA/i.test(desc) && valor === 200) { i += 2; continue; }
+    if (/K C P DE A MACHADO/i.test(desc) && valor === 200) { i += 2; continue; }
+
+    // Classificar
+    const cls = classificarCaixa(textoCompleto, desc, tipo, valor);
+    if (cls.ignorar) { i += 2; continue; }
+
+    transacoes.push({ data, memo: textoCompleto, desc: cls.desc, valor, cat: cls.cat, incluir: true });
+    i += 2;
+  }
+
+  caixaTransacoes = transacoes;
+  renderTabelaCaixa(transacoes);
+}
+
+function classificarCaixa(texto, nome, tipo, valor) {
+  const t = (texto + ' ' + nome).toUpperCase();
+
+  // Juros e IOF
+  if (/COBRANCA DE JUROS/.test(t)) return { cat: 'Despesas Financeiras (Banco)', desc: 'Juros cheque especial — Caixa' };
+  if (/DEBITO DE IOF/.test(t)) return { cat: 'Despesas Financeiras (Banco)', desc: 'IOF — Caixa' };
+  if (/DB DARF RFB|DEBITO ARRECAD|DB DARF/.test(t)) return { cat: 'Impostos', desc: 'Impostos — DARF RFB (Caixa)' };
+  if (/MINISTERIO DA FAZ/.test(t)) return { cat: 'Impostos', desc: 'Impostos — DARF (Caixa)' };
+  if (/MENSALIDADE CESTA/.test(t)) return { cat: 'Despesas Financeiras (Banco)', desc: 'Tarifa bancária — Caixa mensalidade' };
+
+  // Fornecedores
+  if (/IGRAMAR/.test(t)) return { cat: 'Fornecedor', desc: 'Fornecedor pedra — Igramar Ltda (Caixa)' };
+  if (/GUIDONI/.test(t)) return { cat: 'Fornecedor', desc: 'Fornecedor pedra — Guidoni (Caixa)' };
+  if (/EWERTON VINICIUS/.test(t)) return { cat: 'Fornecedor', desc: 'Fornecedor chapa — Ewerton Vinicius (Caixa)' };
+  if (/ROSIMERI MOREIRA/.test(t)) return { cat: 'Fornecedor', desc: 'Fornecedor chapa — Rosimeri Moreira (Caixa)' };
+  if (/BAMBINI KIDS/.test(t)) return { cat: 'Fornecedor', desc: 'Frete chapa — Bambini Kids (Caixa)' };
+  if (/VICTOR HUGO|VIKTOR HUGO/.test(t)) return { cat: 'Fornecedor', desc: 'Fornecedor — Victor Hugo (Caixa)' };
+  if (/GRANILUXI/.test(t)) return { cat: 'Fornecedor', desc: 'Fornecedor chapa — Graniluxi (Caixa)' };
+  if (/LAKA GRAN/.test(t)) return { cat: 'Fornecedor', desc: 'Fornecedor chapa — Laka Granitos (Caixa)' };
+  if (/MONTENEGRO MARMORAR/.test(t)) return { cat: 'Fornecedor', desc: 'Fornecedor chapa — Montenegro (Caixa)' };
+  if (/JOANA GARIOLLI|JOSIANA GARI/.test(t)) return { cat: 'Fornecedor', desc: 'Fornecedor — Joana Gariolli (Caixa)' };
+  if (/REZOM MARMORE/.test(t)) return { cat: 'Fornecedor', desc: 'Fornecedor pedra — Rezom (Caixa)' };
+  if (/AZUL MAR GRANITOS/.test(t)) return { cat: 'Fornecedor', desc: 'Fornecedor pedra — Azul Mar Granitos (Caixa)' };
+
+  // Insumos
+  if (/MELO COMERCIO/.test(t)) return { cat: 'Insumos de Produção', desc: 'Insumos produção — Melo Comércio (Caixa)' };
+  if (/FERRAMAR/.test(t)) return { cat: 'Insumos de Instalação', desc: 'Insumos — Ferramar (Caixa)' };
+  if (/LIMAFER/.test(t)) return { cat: 'Insumos de Instalação', desc: 'Insumos — Limafer (Caixa)' };
+  if (/CAPOBIANGO/.test(t)) return { cat: 'Insumos de Produção', desc: 'Insumos — Capobiango (Caixa)' };
+  if (/MATERIAL DE CONSTRU/.test(t)) return { cat: 'Insumos de Produção', desc: 'Insumos — Material de Construção (Caixa)' };
+  if (/COMERCIAL JARAGUA/.test(t)) return { cat: 'Insumos de Produção', desc: 'Insumos — Comercial Jaragua (Caixa)' };
+  if (/SULGAS/.test(t)) return { cat: 'Combustível', desc: 'Combustível — Sulgas (Caixa)' };
+  if (/ADILSON PRADO/.test(t)) return { cat: 'Insumos de Instalação', desc: 'Insumos — Adilson Prado Moro (Caixa)' };
+  if (/ARNALDO RAMOS/.test(t)) return { cat: 'Insumos de Instalação', desc: 'Insumos — Arnaldo Ramos (Caixa)' };
+  if (/ANDRE LUIS CITERO/.test(t)) return { cat: 'Insumos de Instalação', desc: 'Insumos — André Luis Citero (Caixa)' };
+  if (/TECLA CHRISTINE|TECLA CHRIS/.test(t)) return { cat: 'Insumos de Instalação', desc: 'Insumos — Tecla Christine (Caixa)' };
+
+  // Folha
+  if (/FILIPE DA SILVA ABRAAO/.test(t)) return { cat: 'Folha de Pagamento', desc: 'Pró-labore — Filipe da Silva Abraão (Caixa)' };
+  if (/JONAS FERREIRA BRAND/.test(t)) return { cat: 'Folha de Pagamento', desc: 'Folha — Jonas Ferreira Brandão (Caixa)' };
+  if (/BRAS VIANA BELO/.test(t)) return { cat: 'Folha de Pagamento', desc: 'Folha — Bras Viana Belo (Caixa)' };
+  if (/ADEMIR APARECIDO LIMA/.test(t)) return { cat: 'Folha de Pagamento', desc: 'Folha — Ademir Aparecido Lima (Caixa)' };
+  if (/PAULO PEREIRA DA SILVA/.test(t)) return { cat: 'Folha de Pagamento', desc: 'Folha — Paulo Pereira da Silva (Caixa)' };
+  if (/DENISE CRISTINA LOPES/.test(t)) return { cat: 'Folha de Pagamento', desc: 'Folha — Denise Cristina Lopes (Caixa)' };
+  if (/RONALDO LUIZ THOMAZ/.test(t)) return { cat: 'Folha de Pagamento', desc: 'Folha — Ronaldo Luiz Thomaz (Caixa)' };
+  if (/REGINALDO DE AGUIAR/.test(t)) return { cat: 'Folha de Pagamento', desc: 'Folha — Reginaldo de Aguiar (Caixa)' };
+  if (/ARNALDO RAMOS DE CARVA/.test(t)) return { cat: 'Folha de Pagamento', desc: 'Folha — Arnaldo Ramos (Caixa)' };
+  if (/DEISE EMILIA MACHA/.test(t)) return { cat: 'Folha de Pagamento', desc: 'Folha — Deise Emília Macha (Caixa)' };
+
+  // Aluguel
+  if (/JOAO CARLOS BELO MANSU/.test(t)) return { cat: 'Aluguel', desc: 'Aluguel galpão — João Carlos Belo Mansur (Caixa)' };
+  if (/JOECI TIRELLO/.test(t)) return { cat: 'Alimentação (Vale/Cesta)', desc: 'Benefício — Joeci Tirello (Caixa)' };
+
+  // Combustível
+  if (/POSTO TETRA DIESEL/.test(t)) return { cat: 'Combustível', desc: 'Combustível — Posto Tetra Diesel (Caixa)' };
+  if (/POSTO BEIRA RIO|POSTO ROMA|POSTO BR 393|POSTO JR|POSTO GRANDE|POSTO PIGA|POSTO VINI|POSTO SANTA CRUZ|POSTO ORIGINAL|R-2 POSTO|POSTO METANO/.test(t)) return { cat: 'Combustível', desc: 'Combustível — Posto (Caixa)' };
+  if (/JV TRANSPORTE/.test(t)) return { cat: 'Combustível', desc: 'Transporte — JV Transporte (Caixa)' };
+
+  // Energia
+  if (/LIGHT SERV|PAG LUZ/.test(t)) return { cat: 'Energia Elétrica', desc: 'Energia elétrica — Light (Caixa)' };
+
+  // Água
+  if (/SAAE VOLTA REDONDA|PAGAMENTO AGUA/.test(t)) return { cat: 'Água', desc: 'Água — SAAE (Caixa)' };
+
+  // Telefone/Tim
+  if (/TIM S A/.test(t)) return { cat: 'Celular', desc: 'Telefone — Tim (Caixa)' };
+
+  // Saúde
+  if (/ALIANCA RETIRO/.test(t)) return { cat: 'Assistência Saúde', desc: 'Plano de saúde — Aliança Retiro (Caixa)' };
+  if (/UNIODONTO/.test(t)) return { cat: 'Assistência Saúde', desc: 'Plano odontológico — Uniodonto (Caixa)' };
+
+  // Impostos
+  if (/RECEITA FEDERAL/.test(t)) return { cat: 'Impostos', desc: 'Impostos — Receita Federal (Caixa)' };
+  if (/PREFEITURA MUNICIP|PAG PREFEITURA/.test(t)) return { cat: 'Dívida', desc: 'Parcelamento — Prefeitura VR (Caixa)' };
+
+  // Software/contabilidade
+  if (/MARMOPRICE|MARMOPR/.test(t)) return { cat: 'Software (MarmóPrice)', desc: 'Software — MarmóPrice (Caixa)' };
+  if (/NZD CONTABILID/.test(t)) return { cat: 'Contabilidade', desc: 'Contabilidade — NZD (Caixa)' };
+  if (/CLIENT CO SERVIC/.test(t)) return { cat: 'Software (MarmóPrice)', desc: 'Software — Client Co (Caixa)' };
+  if (/APTAST/.test(t)) return { cat: 'Software (MarmóPrice)', desc: 'Software — Aptast (Caixa)' };
+  if (/TRIVO/.test(t)) return { cat: 'Marketing', desc: 'Marketing — Trivo (Caixa)' };
+  if (/GOOGLE BRASIL/.test(t)) return { cat: 'Marketing', desc: 'Marketing — Google Ads (Caixa)' };
+  if (/FACEBOOK|META/.test(t)) return { cat: 'Marketing', desc: 'Marketing — Facebook/Meta (Caixa)' };
+
+  // Dívidas
+  if (/EURO COBRANCAS/.test(t)) return { cat: 'Dívida', desc: 'Dívida — Euro Cobranças (Caixa)' };
+  if (/MUNICIPIO DE VOLTA/.test(t)) return { cat: 'Dívida', desc: 'Parcelamento — Prefeitura VR (Caixa)' };
+  if (/MINAS GERAL COMERC/.test(t)) return { cat: 'Dívida', desc: 'Dívida — Minas Geral (Caixa)' };
+  if (/SANTANDER/.test(t)) return { cat: 'Dívida', desc: 'Dívida — Banco Santander (Caixa)' };
+  if (/STONE ONE/.test(t)) return { cat: 'Fornecedor', desc: 'Fornecedor chapa — Stone One (Caixa)' };
+  if (/CEF MATRIZ/.test(t)) return { cat: 'Dívida', desc: 'Transferência CEF Matriz (Caixa)' };
+  if (/PIX MARKETPLACE/.test(t)) return { cat: 'Despesas Financeiras (Banco)', desc: 'Taxas — PIX Marketplace (Caixa)' };
+  if (/MERCADO PAGO INSTIT/.test(t)) return { cat: 'Despesas Financeiras (Banco)', desc: 'Taxas — Mercado Pago (Caixa)' };
+  if (/SINDICATO DOS TRAB/.test(t)) return { cat: 'Dívida', desc: 'Sindicato dos Trabalhadores (Caixa)' };
+  if (/SINDICATO DAS E/.test(t)) return { cat: 'Dívida', desc: 'Sindicato das Empresas (Caixa)' };
+  if (/COMASTEC/.test(t)) return { cat: 'Dívida', desc: 'Dívida — Comastec (Caixa)' };
+  if (/GRUPO E/.test(t)) return { cat: 'Dívida', desc: 'Dívida — Grupo E (Caixa)' };
+  if (/UNIODONTO/.test(t)) return { cat: 'Assistência Saúde', desc: 'Uniodonto (Caixa)' };
+
+  // Alimentação
+  if (/CAJU/.test(t)) return { cat: 'Alimentação (Vale/Cesta)', desc: 'Vale alimentação — Caju (Caixa)' };
+  if (/RESTAURANTE|LANCHE|BURGUER|CONVENIENCIA|FOGAO GAUCHO/.test(t)) return { cat: 'Alimentação (Vale/Cesta)', desc: 'Alimentação — ' + nome.substring(0,30) + ' (Caixa)' };
+
+  // Igreja / dízimo
+  if (/IGREJA METODISTA/.test(t)) return { cat: 'A Identificar', desc: 'A identificar — Igreja Metodista (Caixa)' };
+  if (/PRIMEIRA IGREJA/.test(t)) return { ignorar: true }; // cliente pagando serviço, já nas entradas
+
+  // Compras cartão genéricas
+  if (/COMPRA CARTAO DEBITO/.test(tipo)) return { cat: 'A Identificar', desc: 'Compra cartão — ' + nome.substring(0,35) + ' (Caixa)' };
+  if (/DEb PIX CHAVE|PIX ENVIADO/.test(tipo)) return { cat: 'A Identificar', desc: 'A identificar — ' + nome.substring(0,35) + ' (Caixa)' };
+
+  return { cat: 'A Identificar', desc: 'A identificar — ' + (nome || tipo).substring(0,40) + ' (Caixa)' };
+}
+
+function renderTabelaCaixa(transacoes) {
+  const preview = document.getElementById('caixa-preview');
+  if (!transacoes.length) {
+    document.getElementById('caixa-stats').innerHTML = '⚠️ Nenhum lançamento encontrado. Verifique o texto colado.';
+    preview.style.display = 'block';
+    return;
+  }
+  const total = transacoes.reduce((s,t) => s + t.valor, 0);
+  const aId = transacoes.filter(t => t.cat === 'A Identificar').length;
+  document.getElementById('caixa-stats').innerHTML =
+    `<strong>${transacoes.length} lançamentos</strong> • Total: <strong>R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong>` +
+    (aId ? ` • <span style="color:#e65100;">⚠️ ${aId} a identificar</span>` : '');
+
+  const cats = ['Folha de Pagamento','Fornecedor','Insumos de Instalação','Insumos de Produção','Aluguel','Combustível','Alimentação (Vale/Cesta)','Impostos','Energia Elétrica','Água','Celular','Contabilidade','Software (MarmóPrice)','Marketing','Assistência Saúde','Dívida','Despesas Financeiras (Banco)','Manutenção de Máquina','A Identificar'];
+
+  document.getElementById('caixa-tbody').innerHTML = transacoes.map((t,i) => `
+    <tr style="border-bottom:1px solid #f0f0f0;background:${t.cat==='A Identificar'?'#fff8e1':'white'}">
+      <td style="padding:6px 8px;white-space:nowrap;">${t.data}</td>
+      <td style="padding:6px 8px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${t.memo}">${t.desc}</td>
+      <td style="padding:6px 8px;text-align:right;color:#c62828;">R$ ${t.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+      <td style="padding:6px 8px;">
+        <select onchange="caixaTransacoes[${i}].cat=this.value" style="font-size:11px;border:1px solid #ddd;border-radius:4px;padding:2px;">
+          ${cats.map(c=>`<option value="${c}" ${c===t.cat?'selected':''}>${c}</option>`).join('')}
+        </select>
+      </td>
+      <td style="padding:6px 8px;text-align:center;">
+        <input type="checkbox" ${t.incluir?'checked':''} onchange="caixaTransacoes[${i}].incluir=this.checked">
+      </td>
+    </tr>`).join('');
+  preview.style.display = 'block';
+}
+
+async function confirmarImportacaoCaixa() {
+  const sel = caixaTransacoes.filter(t => t.incluir);
+  if (!sel.length) { showNotif('Nenhum lançamento selecionado.', 'error'); return; }
+  if (!confirm(`Importar ${sel.length} lançamentos da Caixa?\nTotal: R$ ${sel.reduce((s,t)=>s+t.valor,0).toLocaleString('pt-BR',{minimumFractionDigits:2})}\n\nEsta ação não pode ser desfeita.`)) return;
+  document.getElementById('modal-caixa').remove();
+  showLoading('Importando lançamentos da Caixa...');
+  let ok = 0, err = 0;
+  for (const t of sel) {
+    const { error } = await getSB().from('transacoes').insert({
+      tipo: 'saida', valor: t.valor, descricao: t.desc,
+      data: t.data, categoria: t.cat,
+      banco: 'Caixa', forma: 'pix', created_by: 'dono'
+    });
+    if (error) err++; else ok++;
+  }
+  hideLoading();
+  if (err === 0) showNotif(`✅ ${ok} saídas da Caixa importadas!`, 'success');
+  else showNotif(`⚠️ ${ok} importadas, ${err} com erro.`, 'error');
+  renderFinanceiro();
+}
+
+// ============================================================
 // IMPORTADOR OFX SICREDI — classificação automática
 // ============================================================
 function abrirImportadorOFX() {
@@ -4788,6 +5081,7 @@ async function renderFinanceiro() {
             <button onclick="document.getElementById('menu-importar').style.display='none';importarEntradasJunho2026();setTimeout(importarSaidasJunho2026,500)" style="display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:none;color:#f0e8d8;font-size:13px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.06);">📅 Junho (Caixa + Sicredi)</button>
             <div style="padding:8px 14px;font-size:10px;color:#D4AF6E;font-weight:700;letter-spacing:1px;border-bottom:1px solid rgba(212,175,110,0.2);border-top:1px solid rgba(212,175,110,0.2);margin-top:4px;">LANÇAMENTO MANUAL POR MÊS</div>
             <button onclick="document.getElementById('menu-importar').style.display='none';abrirImportadorOFX()" style="display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:none;color:#4CAF50;font-size:13px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.06);font-weight:700;">📂 Importar OFX do Sicredi</button>
+            <button onclick="document.getElementById('menu-importar').style.display='none';abrirImportadorCaixa()" style="display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:none;color:#1565C0;font-size:13px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.06);font-weight:700;">U0001F3E6 Importar extrato Caixa (texto)</button>
             <button onclick="document.getElementById('menu-importar').style.display='none';abrirModalNovoMes()" style="display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:none;color:#D4AF6E;font-size:13px;cursor:pointer;font-weight:700;">➕ Abrir novo mês para lançamentos</button>
           </div>
         </div>` : ''}

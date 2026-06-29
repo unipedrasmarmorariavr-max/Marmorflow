@@ -340,7 +340,8 @@
     .item-orcamento-grid { grid-template-columns: 1fr !important; gap: 6px !important; }
 
     /* Peça a Peça */
-    .peca-row { grid-template-columns: 1fr 90px 44px 34px !important; gap: 4px !important; }
+    .peca-row { grid-template-columns: 1fr 80px 48px 36px !important; gap: 4px !important; overflow: visible !important; }
+    .peca-row input { min-width: 0 !important; }
     [id^="pecas-lista-"] input { font-size: 14px !important; padding: 6px !important; }
 
     /* Acabamentos e custos adicionais */
@@ -8871,7 +8872,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
   </div>` : `<div style="padding:20px;text-align:center;color:#999;font-size:13px;">⚠️ Selecione o material e preencha as medidas para calcular.</div>`;
 
   return `
-  <div style="background:white;border-radius:8px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08);overflow:hidden;">
+  <div style="background:white;border-radius:8px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
     <!-- Cabeçalho do item -->
     <div style="background:#f8f8f8;border-bottom:1px solid #e0e0e0;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
       <div style="font-size:13px;font-weight:700;color:#333;min-width:60px;">ITEM ${idx+1}</div>
@@ -8897,7 +8898,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
       ${idx>0?`<button onclick="removerItemTelaOrc(${idx},'${orderId}')" style="background:#dc3545;border:none;color:white;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;">🗑 ITEM</button>`:''}
     </div>
 
-    <div style="padding:16px;">
+    <div style="padding:12px 8px;">
 
       <!-- PEÇA A PEÇA -->
       <div style="margin-bottom:16px;">
@@ -10439,9 +10440,9 @@ function renderConfiguracoes() {
   const el = document.getElementById('configuracoes-content');
   if (!el) return;
   el.innerHTML = `
-  <div style="padding:24px;max-width:1200px;margin:0 auto;">
+  <div style="padding:12px;max-width:100%;margin:0 auto;">
     <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);margin-bottom:24px;">⚙️ Configurações</div>
-    <div style="display:flex;gap:4px;margin-bottom:24px;border-bottom:2px solid var(--cream-dark);padding-bottom:0;">
+    <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--cream-dark);padding-bottom:0;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;">
       <button onclick="showSubConfig('gastos')" id="subcfg-gastos"
         style="padding:10px 20px;border:none;background:var(--gold);color:white;border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
         💰 Grupo de Gastos
@@ -10630,7 +10631,7 @@ function renderGastos() {
     <div><span style="font-size:11px;opacity:0.7;">Custo Hora Homem:</span> <strong>R$ ${custoHora.toFixed(2).replace('.',',')}</strong></div>
   </div>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+  <div style="display:grid;grid-template-columns:1fr;gap:16px;">
     ${['producao','comercial'].map(grupoKey => {
       const grupo = gastos[grupoKey];
       return `
@@ -10652,11 +10653,11 @@ function renderGastos() {
               const pctItem = totalGeral > 0 ? (it.valor/totalGeral*100).toFixed(1) : '0.0';
               return `
               <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-bottom:1px solid var(--cream-dark);">
-                <input class="form-input" style="flex:2;padding:5px 8px;font-size:12px;" value="${it.nome}"
+                <input class="form-input" style="flex:1;min-width:0;padding:5px 6px;font-size:11px;" value="${it.nome}"
                   onblur="atualizarGasto('${grupoKey}',${sgi},${iti},'nome',this.value)">
-                <input class="form-input" style="width:110px;padding:5px 8px;font-size:12px;text-align:right;" value="R$ ${(it.valor||0).toFixed(2).replace('.',',')}"
+                <input class="form-input" style="width:80px;padding:5px 6px;font-size:11px;text-align:right;" value="R$ ${(it.valor||0).toFixed(2).replace('.',',')}"
                   onblur="atualizarGastoValor('${grupoKey}',${sgi},${iti},this.value)">
-                <span style="font-size:11px;color:var(--stone-light);width:36px;text-align:right;">${pctItem}</span>
+                <span style="font-size:10px;color:var(--stone-light);width:28px;text-align:right;flex-shrink:0;">${pctItem}</span>
                 <button onclick="deletarItemGasto('${grupoKey}',${sgi},${iti})" style="background:#FDEAEA;border:none;color:#B85A4A;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;">🗑</button>
               </div>`;
             }).join('')}
@@ -10742,9 +10743,9 @@ function renderTempos() {
   ];
 
   el.innerHTML = `
-  <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:24px;">
+  <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:14px;">
     <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:20px;">⏱️ Informações de Produção — Atualize as informações de produção.</div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:12px;">
       ${campos.map(([label, key, def]) => `
       <div>
         <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">${label}</label>

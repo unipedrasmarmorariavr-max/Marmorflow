@@ -10643,24 +10643,24 @@ function renderGastos() {
           const totalSg = sg.itens.reduce((s,it) => s+(it.valor||0), 0);
           const pctTotal = totalGeral > 0 ? (totalSg/totalGeral*100) : 0;
           return `
-          <div style="border:1px solid var(--cream-dark);border-top:none;${sgi>0?'border-top:none;':''}">
-            <div style="background:var(--cream);padding:8px 14px;display:flex;align-items:center;gap:8px;">
+          <div style="border:1px solid var(--cream-dark);">
+            <div style="background:var(--cream);padding:6px 8px;display:flex;align-items:center;gap:6px;">
               <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--stone);flex:1;">Subgrupo</div>
-              <input class="form-input" style="max-width:200px;padding:4px 8px;font-size:12px;font-weight:700;" value="${sg.nome}"
+              <input class="form-input" style="flex:1;min-width:0;padding:4px 6px;font-size:11px;font-weight:700;" value="${sg.nome}"
                 onblur="atualizarNomeSubgrupo('${grupoKey}',${sgi},this.value)">
             </div>
             ${sg.itens.map((it, iti) => {
               const pctItem = totalGeral > 0 ? (it.valor/totalGeral*100).toFixed(1) : '0.0';
               return `
-              <div style="display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">
-                <input class="form-input" style="flex:1;min-width:0;padding:5px 6px;font-size:11px;" value="${it.nome}"
+              <div style="display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">
+                <input class="form-input" style="width:100%;min-width:0;padding:5px 6px;font-size:11px;" value="${it.nome}"
                   onblur="atualizarGasto('${grupoKey}',${sgi},${iti},'nome',this.value)">
-                <input class="form-input" style="width:90px;flex-shrink:0;padding:5px 6px;font-size:11px;text-align:right;" value="R$ ${(it.valor||0).toFixed(2).replace('.',',')}"
+                <input class="form-input" style="width:90px;padding:5px 6px;font-size:11px;text-align:right;" value="R$ ${(it.valor||0).toFixed(2).replace('.',',')}"
                   onblur="atualizarGastoValor('${grupoKey}',${sgi},${iti},this.value)">
-                <button onclick="deletarItemGasto('${grupoKey}',${sgi},${iti})" style="background:#FDEAEA;border:none;color:#B85A4A;padding:4px 6px;border-radius:4px;cursor:pointer;font-size:11px;flex-shrink:0;">🗑</button>
+                <button onclick="deletarItemGasto('${grupoKey}',${sgi},${iti})" style="background:#FDEAEA;border:none;color:#B85A4A;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:12px;">🗑</button>
               </div>`;
             }).join('')}
-            <div style="padding:8px 12px;background:var(--cream);display:flex;justify-content:space-between;align-items:center;">
+            <div style="padding:6px 8px;background:var(--cream);display:flex;justify-content:space-between;align-items:center;">
               <span style="font-size:11px;font-weight:700;color:var(--stone);">TOTAL ${sg.nome.toUpperCase()}→</span>
               <span style="font-size:13px;font-weight:700;color:var(--stone);">R$ ${totalSg.toFixed(2).replace('.',',')}</span>
             </div>

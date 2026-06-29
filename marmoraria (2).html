@@ -4440,23 +4440,29 @@ function processarCaixa() {
 
     const textoCompleto = (tipo + ' ' + desc).trim();
 
-    // Só saídas
-    if (!negativo) { i += 2; continue; }
-    // Ignorar Tar Pix (tarifas mínimas)
+    // Ignorar sempre
     if (/^Tar Pix$/i.test(tipo)) { i += 2; continue; }
-    // Ignorar Saldo do dia
     if (/Saldo do dia/i.test(tipo)) { i += 2; continue; }
-    // Ignorar transferências para Unipedras (interno)
     if (/UNIPEDRAS BENEFIC/i.test(desc)) { i += 2; continue; }
-    // Ignorar Eduarda/Kely R$200 exatos (dívida)
     if (/EDUARDA LETICIA/i.test(desc) && valor === 200) { i += 2; continue; }
     if (/K C P DE A MACHADO/i.test(desc) && valor === 200) { i += 2; continue; }
 
-    // Classificar
+    if (!negativo) {
+      // ENTRADAS — só clientes reais
+      const isEntradaCliente = /^(Pix Recebido|Cred Pix Chave|Ston Mc Ac|Ston Vs Ac|Recebimento TED|Recebimento Ted|Liq\.Cobranca|LIQ\.COBRANCA)/i.test(tipo);
+      if (!isEntradaCliente) { i += 2; continue; }
+      let entDesc = 'Recebimento cliente — ' + (desc||tipo).substring(0,40) + ' (Caixa)';
+      if (/Ston Mc Ac|Ston Vs Ac/i.test(tipo)) entDesc = 'Recebimento cartão — Stone (Caixa)';
+      transacoes.push({ data, memo: textoCompleto, desc: entDesc, valor, cat: 'Recebimento de Cliente', tipo: 'entrada', incluir: true });
+      i += 2;
+      continue;
+    }
+
+    // SAÍDAS
     const cls = classificarCaixa(textoCompleto, desc, tipo, valor);
     if (cls.ignorar) { i += 2; continue; }
 
-    transacoes.push({ data, memo: textoCompleto, desc: cls.desc, valor, cat: cls.cat, incluir: true });
+    transacoes.push({ data, memo: textoCompleto, desc: cls.desc, valor, cat: cls.cat, tipo: 'saida', incluir: true });
     i += 2;
   }
 
@@ -4587,47 +4593,57 @@ function renderTabelaCaixa(transacoes) {
   }
   const total = transacoes.reduce((s,t) => s + t.valor, 0);
   const aId = transacoes.filter(t => t.cat === 'A Identificar').length;
+  const totalEnt = transacoes.filter(t=>t.tipo==='entrada').reduce((s,t)=>s+t.valor,0);
+  const totalSai = transacoes.filter(t=>t.tipo!=='entrada').reduce((s,t)=>s+t.valor,0);
   document.getElementById('caixa-stats').innerHTML =
-    `<strong>${transacoes.length} lançamentos</strong> • Total: <strong>R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong>` +
+    `<strong>${transacoes.length} lançamentos</strong> • <span style="color:#2E7D32;">↑ ${transacoes.filter(t=>t.tipo==='entrada').length} entradas R$ ${totalEnt.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span> • <span style="color:#c62828;">↓ ${transacoes.filter(t=>t.tipo!=='entrada').length} saídas R$ ${totalSai.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>` +
     (aId ? ` • <span style="color:#e65100;">⚠️ ${aId} a identificar</span>` : '');
 
   const cats = ['Folha de Pagamento','Fornecedor','Insumos de Instalação','Insumos de Produção','Aluguel','Combustível','Alimentação (Vale/Cesta)','Impostos','Energia Elétrica','Água','Celular','Contabilidade','Software (MarmóPrice)','Marketing','Assistência Saúde','Dívida','Despesas Financeiras (Banco)','Manutenção de Máquina','A Identificar'];
 
-  document.getElementById('caixa-tbody').innerHTML = transacoes.map((t,i) => `
-    <tr style="border-bottom:1px solid #f0f0f0;background:${t.cat==='A Identificar'?'#fff8e1':'white'}">
+  document.getElementById('caixa-tbody').innerHTML = transacoes.map((t,i) => {
+    const isEnt = t.tipo === 'entrada';
+    const bgColor = t.cat==='A Identificar' ? '#fff8e1' : isEnt ? '#f0fff4' : 'white';
+    const valColor = isEnt ? '#2E7D32' : '#c62828';
+    const valPrefix = isEnt ? '+' : '-';
+    return `
+    <tr style="border-bottom:1px solid #f0f0f0;background:${bgColor}">
       <td style="padding:6px 8px;white-space:nowrap;">${t.data}</td>
-      <td style="padding:6px 8px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${t.memo}">${t.desc}</td>
-      <td style="padding:6px 8px;text-align:right;color:#c62828;">R$ ${t.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+      <td style="padding:6px 8px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${t.memo}">${isEnt?'↑ ':''}<b>${t.desc}</b></td>
+      <td style="padding:6px 8px;text-align:right;color:${valColor};font-weight:700;">${valPrefix}R$ ${t.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
       <td style="padding:6px 8px;">
-        <select onchange="caixaTransacoes[${i}].cat=this.value" style="font-size:11px;border:1px solid #ddd;border-radius:4px;padding:2px;">
-          ${cats.map(c=>`<option value="${c}" ${c===t.cat?'selected':''}>${c}</option>`).join('')}
-        </select>
+        ${isEnt ? '<span style="font-size:11px;color:#2E7D32;font-weight:600;">Recebimento</span>' : `<select onchange="caixaTransacoes[${i}].cat=this.value" style="font-size:11px;border:1px solid #ddd;border-radius:4px;padding:2px;">${cats.map(c=>`<option value="${c}" ${c===t.cat?'selected':''}>${c}</option>`).join('')}</select>`}
       </td>
       <td style="padding:6px 8px;text-align:center;">
         <input type="checkbox" ${t.incluir?'checked':''} onchange="caixaTransacoes[${i}].incluir=this.checked">
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   preview.style.display = 'block';
 }
 
 async function confirmarImportacaoCaixa() {
   const sel = caixaTransacoes.filter(t => t.incluir);
   if (!sel.length) { showNotif('Nenhum lançamento selecionado.', 'error'); return; }
-  if (!confirm(`Importar ${sel.length} lançamentos da Caixa?\nTotal: R$ ${sel.reduce((s,t)=>s+t.valor,0).toLocaleString('pt-BR',{minimumFractionDigits:2})}\n\nEsta ação não pode ser desfeita.`)) return;
+  const totalSai = sel.filter(t=>t.tipo==='saida').reduce((s,t)=>s+t.valor,0);
+  const totalEnt = sel.filter(t=>t.tipo==='entrada').reduce((s,t)=>s+t.valor,0);
+  const entQtd = sel.filter(t=>t.tipo==='entrada').length;
+  const saiQtd = sel.filter(t=>t.tipo==='saida').length;
+  if (!confirm(`Importar ${sel.length} lançamentos da Caixa?\n\n${saiQtd} saídas: R$ ${totalSai.toLocaleString('pt-BR',{minimumFractionDigits:2})}\n${entQtd} entradas: R$ ${totalEnt.toLocaleString('pt-BR',{minimumFractionDigits:2})}\n\nEsta ação não pode ser desfeita.`)) return;
   document.getElementById('modal-caixa').remove();
   showLoading('Importando lançamentos da Caixa...');
   let ok = 0, err = 0;
   for (const t of sel) {
     const { error } = await getSB().from('transacoes').insert({
-      tipo: 'saida', valor: t.valor, descricao: t.desc,
+      tipo: t.tipo || 'saida', valor: t.valor, descricao: t.desc,
       data: t.data, categoria: t.cat,
       banco: 'Caixa', forma: 'pix', created_by: 'dono'
     });
     if (error) err++; else ok++;
   }
   hideLoading();
-  if (err === 0) showNotif(`✅ ${ok} saídas da Caixa importadas!`, 'success');
-  else showNotif(`⚠️ ${ok} importadas, ${err} com erro.`, 'error');
+  if (err === 0) showNotif(`✅ ${ok} lançamentos da Caixa importados!`, 'success');
+  else showNotif(`⚠️ ${ok} importados, ${err} com erro.`, 'error');
   renderFinanceiro();
 }
 

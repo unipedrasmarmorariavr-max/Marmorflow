@@ -5049,6 +5049,16 @@ async function renderFinanceiro() {
 
   const fmtV = v => 'R$ '+(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
   const fmtDt = d => d ? d.substring(8,10)+'/'+d.substring(5,7)+'/'+d.substring(0,4) : '';
+  // Saldo por banco (todas as transações, sem filtro de mês)
+  const saldoBanco = (banco) => {
+    const ent = transacoes.filter(t => t.banco === banco && t.tipo === 'entrada').reduce((s,t) => s+(parseFloat(t.valor)||0), 0);
+    const sai = transacoes.filter(t => t.banco === banco && t.tipo === 'saida').reduce((s,t) => s+(parseFloat(t.valor)||0), 0);
+    return ent - sai;
+  };
+  const saldoSicredi = saldoBanco('Sicredi');
+  const saldoCaixa = saldoBanco('Caixa');
+  const saldoMP = saldoBanco('Mercado Pago');
+  const saldoTotal = saldoSicredi + saldoCaixa + saldoMP;
 
   el.innerHTML = `
   <div style="padding:24px;max-width:1100px;margin:0 auto;">
@@ -5114,6 +5124,30 @@ async function renderFinanceiro() {
         <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">A Pagar ${filtroMes.substring(5,7)}/${filtroMes.substring(0,4)}</div>
         <div style="font-size:20px;font-weight:800;color:${contasVencidas.length>0?'#B85A4A':'#5B4A8B'};">${fmtV(totalAPagar)}</div>
         <div style="font-size:11px;color:${contasVencidas.length>0?'#B85A4A':'#888'};">${contasVencidas.length>0?'⚠️ '+contasVencidas.length+' vencida(s)':contasMes.length+' conta(s)'}</div>
+      </div>
+    </div>
+
+    <!-- SALDO POR BANCO -->
+    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:18px 20px;margin-bottom:20px;border-left:5px solid #1565C0;">
+      <div style="font-size:11px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;">&#127970; Saldo Atual por Banco</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+        <div style="background:#f8f9fa;border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:11px;color:#555;font-weight:600;margin-bottom:6px;">&#128994; Sicredi</div>
+          <div style="font-size:18px;font-weight:800;color:${saldoSicredi>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoSicredi)}</div>
+        </div>
+        <div style="background:#f8f9fa;border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:11px;color:#555;font-weight:600;margin-bottom:6px;">&#128309; Caixa</div>
+          <div style="font-size:18px;font-weight:800;color:${saldoCaixa>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoCaixa)}</div>
+          ${saldoCaixa<0?'<div style=\"font-size:10px;color:#B85A4A;\">cheque especial</div>':''}
+        </div>
+        <div style="background:#f8f9fa;border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:11px;color:#555;font-weight:600;margin-bottom:6px;">&#128155; Mercado Pago</div>
+          <div style="font-size:18px;font-weight:800;color:${saldoMP>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoMP)}</div>
+        </div>
+        <div style="background:${saldoTotal>=0?'#e8f5e9':'#ffebee'};border-radius:10px;padding:14px;text-align:center;border:2px solid ${saldoTotal>=0?'#2E7D32':'#B85A4A'};">
+          <div style="font-size:11px;color:#555;font-weight:700;margin-bottom:6px;">&#128176; TOTAL</div>
+          <div style="font-size:20px;font-weight:900;color:${saldoTotal>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoTotal)}</div>
+        </div>
       </div>
     </div>
 

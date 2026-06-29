@@ -4296,18 +4296,19 @@ async function importarSaidasJunho2026() {
 }
 
 // ============================================================
-// CORRETOR DE BANCO DAS SAÍDAS — corrige registros com "(Caixa)" salvos como Sicredi
+// CORRETOR DE BANCO DAS SAÍDAS — corrige banco de todas as saídas
+// Regra: saída com "(Caixa)" ou "/ Caixa" na descrição → banco='Caixa'
+//        todas as demais saídas → banco='Sicredi'
 // ============================================================
 async function corrigirBancoDasSaidas() {
-  if (!confirm('🔧 Corrigir banco das saídas importadas?\n\nEsta função busca todas as saídas com "(Caixa)" ou "/ Caixa" na descrição que estão salvas como banco=Sicredi e corrige para banco=Caixa.\n\nIsso afeta o saldo por banco. Continuar?')) return;
-  showLoading('Buscando saídas para corrigir...');
+  if (!confirm('🔧 Corrigir banco de TODAS as saídas?\n\nRegra aplicada:\n• Descrição contém "(Caixa)" → banco = Caixa\n• Todas as demais saídas → banco = Sicredi\n\nIsso vai corrigir o saldo por banco para refletir a realidade. Continuar?')) return;
+  showLoading('Buscando todas as saídas...');
 
-  // Buscar todas as saídas com banco=Sicredi
+  // Buscar TODAS as saídas
   const { data: saidas, error } = await getSB()
     .from('transacoes')
     .select('id, descricao, banco')
-    .eq('tipo', 'saida')
-    .eq('banco', 'Sicredi');
+    .eq('tipo', 'saida');
 
   if (error) {
     hideLoading();
@@ -4315,31 +4316,24 @@ async function corrigirBancoDasSaidas() {
     return;
   }
 
-  // Filtrar as que deveriam ser Caixa
-  const paraCorrigir = (saidas||[]).filter(s =>
-    (s.descricao||'').includes('(Caixa)') || (s.descricao||'').includes('/ Caixa')
-  );
-
-  if (paraCorrigir.length === 0) {
-    hideLoading();
-    showNotif('✅ Nenhuma saída para corrigir. Banco já está correto!', 'success');
-    return;
-  }
-
-  let ok = 0, err = 0;
-  for (const s of paraCorrigir) {
+  let okSicredi = 0, okCaixa = 0, err = 0;
+  for (const s of (saidas||[])) {
+    const ehCaixa = (s.descricao||'').includes('(Caixa)') || (s.descricao||'').includes('/ Caixa');
+    const bancoCorreto = ehCaixa ? 'Caixa' : 'Sicredi';
+    if (s.banco === bancoCorreto) continue; // já está certo, pula
     const { error: upErr } = await getSB()
       .from('transacoes')
-      .update({ banco: 'Caixa' })
+      .update({ banco: bancoCorreto })
       .eq('id', s.id);
-    if (upErr) err++; else ok++;
+    if (upErr) err++;
+    else if (ehCaixa) okCaixa++; else okSicredi++;
   }
 
   hideLoading();
   if (err === 0) {
-    showNotif(`✅ ${ok} saída(s) corrigidas de Sicredi → Caixa!`, 'success');
+    showNotif(`✅ Correção concluída! ${okSicredi} saídas → Sicredi, ${okCaixa} saídas → Caixa.`, 'success');
   } else {
-    showNotif(`⚠️ ${ok} corrigidas, ${err} com erro.`, 'error');
+    showNotif(`⚠️ ${okSicredi+okCaixa} corrigidas, ${err} com erro.`, 'error');
   }
   renderFinanceiro();
 }

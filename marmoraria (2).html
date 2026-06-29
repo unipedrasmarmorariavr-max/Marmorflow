@@ -4293,6 +4293,327 @@ async function importarSaidasJunho2026() {
   renderFinanceiro();
 }
 
+// ============================================================
+// IMPORTADOR OFX SICREDI — classificação automática
+// ============================================================
+function abrirImportadorOFX() {
+  let modal = document.getElementById('modal-ofx');
+  if (modal) modal.remove();
+  modal = document.createElement('div');
+  modal.id = 'modal-ofx';
+  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
+  modal.innerHTML = `
+    <div style="background:white;border-radius:16px;width:100%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+      <div style="background:#2C5F2E;color:white;padding:18px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:16px;font-weight:700;">📂 Importar OFX do Sicredi</div>
+        <button onclick="document.getElementById('modal-ofx').remove()" style="background:none;border:none;color:white;font-size:22px;cursor:pointer;">×</button>
+      </div>
+      <div style="padding:20px;">
+        <p style="color:#555;font-size:14px;margin:0 0 16px;">Selecione o arquivo OFX exportado do internet banking do Sicredi. O sistema vai classificar automaticamente cada lançamento.</p>
+        <div style="background:#f5f5f5;border:2px dashed #ccc;border-radius:8px;padding:20px;text-align:center;margin-bottom:16px;">
+          <input type="file" id="ofx-input" accept=".ofx,.OFX" style="display:none;" onchange="processarOFX(this)">
+          <button onclick="document.getElementById('ofx-input').click()" style="background:#2C5F2E;color:white;border:none;padding:10px 24px;border-radius:8px;font-size:14px;cursor:pointer;">📁 Selecionar arquivo OFX</button>
+          <p id="ofx-filename" style="color:#888;font-size:13px;margin:8px 0 0;">Nenhum arquivo selecionado</p>
+        </div>
+        <div id="ofx-preview" style="display:none;">
+          <div id="ofx-stats" style="background:#e8f5e9;border-radius:8px;padding:12px;margin-bottom:12px;font-size:13px;"></div>
+          <div style="max-height:300px;overflow-y:auto;border:1px solid #eee;border-radius:8px;">
+            <table id="ofx-table" style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead style="background:#f5f5f5;position:sticky;top:0;">
+                <tr>
+                  <th style="padding:8px;text-align:left;border-bottom:1px solid #eee;">Data</th>
+                  <th style="padding:8px;text-align:left;border-bottom:1px solid #eee;">Descrição</th>
+                  <th style="padding:8px;text-align:right;border-bottom:1px solid #eee;">Valor</th>
+                  <th style="padding:8px;text-align:left;border-bottom:1px solid #eee;">Categoria</th>
+                  <th style="padding:8px;text-align:center;border-bottom:1px solid #eee;">Importar?</th>
+                </tr>
+              </thead>
+              <tbody id="ofx-tbody"></tbody>
+            </table>
+          </div>
+          <div style="margin-top:16px;display:flex;gap:10px;">
+            <button onclick="confirmarImportacaoOFX()" style="flex:1;background:#2C5F2E;color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✅ Importar selecionados</button>
+            <button onclick="document.getElementById('modal-ofx').remove()" style="background:#eee;color:#333;border:none;padding:12px 16px;border-radius:8px;font-size:14px;cursor:pointer;">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+const OFX_REGRAS = [
+  // IGNORAR — transferências internas
+  { match: /UNIPEDRAS BENEFIC/i, ignorar: true },
+  { match: /00326917000180/i, ignorar: true },
+  // IGNORAR — entradas de clientes (já lançadas separadamente)
+  { match: /^RECEBIMENTO PIX/i, ignorar: true, seSaida: false },
+  { match: /^LIQ\.COBRANCA/i, ignorar: true, seSaida: false },
+  { match: /^RECEB\. COB/i, ignorar: true, seSaida: false },
+  { match: /^RECEBIMENTO TED/i, ignorar: true, seSaida: false },
+  // FOLHA DE PAGAMENTO
+  { match: /FILIPE DA SILVA ABRAAO|15785250713/i, cat: 'Folha de Pagamento', desc: 'Pró-labore — Filipe da Silva Abraão' },
+  { match: /JONAS FERREIRA BRAND|81408919753/i, cat: 'Folha de Pagamento', desc: 'Folha — Jonas Ferreira Brandão' },
+  { match: /BRAS VIANA BELO|08756886756/i, cat: 'Folha de Pagamento', desc: 'Folha — Bras Viana Belo' },
+  { match: /ADEMIR APARECIDO LIMA|13457122784/i, cat: 'Folha de Pagamento', desc: 'Folha — Ademir Aparecido Lima' },
+  { match: /PAULO PEREIRA DA SILVA|05304559789/i, cat: 'Folha de Pagamento', desc: 'Folha — Paulo Pereira da Silva' },
+  { match: /DENISE CRISTINA LOPES|07804420757/i, cat: 'Folha de Pagamento', desc: 'Folha — Denise Cristina Lopes' },
+  { match: /RONALDO LUIZ THOMAZ|04644519731/i, cat: 'Folha de Pagamento', desc: 'Folha — Ronaldo Luiz Thomaz' },
+  { match: /REGINALDO DE AGUIAR|08331727789/i, cat: 'Folha de Pagamento', desc: 'Folha — Reginaldo de Aguiar' },
+  { match: /ARNALDO RAMOS DE CARVA|05706902771/i, cat: 'Folha de Pagamento', desc: 'Folha — Arnaldo Ramos de Carvalho' },
+  // FORNECEDORES DE PEDRA
+  { match: /IGRAMAR|01885369000191/i, cat: 'Fornecedor', desc: 'Fornecedor pedra — Igramar Ltda' },
+  { match: /GUIDONI|00264528000178/i, cat: 'Fornecedor', desc: 'Fornecedor pedra — Guidoni Brasil SA' },
+  { match: /GRANILUXI|04734436000165/i, cat: 'Fornecedor', desc: 'Fornecedor chapa — Graniluxi' },
+  { match: /LAKA GRANITO|16922772000110/i, cat: 'Fornecedor', desc: 'Fornecedor chapa — Laka Granitos' },
+  { match: /MONTENEGRO MARMORAR|35510112000177/i, cat: 'Fornecedor', desc: 'Fornecedor chapa — Montenegro Marmoraria' },
+  { match: /REZOM MARMORE|18257074000173/i, cat: 'Fornecedor', desc: 'Fornecedor pedra — Rezom Mármores' },
+  { match: /EWERTON VINICIUS|171\.517/i, cat: 'Fornecedor', desc: 'Fornecedor chapa — Ewerton Vinicius' },
+  { match: /ROSIMERI MOREIRA|267\.997/i, cat: 'Fornecedor', desc: 'Fornecedor chapa — Rosimeri Moreira' },
+  { match: /VICTOR HUGO GOMES|13408076707/i, cat: 'Fornecedor', desc: 'Fornecedor — Victor Hugo Gomes' },
+  { match: /JOANA GARIOLLI|12697557733/i, cat: 'Fornecedor', desc: 'Fornecedor — Joana Gariolli' },
+  { match: /STONE ONE|47163094000183/i, cat: 'Fornecedor', desc: 'Fornecedor chapa — Stone One' },
+  // FRETE
+  { match: /BAMBINI KIDS|42994589000130/i, cat: 'Fornecedor', desc: 'Frete chapa — Bambini Kids Ltda' },
+  // INSUMOS DE INSTALAÇÃO — Kely/KCP (R$200 exatos = dívida, ignorar; outros = insumo)
+  { match: /K C P DE A MACHADO|43496567000103/i, cat: 'Insumos de Instalação', desc: 'Insumos instalação — KCP (Kely)', dividaExata: 200 },
+  // Eduarda = filha da Kely, mesma regra
+  { match: /EDUARDA LETICIA PEREIR|13019728789/i, cat: 'Insumos de Instalação', desc: 'Insumos instalação — Eduarda/Kely', dividaExata: 200 },
+  // INSUMOS DE PRODUÇÃO
+  { match: /MELO COMERCIO|08722347000150/i, cat: 'Insumos de Produção', desc: 'Insumos produção — Melo Comércio' },
+  { match: /FERRAMAR|09142174000163/i, cat: 'Insumos de Instalação', desc: 'Insumos — Ferramar' },
+  { match: /LIMAFER|08250747000100/i, cat: 'Insumos de Instalação', desc: 'Insumos — Limafer Ferragens' },
+  { match: /ROSALDO MADEIRAS|684\.133/i, cat: 'Fornecedor', desc: 'Material — Rosaldo Madeiras' },
+  { match: /CAPOBIANGO|39777065000183|26705433000136/i, cat: 'Insumos de Produção', desc: 'Insumos — Capobiango Materiais' },
+  { match: /IGRAEX|10368549000197/i, cat: 'Insumos de Instalação', desc: 'Insumos — Igraex Trading' },
+  { match: /COMERCIAL JARAGUA|15275798000151/i, cat: 'Insumos de Produção', desc: 'Insumos — Comercial Jaragua' },
+  // TRANSPORTE / INSTALAÇÃO TERCEIROS
+  { match: /JV TRANSPORTE|46904848000146/i, cat: 'Combustível', desc: 'Transporte — JV Transporte Ltda' },
+  { match: /FAGNER MEIRA|42875398000150/i, cat: 'Insumos de Instalação', desc: 'Instalação — Fagner Meira Rodrigues' },
+  { match: /OLIVEIRA.*NYARADY|05530223000184/i, cat: 'Insumos de Instalação', desc: 'Instalação — Oliveira & Nyarady' },
+  // COMBUSTÍVEL
+  { match: /POSTO TETRA DIESEL|17773737000140/i, cat: 'Combustível', desc: 'Combustível — Posto Tetra Diesel' },
+  { match: /POSTO METANO|07593223000159/i, cat: 'Combustível', desc: 'Combustível — Posto Metano VR' },
+  { match: /POSTO ORIGINAL|32507287000137|39758990000167/i, cat: 'Combustível', desc: 'Combustível — Posto Original' },
+  { match: /POSTO VINI|34267899000125/i, cat: 'Combustível', desc: 'Combustível — Posto Vini' },
+  { match: /POSTO BEIRA RIO|POSTO ROMA|POSTO BR 393|POSTO JR|POSTO GRANDE|R\-2 POSTO|POSTO PIGA/i, cat: 'Combustível', desc: 'Combustível — Posto' },
+  { match: /SULGAS|39194238000130/i, cat: 'Combustível', desc: 'Combustível — Sulgas' },
+  // ALUGUEL
+  { match: /JOAO CARLOS BELO MANSU|08343797752/i, cat: 'Aluguel', desc: 'Aluguel galpão — João Carlos Belo Mansur' },
+  // FOLHA PAGAMENTO — salário Caju
+  { match: /CAJU|33449007000144/i, cat: 'Alimentação (Vale/Cesta)', desc: 'Vale alimentação — Caju' },
+  { match: /JOECI TIRELLO|89921054791|140560548146/i, cat: 'Alimentação (Vale/Cesta)', desc: 'Benefício — Joeci Tirello' },
+  { match: /LUCIA HELENA DE OLIVEI|10248807706/i, cat: 'Alimentação (Vale/Cesta)', desc: 'Benefício — Lucia Helena' },
+  // IMPOSTOS
+  { match: /RECEITA FEDERAL|00394460005887/i, cat: 'Impostos', desc: 'Impostos — Receita Federal DARF/DAS' },
+  { match: /DB DARF RFB|DEBITO ARRECADACAO/i, cat: 'Impostos', desc: 'Impostos — DARF RFB' },
+  { match: /DAS\b/i, cat: 'Impostos', desc: 'Impostos — DAS Simples Nacional' },
+  // ENERGIA
+  { match: /LIGHT SERVICOS|60444437000146/i, cat: 'Energia Elétrica', desc: 'Energia elétrica — Light' },
+  // ÁGUA
+  { match: /SAAE|32504706000187/i, cat: 'Água', desc: 'Água — SAAE' },
+  { match: /PAGAMENTO AGUA|PAGAMENTO AGUA IBC/i, cat: 'Água', desc: 'Água — SAAE' },
+  // TELEFONE
+  { match: /TIM S A|02421421000111|TIMCEL/i, cat: 'Celular', desc: 'Telefone — Tim' },
+  { match: /VIVO|02558157000162/i, cat: 'Celular', desc: 'Telefone — Vivo' },
+  // SAÚDE
+  { match: /UNIODONTO|44595858000111/i, cat: 'Assistência Saúde', desc: 'Plano odontológico — Uniodonto' },
+  { match: /ALIANCA RETIRO|12937073000193/i, cat: 'Assistência Saúde', desc: 'Plano de saúde — Aliança Retiro VR' },
+  // CONTABILIDADE
+  { match: /NZD CONTABILID|49932356000152/i, cat: 'Contabilidade', desc: 'Contabilidade — NZD' },
+  // SOFTWARE
+  { match: /MARMOPRICE|MARMOPR|53478353000168/i, cat: 'Software (MarmóPrice)', desc: 'Software — MarmóPrice' },
+  { match: /CLIENT CO SERVIC|53420564000140/i, cat: 'Software (MarmóPrice)', desc: 'Software — Client Co' },
+  { match: /APTAST|49161901000154/i, cat: 'Software (MarmóPrice)', desc: 'Software — Aptast Tecnologia' },
+  { match: /INFO IN TIME|05155575000105/i, cat: 'Software (MarmóPrice)', desc: 'Software — Info In Time' },
+  // MARKETING
+  { match: /FACEBOOK|META|13347016000117/i, cat: 'Marketing', desc: 'Marketing — Facebook/Meta Ads' },
+  { match: /TRIVO|52325804000164/i, cat: 'Marketing', desc: 'Marketing — Trivo Gestão de Mídia' },
+  { match: /GOOGLE BRASIL|06990590000123/i, cat: 'Marketing', desc: 'Marketing — Google Ads' },
+  // DÍVIDAS / BANCOS
+  { match: /SANTANDER|90400888000142/i, cat: 'Dívida', desc: 'Dívida — Banco Santander' },
+  { match: /EURO COBRANCA|33536315000107/i, cat: 'Dívida', desc: 'Dívida — Euro Cobranças' },
+  { match: /MUNICIPIO DE VOLTA|32512501000143/i, cat: 'Dívida', desc: 'Parcelamento — Prefeitura VR' },
+  { match: /PAG PREFEITURA|PAG BOLETO IBC.*PREFEIT/i, cat: 'Dívida', desc: 'Parcelamento — Prefeitura VR' },
+  { match: /COMASTEC|97395792000182/i, cat: 'Dívida', desc: 'Dívida — Comastec' },
+  { match: /GRUPO E|38479099000129/i, cat: 'Dívida', desc: 'Dívida — Grupo E' },
+  { match: /PIX MARKETPLACE|10573521000191/i, cat: 'Despesas Financeiras (Banco)', desc: 'Taxas — PIX Marketplace' },
+  { match: /MERCADO PAGO INSTIT/i, cat: 'Despesas Financeiras (Banco)', desc: 'Taxas — Mercado Pago' },
+  { match: /SEGURO PRESTAMISTA|LIQUIDACAO DE PARCELA|AMORTIZACAO CONTRATO|LIQUIDACAO.*PARCELA/i, cat: 'Dívida', desc: 'Sicredi — parcela/seguro contrato' },
+  { match: /CESTA DE RELACIONAMENTO/i, cat: 'Despesas Financeiras (Banco)', desc: 'Tarifa bancária — Sicredi cesta' },
+  { match: /COBRANCA DE JUROS|DEBITO DE IOF/i, cat: 'Despesas Financeiras (Banco)', desc: 'Juros/IOF — Caixa cheque especial' },
+  { match: /TARIFA SERV\.COBR/i, cat: 'Despesas Financeiras (Banco)', desc: 'Tarifa cobrança — Sicredi' },
+  { match: /SINDICATO DOS TRAB|32500589000183/i, cat: 'Dívida', desc: 'Sindicato dos Trabalhadores' },
+  { match: /SINDICATO DAS E|29055993000180/i, cat: 'Dívida', desc: 'Sindicato das Empresas' },
+  { match: /DEBITO CONVENIOS.*LIGHTEL|LIGHTEL/i, cat: 'Energia Elétrica', desc: 'Energia — Light (débito automático)' },
+  { match: /PAG LUZ.*IBC|PAG LUZ\/GAS/i, cat: 'Energia Elétrica', desc: 'Energia elétrica — Light' },
+  { match: /ALONSO AMBROSIM|08619931792/i, cat: 'Dívida', desc: 'Dívida — Alonso Ambrosim' },
+  { match: /TRINCOFORT|27876960000176/i, cat: 'Manutenção de Máquina', desc: 'Equipamento — Trincofort' },
+  { match: /REMIX COMERCIO|28547202000177/i, cat: 'Insumos de Instalação', desc: 'Insumos — Remix Comércio' },
+  { match: /NEANDRO DE SOUZA|16741461752/i, cat: 'A Identificar', desc: 'A identificar — Neandro de Souza' },
+  { match: /EUZINETE VIANA|03735436706/i, cat: 'Alimentação (Vale/Cesta)', desc: 'Alimentação em campo — Euzinete Viana' },
+  { match: /IGLEJA METODISTA|353\.920/i, cat: 'A Identificar', desc: 'A identificar — Igreja Metodista W' },
+  { match: /ROSINEIA MARIA BARROS|85130125720/i, cat: 'A Identificar', desc: 'A identificar — Rosineia Barros' },
+  { match: /GEISA TAVARES|00746782721/i, cat: 'A Identificar', desc: 'A identificar — Geisa Tavares' },
+  { match: /VANTUIR DE ARAUJO|97650935787/i, cat: 'A Identificar', desc: 'A identificar — Vantuir Araujo' },
+  { match: /DEMERGE BRASIL|33967103000184/i, cat: 'A Identificar', desc: 'A identificar — Demerge Brasil' },
+  { match: /VIKTOR HUGO|VICTOR HUGO/i, cat: 'Fornecedor', desc: 'Fornecedor — Victor Hugo' },
+  { match: /DMJ|58108528000169/i, cat: 'A Identificar', desc: 'A identificar — DMJ' },
+  { match: /ARIANNE SERRA|15237418724/i, cat: 'A Identificar', desc: 'A identificar — Arianne Serra' },
+  { match: /BINNER RESTAURANTE|60915182000152/i, cat: 'Alimentação (Vale/Cesta)', desc: 'Alimentação — Binner Restaurante' },
+  { match: /RESTAURANTE PE NA E|53478496000170/i, cat: 'Alimentação (Vale/Cesta)', desc: 'Alimentação — Restaurante Pé na Estrada' },
+  { match: /BACIAO BURGUERS|12530114000122/i, cat: 'Alimentação (Vale/Cesta)', desc: 'Alimentação — Bacião Burguers' },
+  { match: /FOGAO GAUCHO|07169858000123/i, cat: 'Alimentação (Vale/Cesta)', desc: 'Alimentação — Fogão Gaúcho' },
+  { match: /BRENO CONVENIENCIA|59957757000110/i, cat: 'Alimentação (Vale/Cesta)', desc: 'Alimentação — Breno Conveniência' },
+  { match: /SUPER SOUZA|12744608000100/i, cat: 'Alimentação (Vale/Cesta)', desc: 'Alimentação — Super Souza' },
+  { match: /VILLE SUPERMERCADO|32877857000180/i, cat: 'Alimentação (Vale/Cesta)', desc: 'Alimentação — Ville Supermercado' },
+  { match: /MOBITT|00415375000112/i, cat: 'Despesas Financeiras (Banco)', desc: 'Taxas — Mobitt' },
+  { match: /99 TECNOLOGIA|18033552000161/i, cat: 'Despesas Financeiras (Banco)', desc: 'Taxas — 99' },
+  { match: /SAQUE BANCO 24H|TARIFA SAQUE/i, cat: 'Despesas Financeiras (Banco)', desc: 'Saque — Banco 24h' },
+  { match: /DEBITO CONVENIOS.*SAAE|SAAEVOL/i, cat: 'Água', desc: 'Água — SAAE (débito automático)' },
+  { match: /DEBITO CONVENIOS.*DARJRJ|DARJRJ/i, cat: 'Impostos', desc: 'Impostos — DARJ RJ' },
+  { match: /DEBITO ARRECADACAO.*DARFC/i, cat: 'Impostos', desc: 'Impostos — DARF Complementar' },
+  { match: /ZIG TECNOLOGIA|26356125000142/i, cat: 'Software (MarmóPrice)', desc: 'Software — Zig Tecnologia' },
+  { match: /RF PROTECT|29892230000194/i, cat: 'A Identificar', desc: 'A identificar — RF Protect' },
+  { match: /VP MALDONADO|37521224000159/i, cat: 'A Identificar', desc: 'A identificar — VP Maldonado' },
+  { match: /VIDRACARIA SUL|31095219000145/i, cat: 'Insumos de Instalação', desc: 'Insumos — Vidraçaria Sul Fluminense' },
+  { match: /GRANILUXI|LAKA GRAN/i, cat: 'Fornecedor', desc: 'Fornecedor chapa — Graniluxi/Laka' },
+  { match: /GORDON BRASIL|SINAE|INFRAVISUAL|65093765000169/i, cat: 'A Identificar', desc: 'A identificar — Gráfica/Outros' },
+  { match: /RUFINO|FABRICIO SALVIANO|05364792757/i, cat: 'A Identificar', desc: 'A identificar — Fabricio Salviano' },
+  { match: /JORGE DA COSTA|07146104702/i, cat: 'A Identificar', desc: 'A identificar — Jorge da Costa' },
+  { match: /MARIANA CELI|00008916730/i, cat: 'A Identificar', desc: 'A identificar — Mariana Celi' },
+  { match: /PAULO BUENO|11174744000149/i, cat: 'A Identificar', desc: 'A identificar — J Paolo Bueno' },
+  { match: /ALAN CHAGAS|12697689729/i, cat: 'A Identificar', desc: 'A identificar — Alan Chagas' },
+  { match: /ALAN.*MACEDO/i, cat: 'A Identificar', desc: 'A identificar — Alan Macedo' },
+  { match: /SUELLEN MARCELLY|05651924779/i, cat: 'A Identificar', desc: 'A identificar — Suellen Marcelly' },
+  { match: /HILARIO ALCANTARA|09859057788/i, cat: 'A Identificar', desc: 'A identificar — Hilário Alcântara' },
+  { match: /ADEMIR APARECIDO L.*\(fora folha\)/i, cat: 'A Identificar', desc: 'A identificar' },
+  { match: /LUCANO KALIL|96091193791/i, cat: 'A Identificar', desc: 'A identificar — Luciano Kalil' },
+  { match: /RAFAEL SANTOS NEVES|11398622788/i, cat: 'A Identificar', desc: 'A identificar — Rafaela Santos' },
+  { match: /SILAS FERREIRA|84962992791/i, cat: 'A Identificar', desc: 'A identificar — Silas Ferreira' },
+  { match: /RBENS SILVA|81254202749/i, cat: 'A Identificar', desc: 'A identificar — Rubem Silva' },
+  { match: /MTHS SERVICOS|18194683000120/i, cat: 'A Identificar', desc: 'A identificar — MTHS Serviços' },
+  { match: /JOANA.*GARIOLLI/i, cat: 'Fornecedor', desc: 'Fornecedor — Joana Gariolli' },
+  { match: /JOSIANA.*GARIOLLI/i, cat: 'Fornecedor', desc: 'Fornecedor — Joana Gariolli' },
+  { match: /EDICOES|IMPACTO.*AUTOMOTIVO|157847898458/i, cat: 'A Identificar', desc: 'A identificar — Impacto Automotivo' },
+];
+
+function classificarOFX(memo, valor, tipo) {
+  const abs = Math.abs(valor);
+  const isSaida = tipo === 'DEBIT' || valor < 0;
+
+  // Entradas de clientes — pular
+  if (!isSaida) return { ignorar: true };
+
+  for (const regra of OFX_REGRAS) {
+    if (!regra.match.test(memo)) continue;
+    if (regra.ignorar) {
+      if (regra.seSaida === false && !isSaida) return { ignorar: true };
+      if (regra.seSaida === undefined) return { ignorar: true };
+    }
+    // Regra de dívida exata (Kely/Eduarda R$200)
+    if (regra.dividaExata && abs === regra.dividaExata) return { ignorar: true };
+    return { cat: regra.cat, desc: regra.desc };
+  }
+
+  // Não classificado
+  return { cat: 'A Identificar', desc: 'A identificar — ' + memo.substring(0, 50) };
+}
+
+let ofxTransacoes = [];
+
+function processarOFX(input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById('ofx-filename').textContent = file.name;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const texto = e.target.result;
+    const transacoes = [];
+    const regex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi;
+    let match;
+    while ((match = regex.exec(texto)) !== null) {
+      const bloco = match[1];
+      const tipo = (bloco.match(/<TRNTYPE>(.*?)</i) || [])[1]?.trim();
+      const dtRaw = (bloco.match(/<DTPOSTED>(.*?)</i) || [])[1]?.trim();
+      const valorRaw = (bloco.match(/<TRNAMT>(.*?)</i) || [])[1]?.trim();
+      const memo = (bloco.match(/<MEMO>(.*?)</i) || [])[1]?.trim() || '';
+
+      if (!tipo || !dtRaw || !valorRaw) continue;
+
+      const ano = dtRaw.substring(0,4);
+      const mes = dtRaw.substring(4,6);
+      const dia = dtRaw.substring(6,8);
+      const data = `${ano}-${mes}-${dia}`;
+      const valor = parseFloat(valorRaw);
+
+      const cls = classificarOFX(memo, valor, tipo);
+      if (cls.ignorar) continue;
+
+      transacoes.push({ data, memo, valor: Math.abs(valor), tipo, cat: cls.cat, desc: cls.desc, incluir: true });
+    }
+
+    ofxTransacoes = transacoes;
+    renderTabelaOFX(transacoes);
+  };
+  reader.readAsText(file, 'latin1');
+}
+
+function renderTabelaOFX(transacoes) {
+  if (!transacoes.length) {
+    document.getElementById('ofx-stats').innerHTML = '⚠️ Nenhum lançamento encontrado para importar.';
+    document.getElementById('ofx-preview').style.display = 'block';
+    return;
+  }
+
+  const total = transacoes.reduce((s,t) => s + t.valor, 0);
+  const aIdentificar = transacoes.filter(t => t.cat === 'A Identificar').length;
+  document.getElementById('ofx-stats').innerHTML =
+    `<strong>${transacoes.length} lançamentos</strong> encontrados • Total: <strong>R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong>` +
+    (aIdentificar ? ` • <span style="color:#e65100;">⚠️ ${aIdentificar} a identificar</span>` : '');
+
+  const tbody = document.getElementById('ofx-tbody');
+  tbody.innerHTML = transacoes.map((t, i) => `
+    <tr style="border-bottom:1px solid #f0f0f0;background:${t.cat==='A Identificar'?'#fff8e1':'white'}">
+      <td style="padding:6px 8px;white-space:nowrap;">${t.data}</td>
+      <td style="padding:6px 8px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${t.memo}">${t.desc}</td>
+      <td style="padding:6px 8px;text-align:right;color:#c62828;">R$ ${t.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+      <td style="padding:6px 8px;">
+        <select onchange="ofxTransacoes[${i}].cat=this.value" style="font-size:11px;border:1px solid #ddd;border-radius:4px;padding:2px;">
+          ${['Folha de Pagamento','Fornecedor','Insumos de Instalação','Insumos de Produção','Aluguel','Combustível','Alimentação (Vale/Cesta)','Impostos','Energia Elétrica','Água','Celular','Contabilidade','Software (MarmóPrice)','Marketing','Assistência Saúde','Dívida','Despesas Financeiras (Banco)','Manutenção de Máquina','A Identificar'].map(c => `<option value="${c}" ${c===t.cat?'selected':''}>${c}</option>`).join('')}
+        </select>
+      </td>
+      <td style="padding:6px 8px;text-align:center;">
+        <input type="checkbox" ${t.incluir?'checked':''} onchange="ofxTransacoes[${i}].incluir=this.checked">
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('ofx-preview').style.display = 'block';
+}
+
+async function confirmarImportacaoOFX() {
+  const selecionados = ofxTransacoes.filter(t => t.incluir);
+  if (!selecionados.length) { showNotif('Nenhum lançamento selecionado.', 'error'); return; }
+  if (!confirm(`Importar ${selecionados.length} lançamentos do OFX?\nTotal: R$ ${selecionados.reduce((s,t)=>s+t.valor,0).toLocaleString('pt-BR',{minimumFractionDigits:2})}\n\nEsta ação não pode ser desfeita.`)) return;
+
+  document.getElementById('modal-ofx').remove();
+  showLoading('Importando lançamentos OFX...');
+
+  let ok = 0, err = 0;
+  for (const t of selecionados) {
+    const { error } = await getSB().from('transacoes').insert({
+      tipo: 'saida', valor: t.valor, descricao: t.desc,
+      data: t.data, categoria: t.cat,
+      banco: 'Sicredi', forma: 'pix', created_by: 'dono'
+    });
+    if (error) err++; else ok++;
+  }
+  hideLoading();
+  if (err === 0) showNotif(`✅ ${ok} saídas importadas do OFX!`, 'success');
+  else showNotif(`⚠️ ${ok} importadas, ${err} com erro.`, 'error');
+  renderFinanceiro();
+}
+
 function abrirModalNovoMes() {
   const hoje = new Date();
   const mesAtual = hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0');
@@ -4466,6 +4787,7 @@ async function renderFinanceiro() {
             <button onclick="document.getElementById('menu-importar').style.display='none';importarEntradasMaio2026();setTimeout(importarMaio2026,500)" style="display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:none;color:#f0e8d8;font-size:13px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.06);">📅 Maio (Caixa + Sicredi)</button>
             <button onclick="document.getElementById('menu-importar').style.display='none';importarEntradasJunho2026();setTimeout(importarSaidasJunho2026,500)" style="display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:none;color:#f0e8d8;font-size:13px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.06);">📅 Junho (Caixa + Sicredi)</button>
             <div style="padding:8px 14px;font-size:10px;color:#D4AF6E;font-weight:700;letter-spacing:1px;border-bottom:1px solid rgba(212,175,110,0.2);border-top:1px solid rgba(212,175,110,0.2);margin-top:4px;">LANÇAMENTO MANUAL POR MÊS</div>
+            <button onclick="document.getElementById('menu-importar').style.display='none';abrirImportadorOFX()" style="display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:none;color:#4CAF50;font-size:13px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.06);font-weight:700;">📂 Importar OFX do Sicredi</button>
             <button onclick="document.getElementById('menu-importar').style.display='none';abrirModalNovoMes()" style="display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:none;color:#D4AF6E;font-size:13px;cursor:pointer;font-weight:700;">➕ Abrir novo mês para lançamentos</button>
           </div>
         </div>` : ''}

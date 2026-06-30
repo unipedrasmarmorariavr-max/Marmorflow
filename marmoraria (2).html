@@ -2083,6 +2083,10 @@ function ativarSessao(perfil) {
 }
 
 function iniciarApp() {
+  // Carrega contas a pagar do Supabase para o localStorage (não bloqueia o resto)
+  if (typeof carregarContasPagarDoSupabase === 'function') {
+    carregarContasPagarDoSupabase();
+  }
   // Restaura sessão salva (evita login ao recarregar)
   var sessaoSalva = localStorage.getItem('mf_sessao');
   if (sessaoSalva && PROFILES[sessaoSalva]) {
@@ -3246,7 +3250,54 @@ function abrirLancamento(tipo) {
 function getContasPagar() {
   try { return JSON.parse(localStorage.getItem('mf_contas_pagar')||'[]'); } catch(e){ return []; }
 }
-function salvarContasPagar(c) { localStorage.setItem('mf_contas_pagar', JSON.stringify(c)); }
+function salvarContasPagar(c) {
+  localStorage.setItem('mf_contas_pagar', JSON.stringify(c));
+  sincronizarContasPagarSupabase(c);
+}
+
+// Sincroniza o array completo de contas a pagar com o Supabase (salva tudo de novo)
+let _syncContasPagarTimeout = null;
+function sincronizarContasPagarSupabase(contas) {
+  clearTimeout(_syncContasPagarTimeout);
+  _syncContasPagarTimeout = setTimeout(async () => {
+    try {
+      await getSB().from('contas_pagar').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (contas.length) {
+        const rows = contas.map(c => ({
+          descricao: c.descricao || '',
+          valor: parseFloat(c.valor) || 0,
+          vencimento: c.vencimento || null,
+          status: c.status || 'pendente',
+          categoria: c.categoria || null,
+          recorrencia: c.recorrencia || null,
+          data_pagamento: c.dataPagamento || null
+        }));
+        await getSB().from('contas_pagar').insert(rows);
+      }
+    } catch(e) { console.error('Erro ao sincronizar contas a pagar:', e); }
+  }, 800);
+}
+
+// Carrega contas a pagar do Supabase para o localStorage (chamar ao iniciar o app)
+async function carregarContasPagarDoSupabase() {
+  try {
+    const { data, error } = await getSB().from('contas_pagar').select('*').order('vencimento', { ascending: true });
+    if (error) { console.error('Erro ao carregar contas a pagar:', error); return; }
+    if (data) {
+      const contas = data.map(c => ({
+        id: c.id,
+        descricao: c.descricao,
+        valor: c.valor,
+        vencimento: c.vencimento,
+        status: c.status,
+        categoria: c.categoria,
+        recorrencia: c.recorrencia,
+        dataPagamento: c.data_pagamento
+      }));
+      localStorage.setItem('mf_contas_pagar', JSON.stringify(contas));
+    }
+  } catch(e) { console.error('Erro ao carregar contas a pagar do Supabase:', e); }
+}
 
 function toggleParcelasCP() {
   const tipo = document.getElementById('cp-recorrencia')?.value;

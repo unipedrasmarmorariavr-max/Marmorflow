@@ -2551,6 +2551,17 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
   const { data: txAll } = await getSB().from('transacoes').select('*');
   const transacoes = txAll || [];
 
+  // Saldo Inicial — para mostrar o saldo bancário real
+  let saldoInicialDash = 0, dataSaldoInicialDash = '';
+  try {
+    const { data: cfgDash } = await getSB().from('configuracoes').select('*').eq('chave','saldo_inicial').maybeSingle();
+    if (cfgDash) { saldoInicialDash = parseFloat(cfgDash.valor)||0; dataSaldoInicialDash = cfgDash.data_referencia || ''; }
+  } catch(e) {}
+  const txDesdeSaldo = dataSaldoInicialDash ? transacoes.filter(t => (t.data||'') >= dataSaldoInicialDash) : transacoes;
+  const entDesdeSaldo = txDesdeSaldo.filter(t=>t.tipo==='entrada').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const saiDesdeSaldo = txDesdeSaldo.filter(t=>t.tipo==='saida').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const saldoBancarioReal = saldoInicialDash + entDesdeSaldo - saiDesdeSaldo;
+
   const CATS_DIVIDA = ['Dívida','Despesas Financeiras (Banco)'];
 
   // Montar lista de todos os meses com lançamento, do mais antigo até o mês atual
@@ -2612,6 +2623,15 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
   const tituloFiltro = filtroAtual==='todos' ? 'Todos os meses' : (dadosPorMes[filtroAtual]?.labelLong||filtroAtual);
 
   el.innerHTML = `
+    <!-- SALDO BANCÁRIO REAL -->
+    <div style="background:linear-gradient(135deg,${saldoBancarioReal>=0?'#1b4332,#2d6a4f':'#7f1d1d,#991b1b'});border-radius:14px;padding:18px 20px;margin-bottom:16px;box-shadow:0 4px 20px rgba(0,0,0,.2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+      <div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.7);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">🏦 Saldo Bancário Real (todas as contas)</div>
+        <div style="font-size:32px;font-weight:900;color:white;">${fmtV(saldoBancarioReal)}</div>
+        ${dataSaldoInicialDash ? `<div style="font-size:11px;color:rgba(255,255,255,0.7);margin-top:4px;">Desde ${dataSaldoInicialDash.substring(8,10)}/${dataSaldoInicialDash.substring(5,7)}/${dataSaldoInicialDash.substring(0,4)}: inicial ${fmtV(saldoInicialDash)} + entradas ${fmtV(entDesdeSaldo)} − saídas ${fmtV(saiDesdeSaldo)}</div>` : `<div style="font-size:11px;color:#ffd166;margin-top:4px;">⚠️ Saldo inicial não definido — configure no Financeiro</div>`}
+      </div>
+    </div>
+
     <!-- FILTRO DE MÊS -->
     <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
       <div style="font-size:12px;font-weight:700;color:#555;white-space:nowrap;">📅 Período:</div>
@@ -5424,6 +5444,54 @@ async function salvarLancamento(editId) {
   if (error) { showNotif('Erro ao salvar.', 'error'); } else { showNotif('Lancamento salvo!', 'success'); renderFinanceiro(); }
 }
 
+function abrirModalSaldoInicial(saldoAtual) {
+  let m = document.getElementById('modal-saldo-inicial');
+  if (m) m.remove();
+  m = document.createElement('div');
+  m.id = 'modal-saldo-inicial';
+  m.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
+  const hoje = new Date().toISOString().substring(0,10);
+  m.innerHTML = `
+    <div style="background:white;border-radius:16px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+      <div style="background:#2C5F2E;color:white;padding:16px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:15px;font-weight:700;">⚙️ Definir Saldo Inicial</div>
+        <button onclick="document.getElementById('modal-saldo-inicial').remove()" style="background:none;border:none;color:white;font-size:22px;cursor:pointer;">×</button>
+      </div>
+      <div style="padding:20px;">
+        <p style="font-size:13px;color:#666;margin:0 0 16px;">Informe o saldo real de hoje (somando todas as contas: Sicredi + Caixa + Mercado Pago). A partir dessa data, o sistema soma entradas e subtrai saídas para manter o saldo sempre atualizado.</p>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px;font-weight:600;color:#333;display:block;margin-bottom:6px;">Saldo Atual (pode ser negativo) *</label>
+          <input id="si-valor" type="number" step="0.01" value="${saldoAtual||''}" placeholder="-12386.96" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;">
+          <div style="font-size:11px;color:#888;margin-top:4px;">Use número negativo se estiver no vermelho (ex: -12386.96)</div>
+        </div>
+        <div style="margin-bottom:20px;">
+          <label style="font-size:13px;font-weight:600;color:#333;display:block;margin-bottom:6px;">Data de Referência *</label>
+          <input id="si-data" type="date" value="${hoje}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;">
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button onclick="salvarSaldoInicial()" style="flex:1;background:#2E7D32;color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✅ Salvar</button>
+          <button onclick="document.getElementById('modal-saldo-inicial').remove()" style="background:#eee;color:#333;border:none;padding:12px 16px;border-radius:8px;font-size:14px;cursor:pointer;">Cancelar</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(m);
+}
+
+async function salvarSaldoInicial() {
+  const valor = parseFloat(document.getElementById('si-valor').value);
+  const data = document.getElementById('si-data').value;
+  if (isNaN(valor) || !data) { alert('Preencha o valor e a data!'); return; }
+  const { data: existe } = await getSB().from('configuracoes').select('id').eq('chave','saldo_inicial').maybeSingle();
+  if (existe) {
+    await getSB().from('configuracoes').update({ valor: valor, data_referencia: data }).eq('chave','saldo_inicial');
+  } else {
+    await getSB().from('configuracoes').insert({ chave: 'saldo_inicial', valor: valor, data_referencia: data });
+  }
+  document.getElementById('modal-saldo-inicial').remove();
+  showNotif('✅ Saldo inicial salvo!', 'success');
+  renderFinanceiro();
+}
+
 async function renderFinanceiro() {
   const el = document.getElementById('financeiro-content');
   if (!el) return;
@@ -5474,11 +5542,21 @@ async function renderFinanceiro() {
   // MP sempre zerado (dinheiro é transferido para Sicredi/Caixa)
   // Saídas com "(Caixa)" na descrição devem estar salvas com banco='Caixa'
   // Saldo total = todas entradas - todas saídas (independente do banco)
-  const totalEnt = transacoes.filter(t => t.tipo==='entrada').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
-  const saiSicredi = transacoes.filter(t => t.banco==='Sicredi' && t.tipo==='saida').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
-  const saiCaixa = transacoes.filter(t => t.banco==='Caixa' && t.tipo==='saida').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  // SALDO INICIAL — ponto de partida definido pelo usuário
+  let saldoInicial = 0;
+  let dataSaldoInicial = '';
+  try {
+    const { data: cfg } = await getSB().from('configuracoes').select('*').eq('chave','saldo_inicial').maybeSingle();
+    if (cfg) { saldoInicial = parseFloat(cfg.valor)||0; dataSaldoInicial = cfg.data_referencia || ''; }
+  } catch(e) {}
+
+  // Filtra transações a partir da data de referência do saldo inicial (se definida)
+  const txParaSaldo = dataSaldoInicial ? transacoes.filter(t => (t.data||'') >= dataSaldoInicial) : transacoes;
+  const totalEnt = txParaSaldo.filter(t => t.tipo==='entrada').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const saiSicredi = txParaSaldo.filter(t => t.banco==='Sicredi' && t.tipo==='saida').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const saiCaixa = txParaSaldo.filter(t => t.banco==='Caixa' && t.tipo==='saida').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const totalSai = saiSicredi + saiCaixa;
-  const saldoTotal = totalEnt - totalSai;
+  const saldoTotal = saldoInicial + totalEnt - totalSai;
   const entSicredi = totalEnt; // para exibição
   const entCaixa = 0;
   const saldoSicredi = saiSicredi;
@@ -5558,22 +5636,26 @@ async function renderFinanceiro() {
 
     <!-- SALDO TOTAL -->
     <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:18px 20px;margin-bottom:20px;border-left:5px solid ${saldoTotal>=0?'#2E7D32':'#B85A4A'};">
-      <div style="font-size:11px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;">🏦 Saldo Disponível (acumulado jan–jun/2026)</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div style="font-size:11px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">🏦 Saldo Disponível</div>
+        <button onclick="abrirModalSaldoInicial(${saldoInicial})" style="background:#f0f0f0;color:#555;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;">⚙️ Definir saldo inicial</button>
+      </div>
+      ${dataSaldoInicial ? `<div style="font-size:11px;color:#888;margin-bottom:10px;">Saldo inicial de ${fmtDt(dataSaldoInicial)}: <b>${fmtV(saldoInicial)}</b></div>` : `<div style="font-size:11px;color:#B85A4A;margin-bottom:10px;">⚠️ Saldo inicial não definido — clique em "Definir saldo inicial"</div>`}
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
         <div style="background:#f8f9fa;border-radius:10px;padding:14px;text-align:center;">
           <div style="font-size:11px;color:#555;font-weight:600;margin-bottom:6px;">📥 Total Entradas</div>
           <div style="font-size:18px;font-weight:800;color:#2E7D32;">${fmtV(totalEnt)}</div>
-          <div style="font-size:10px;color:#888;margin-top:4px;">Sicredi + MP + Caixa</div>
+          <div style="font-size:10px;color:#888;margin-top:4px;">desde ${dataSaldoInicial?fmtDt(dataSaldoInicial):'início'}</div>
         </div>
         <div style="background:#f8f9fa;border-radius:10px;padding:14px;text-align:center;">
           <div style="font-size:11px;color:#555;font-weight:600;margin-bottom:6px;">📤 Total Saídas</div>
           <div style="font-size:18px;font-weight:800;color:#B85A4A;">${fmtV(totalSai)}</div>
-          <div style="font-size:10px;color:#888;margin-top:4px;">Sicredi: ${fmtV(saiSicredi)} · Caixa: ${fmtV(saiCaixa)}</div>
+          <div style="font-size:10px;color:#888;margin-top:4px;">desde ${dataSaldoInicial?fmtDt(dataSaldoInicial):'início'}</div>
         </div>
         <div style="background:${saldoTotal>=0?'#e8f5e9':'#ffebee'};border-radius:10px;padding:14px;text-align:center;border:2px solid ${saldoTotal>=0?'#2E7D32':'#B85A4A'};">
           <div style="font-size:11px;color:#555;font-weight:700;margin-bottom:6px;">💰 SALDO DISPONÍVEL</div>
           <div style="font-size:22px;font-weight:900;color:${saldoTotal>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoTotal)}</div>
-          <div style="font-size:10px;color:#888;margin-top:4px;">entradas − saídas</div>
+          <div style="font-size:10px;color:#888;margin-top:4px;">inicial + entradas − saídas</div>
         </div>
       </div>
     </div>

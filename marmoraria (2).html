@@ -5432,7 +5432,7 @@ async function renderFinanceiro() {
   const bancos = getBancos();
   let transacoes = [];
   try {
-    const { data } = await getSB().from('transacoes').select('*').order('data', { ascending: false });
+    const { data } = await getSB().from('transacoes').select('*').order('data', { ascending: false }).range(0, 4999);
     transacoes = data || [];
   } catch(e) { console.error(e); }
 

@@ -2087,6 +2087,10 @@ function iniciarApp() {
   if (typeof carregarContasPagarDoSupabase === 'function') {
     carregarContasPagarDoSupabase();
   }
+  // Carrega orçamentos do Supabase
+  if (typeof carregarOrcamentosDoSupabase === 'function') {
+    carregarOrcamentosDoSupabase();
+  }
   // Restaura sessão salva (evita login ao recarregar)
   var sessaoSalva = localStorage.getItem('mf_sessao');
   if (sessaoSalva && PROFILES[sessaoSalva]) {
@@ -8828,9 +8832,42 @@ function getOrcamentos() {
   } catch(e) { return []; }
 }
 function salvarOrcamentos(orcs) {
-  // Limita a 50 orçamentos para não estourar o localStorage
   if (orcs.length > 50) orcs = orcs.slice(-50);
   localStorage.setItem('orcamentos_marmorflow', JSON.stringify(orcs));
+  // Sincroniza com Supabase em background
+  sincronizarOrcamentosSupabase(orcs);
+}
+
+let _syncOrcTimeout = null;
+function sincronizarOrcamentosSupabase(orcs) {
+  clearTimeout(_syncOrcTimeout);
+  _syncOrcTimeout = setTimeout(async () => {
+    try {
+      for (const orc of orcs) {
+        if (!orc.id) continue;
+        const row = {
+          id: orc.id,
+          pedido_id: orc.pedidoId || null,
+          pedido_key: orc.pedidoKey || null,
+          cliente: orc.cliente || '',
+          status: orc.status || '',
+          dados: orc,
+          updated_at: new Date().toISOString()
+        };
+        await getSB().from('orcamentos').upsert(row, { onConflict: 'id' });
+      }
+    } catch(e) { console.error('Erro ao sincronizar orçamentos:', e); }
+  }, 1000);
+}
+
+async function carregarOrcamentosDoSupabase() {
+  try {
+    const { data, error } = await getSB().from('orcamentos').select('*').order('updated_at', { ascending: false });
+    if (error || !data || !data.length) return;
+    const orcs = data.map(r => r.dados || {});
+    localStorage.setItem('orcamentos_marmorflow', JSON.stringify(orcs));
+    console.log('Orçamentos carregados do Supabase:', orcs.length);
+  } catch(e) { console.error('Erro ao carregar orçamentos:', e); }
 }
 
 // ─── CÁLCULO DO ORÇAMENTO ────────────────────────────────────────────────

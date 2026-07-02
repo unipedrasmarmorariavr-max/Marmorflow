@@ -1216,7 +1216,7 @@ function createCard(o) {
         <button class="card-btn" onclick="copiarLinkCliente('${o.id}');event.stopPropagation()" title="Link cliente" style="color:#25D366;">🔗</button>
         ${['corte','acabamento','pronto','entregue'].includes(o.stage)?`<button class="card-btn" onclick="abrirVerProjeto('${o.id}');event.stopPropagation()" title="Ver Projeto" style="color:#006382;">📐</button>`:''}
         ${o.stage==='pronto'&&(currentUser==='dono'||currentUser==='comercial')?`<button class="card-btn" onclick="definirResponsavelInstalacao('${o.id}','${o.dataentrega||''}','pedido');event.stopPropagation()" title="${o.responsavel_instalacao?'👷 '+o.responsavel_instalacao:'Definir responsável'}" style="color:${o.responsavel_instalacao?'#2E7D32':'#B85A4A'};">🔧</button>`:''}
-        ${showFechar?`<button class="card-btn" onclick="abrirFecharPedido('${o.id}');event.stopPropagation()" title="Dados comerciais" style="color:var(--green);font-size:13px;">💼</button>`:''}
+        ${(showFechar&&!['aguardando','negociacao'].includes(o.stage))?`<button class="card-btn" onclick="abrirFecharPedido('${o.id}');event.stopPropagation()" title="Dados comerciais" style="color:var(--green);font-size:13px;">💼</button>`:''}
         ${p.canEdit&&o.stage==='medicao'?`<button class="card-btn" onclick="openEditMedidor('${o.id}')" title="Editar">✏️</button>`:''}
         ${p.canDelete?`<button class="card-btn" onclick="deleteOrder('${o.id}')" title="Excluir">🗑</button>`:''}
       </div>

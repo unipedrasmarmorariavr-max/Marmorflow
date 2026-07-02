@@ -2869,6 +2869,7 @@ function getEstoque() {
 }
 function salvarEstoque(chapas) {
   localStorage.setItem('mf_estoque', JSON.stringify(chapas));
+  syncConfigToSupabase('mf_estoque', chapas);
 }
 
 function renderMateriais() {
@@ -8087,6 +8088,7 @@ function excluirInstalacao(id) {
   const inst = JSON.parse(localStorage.getItem('mf_instalacoes')||'[]');
   const nova = inst.filter(i => i.id !== id);
   localStorage.setItem('mf_instalacoes', JSON.stringify(nova));
+  syncConfigToSupabase('mf_instalacoes', nova);
   renderAgendaInstalacao();
   showNotif('Instalação excluída!', 'success');
 }
@@ -8672,7 +8674,7 @@ async function loadConfigFromSupabase(chave) {
 }
 
 async function carregarConfigsDoSupabase() {
-  const chaves = ['config_orcamento', 'pedras_cadastradas', 'pedras_extras', 'mf_bancos', 'gastos_marmorflow'];
+  const chaves = ['config_orcamento', 'pedras_cadastradas', 'pedras_extras', 'mf_bancos', 'gastos_marmorflow', 'mf_estoque', 'mf_instalacoes'];
   for (const chave of chaves) {
     try {
       const val = await loadConfigFromSupabase(chave);

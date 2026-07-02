@@ -1217,6 +1217,7 @@ function createCard(o) {
         ${['corte','acabamento','pronto','entregue'].includes(o.stage)?`<button class="card-btn" onclick="abrirVerProjeto('${o.id}');event.stopPropagation()" title="Ver Projeto" style="color:#006382;">📐</button>`:''}
         ${o.stage==='pronto'&&(currentUser==='dono'||currentUser==='comercial')?`<button class="card-btn" onclick="definirResponsavelInstalacao('${o.id}','${o.dataentrega||''}','pedido');event.stopPropagation()" title="${o.responsavel_instalacao?'👷 '+o.responsavel_instalacao:'Definir responsável'}" style="color:${o.responsavel_instalacao?'#2E7D32':'#B85A4A'};">🔧</button>`:''}
         ${showFechar?`<button class="card-btn" onclick="abrirFecharPedido('${o.id}');event.stopPropagation()" title="Adicionar dados comerciais" style="color:var(--green);font-size:13px;">💼</button>`:''}
+        ${(p.canOrcamento&&['aguardando','negociacao'].includes(o.stage))?`<button class="card-btn" onclick="abrirTelaOrcamentoPedido('${o.id}');event.stopPropagation()" title="Fazer orçamento" style="color:#8B6914;font-size:11px;font-weight:700;background:#FBF8F2;border:1px solid #D4AF6E;border-radius:4px;padding:2px 6px;">📋 Orçar</button>`:''}
         ${p.canEdit&&o.stage==='medicao'?`<button class="card-btn" onclick="openEditMedidor('${o.id}')" title="Editar">✏️</button>`:''}
         ${p.canDelete?`<button class="card-btn" onclick="deleteOrder('${o.id}')" title="Excluir">🗑</button>`:''}
       </div>
@@ -10781,6 +10782,12 @@ async function salvarOrcamentoPedido(silencioso) {
       if (orcamentoAtual.origem) {
         updateData.origem = orcamentoAtual.origem;
         order.origem = orcamentoAtual.origem;
+      }
+      // Se pedido está em "aguardando orçamento", muda para "negociação" automaticamente
+      if (order.stage === 'aguardando') {
+        updateData.stage = 'negociacao';
+        order.stage = 'negociacao';
+        showNotif('📋 Orçamento salvo! Pedido movido para Negociação ✓', 'success');
       }
       if (Object.keys(updateData).length > 0) {
         await getSB().from('pedidos').update(updateData).eq('id', pedidoOrcAtual);

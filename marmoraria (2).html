@@ -2827,8 +2827,17 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
         </div>
       </div>
     </div>
+
+    <!-- ANÁLISE DE GASTOS POR CATEGORIA -->
+    <div style="margin-top:16px;" id="dash-analise-wrapper">
+      <div id="dash-analise-inner" style="color:#888;padding:20px;text-align:center;">Carregando análise...</div>
+    </div>
   `;
 }
+  setTimeout(function() {
+    const el = document.getElementById('dash-analise-inner');
+    if (el) el.innerHTML = renderAnaliseFinanceiro(txMes, filtroAtual);
+  }, 100);
 
 function card(icon,title,value,sub,bg,color) {
   return `<div style="background:${bg};border-radius:14px;padding:20px;">
@@ -5743,7 +5752,7 @@ async function renderFinanceiro() {
 
     <!-- TABS -->
     <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid var(--cream-dark);overflow-x:auto;-webkit-overflow-scrolling:touch;">
-      ${[['geral','📊 Lançamentos'],['receber','📋 A Receber'],['pagar','📤 Contas a Pagar'],['dividas','💳 Dívidas'],['analise','📈 Análise']].map(([aba,label]) => `
+      ${[['geral','📊 Lançamentos'],['receber','📋 A Receber'],['pagar','📤 Contas a Pagar'],['dividas','💳 Dívidas']].map(([aba,label]) => `
       <button onclick="finSwitchAba('${aba}')" id="fin-aba-${aba}"
         style="padding:10px 20px;border:none;background:${abaFin===aba?'var(--gold)':'var(--cream-dark)'};color:${abaFin===aba?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
         ${label}
@@ -5983,16 +5992,10 @@ async function renderFinanceiro() {
       <div id="fin-dividas-content">Carregando...</div>
     </div>
 
-    <div id="fin-painel-analise" style="display:${abaFin==='analise'?'block':'none'}">
-      <div id="fin-analise-inner" style="color:#888;padding:20px;text-align:center;">Carregando análise...</div>
-    </div>
+
 
   </div>`;
-  // Renderiza a aba análise separadamente para evitar template literal aninhado
-  setTimeout(function() {
-    const el = document.getElementById('fin-analise-inner');
-    if (el) el.innerHTML = renderAnaliseFinanceiro(txMes, filtroMes);
-  }, 50);
+
 }
 setTimeout(aplicarEstilosMobile,50);
 

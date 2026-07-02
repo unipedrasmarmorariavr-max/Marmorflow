@@ -231,6 +231,8 @@
   .custos-adicionais-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; }
 
   @media(max-width:768px){
+    /* Botão mover aparece só no mobile */
+    .btn-mover-mobile { display: block !important; }
 
     /* ══ RESET GLOBAL MOBILE ══════════════════════════════════════════ */
     *, *::before, *::after { box-sizing: border-box; }
@@ -1225,6 +1227,12 @@ function createCard(o) {
       style="width:100%;margin-top:8px;padding:8px;background:#8B6914;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:.5px;">
       📋 ORÇAR
     </button>`:''}
+    ${_canDrag?`
+    <button onclick="abrirMenuMoverPedido('${o.id}','${o.stage}');event.stopPropagation()"
+      style="width:100%;margin-top:6px;padding:8px;background:#f0f0f0;color:#555;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:none;" 
+      class="btn-mover-mobile">
+      ➡️ Mover para...
+    </button>`:''}
     </div>`;
   return div;
 }
@@ -1519,6 +1527,54 @@ async function salvarItensCliente(id) {
 }
 
 // ============ DRAG & DROP ============
+
+function abrirMenuMoverPedido(id, stageAtual) {
+  const order = orders.find(o => o.id === id);
+  if (!order) return;
+  const p = PROFILES[currentUser];
+
+  // Estágios disponíveis para mover
+  const todosStages = [
+    { id:'medicao', label:'📐 Medição' },
+    { id:'aguardando', label:'⏳ Aguardando Orçamento' },
+    { id:'negociacao', label:'💬 Negociação' },
+    { id:'fechado', label:'✅ Pedido Fechado' },
+    { id:'corte', label:'🪚 Em Corte' },
+    { id:'acabamento', label:'✨ Acabamento' },
+    { id:'pronto', label:'📦 Pronto p/ Entrega' },
+    { id:'entregue', label:'🚚 Entregue' },
+  ].filter(s => s.id !== stageAtual);
+
+  let m = document.getElementById('modal-mover-mobile');
+  if (m) m.remove();
+  m = document.createElement('div');
+  m.id = 'modal-mover-mobile';
+  m.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center;';
+  m.innerHTML = `
+    <div style="background:white;border-radius:16px 16px 0 0;width:100%;max-width:500px;padding:20px;max-height:80vh;overflow-y:auto;">
+      <div style="font-size:15px;font-weight:700;color:#333;margin-bottom:4px;">➡️ Mover pedido</div>
+      <div style="font-size:13px;color:#888;margin-bottom:16px;">${order.cliente} — ${id}</div>
+      ${todosStages.map(s => `
+        <button onclick="moverPedidoMobile('${id}','${s.id}')" 
+          style="width:100%;text-align:left;padding:14px 16px;background:#f8f8f8;border:none;border-radius:10px;margin-bottom:8px;font-size:14px;font-weight:600;cursor:pointer;color:#333;">
+          ${s.label}
+        </button>`).join('')}
+      <button onclick="document.getElementById('modal-mover-mobile').remove()" 
+        style="width:100%;padding:12px;background:#eee;border:none;border-radius:10px;font-size:14px;color:#555;cursor:pointer;margin-top:4px;">
+        Cancelar
+      </button>
+    </div>`;
+  m.onclick = (e) => { if (e.target === m) m.remove(); };
+  document.body.appendChild(m);
+}
+
+async function moverPedidoMobile(id, novoStage) {
+  document.getElementById('modal-mover-mobile')?.remove();
+  // Reutiliza a lógica existente de drop
+  const fakeEvent = { preventDefault: ()=>{}, dataTransfer: { getData: ()=>id }, currentTarget: { classList: { remove: ()=>{} } } };
+  await drop({ preventDefault:()=>{}, dataTransfer:{ getData:()=>id }, currentTarget:{ classList:{remove:()=>{}} } }, novoStage);
+}
+
 function dragOver(e){e.preventDefault();e.currentTarget.classList.add('drag-over');}
 function dragLeave(e){e.currentTarget.classList.remove('drag-over');}
 async function drop(e,stage) {

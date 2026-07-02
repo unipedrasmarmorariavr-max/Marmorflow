@@ -3438,7 +3438,13 @@ function salvarContaPagar() {
       if (recorrencia === 'semanal') {
         d.setDate(d.getDate() + (i * 7)); // incrementa 7 dias por semana
       } else {
-        d.setMonth(d.getMonth() + i); // incrementa 1 mês
+        // Incrementa mês respeitando último dia do mês
+        const diaOriginal = base.getDate();
+        d.setDate(1); // vai para dia 1 para evitar overflow
+        d.setMonth(base.getMonth() + i);
+        // Coloca o dia correto (ou o último dia do mês se não existir)
+        const ultimoDia = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+        d.setDate(Math.min(diaOriginal, ultimoDia));
       }
       const dtStr = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
       contas.push({

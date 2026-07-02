@@ -5661,6 +5661,51 @@ async function renderFinanceiro() {
       </div>
     </div>
 
+    <!-- ALERTAS DE VENCIMENTO -->
+    ${(() => {
+      const hoje = new Date().toISOString().substring(0,10);
+      const contasAlerta = getContasPagar().filter(c =>
+        c.status !== 'pago' && c.vencimento && c.vencimento <= hoje
+      ).sort((a,b) => a.vencimento.localeCompare(b.vencimento));
+
+      if (!contasAlerta.length) return '';
+
+      const venceHoje = contasAlerta.filter(c => c.vencimento === hoje);
+      const vencidas = contasAlerta.filter(c => c.vencimento < hoje);
+
+      const fmtDt = d => d.substring(8,10)+'/'+d.substring(5,7)+'/'+d.substring(0,4);
+
+      let html = '<div style="margin-bottom:16px;">';
+
+      if (venceHoje.length) {
+        html += '<div style="background:#FFF3CD;border:1.5px solid #F0A500;border-radius:12px;padding:14px 18px;margin-bottom:10px;">';
+        html += '<div style="font-size:13px;font-weight:700;color:#8B6914;margin-bottom:8px;">⚠️ Vence Hoje ('+venceHoje.length+')</div>';
+        venceHoje.forEach(c => {
+          html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #F0E0A0;">';
+          html += '<span style="font-size:13px;color:#555;">'+c.descricao+'</span>';
+          html += '<span style="font-size:13px;font-weight:700;color:#8B6914;">R$ '+parseFloat(c.valor).toLocaleString("pt-BR",{minimumFractionDigits:2})+'</span>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+
+      if (vencidas.length) {
+        html += '<div style="background:#FFEBEE;border:1.5px solid #B85A4A;border-radius:12px;padding:14px 18px;">';
+        html += '<div style="font-size:13px;font-weight:700;color:#B85A4A;margin-bottom:8px;">🔴 Contas Vencidas ('+vencidas.length+')</div>';
+        vencidas.forEach(c => {
+          html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #F5C0B8;">';
+          html += '<div><span style="font-size:13px;color:#555;">'+c.descricao+'</span>';
+          html += '<span style="font-size:11px;color:#B85A4A;margin-left:8px;">venceu '+fmtDt(c.vencimento)+'</span></div>';
+          html += '<span style="font-size:13px;font-weight:700;color:#B85A4A;">R$ '+parseFloat(c.valor).toLocaleString("pt-BR",{minimumFractionDigits:2})+'</span>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+
+      html += '</div>';
+      return html;
+    })()}
+
     <!-- CARDS RESUMO -->
     <div id="fin-cards-resumo" style="display:grid;gap:12px;margin-bottom:20px;">
       <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid #2E7D32;">

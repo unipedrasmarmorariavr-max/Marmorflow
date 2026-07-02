@@ -6091,83 +6091,57 @@ function renderAnaliseFinanceiro(txMes, filtroMes) {
 async function renderDividas() {
   const el = document.getElementById('fin-dividas-content');
   if (!el) return;
-  el.innerHTML = '<div style="padding:30px;text-align:center;color:#888;">Carregando dívidas...</div>';
 
   const contas = getContasPagar();
   const CATS_DIVIDA = ['Dívida','Financiamento/Refinanciamento'];
   const dividas = contas.filter(c => CATS_DIVIDA.includes(c.categoria));
-
-  if (!dividas.length) {
-    el.innerHTML = '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:40px;text-align:center;color:#888;"><div style="font-size:48px;margin-bottom:12px;">✅</div><div style="font-size:16px;font-weight:700;color:#2E7D32;">Nenhuma dívida cadastrada</div></div>';
-    return;
-  }
-
   const fmtV = v => 'R$ '+(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
   const fmtDt = d => d ? d.substring(8,10)+'/'+d.substring(5,7)+'/'+d.substring(0,4) : '-';
   const hoje = new Date().toISOString().substring(0,10);
 
-  const pendentes = dividas.filter(c => c.status !== 'pago');
-  const pagas = dividas.filter(c => c.status === 'pago');
-  const totalPendente = pendentes.reduce((s,c) => s+(parseFloat(c.valor)||0), 0);
-  const totalPago = pagas.reduce((s,c) => s+(parseFloat(c.valor)||0), 0);
-  const totalGeral = dividas.reduce((s,c) => s+(parseFloat(c.valor)||0), 0);
+  if (!dividas.length) {
+    el.innerHTML = '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:40px;text-align:center;"><div style="font-size:40px;margin-bottom:12px;">✅</div><div style="font-size:16px;font-weight:700;color:#2E7D32;">Nenhuma dívida cadastrada</div></div>';
+    return;
+  }
 
-  // Agrupar por descrição base (removendo " (X/Y)")
+  const totalAberto = dividas.filter(c=>c.status!=='pago').reduce((s,c)=>s+(parseFloat(c.valor)||0),0);
+
+  // Agrupar por descrição base
   const grupos = {};
   dividas.forEach(c => {
     const base = c.descricao.replace(/\s*\(\d+\/\d+\)$/, '').trim();
-    if (!grupos[base]) grupos[base] = { contas:[], cat: c.categoria };
-    grupos[base].contas.push(c);
+    if (!grupos[base]) grupos[base] = [];
+    grupos[base].push(c);
   });
 
   el.innerHTML = `
-    <!-- RESUMO -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
-      <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;text-align:center;border-top:4px solid #B85A4A;">
-        <div style="font-size:11px;color:#888;font-weight:700;margin-bottom:6px;">💳 TOTAL EM ABERTO</div>
-        <div style="font-size:20px;font-weight:900;color:#B85A4A;">${fmtV(totalPendente)}</div>
-      </div>
-      <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;text-align:center;border-top:4px solid #2E7D32;">
-        <div style="font-size:11px;color:#888;font-weight:700;margin-bottom:6px;">✅ TOTAL PAGO</div>
-        <div style="font-size:20px;font-weight:900;color:#2E7D32;">${fmtV(totalPago)}</div>
-      </div>
-      <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;text-align:center;border-top:4px solid #555;">
-        <div style="font-size:11px;color:#888;font-weight:700;margin-bottom:6px;">📊 TOTAL GERAL</div>
-        <div style="font-size:20px;font-weight:900;color:#333;">${fmtV(totalGeral)}</div>
-      </div>
+    <!-- TOTAL EM ABERTO -->
+    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;margin-bottom:16px;border-left:5px solid #B85A4A;">
+      <div style="font-size:11px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">💳 Total de Dívidas em Aberto</div>
+      <div style="font-size:28px;font-weight:900;color:#B85A4A;">${fmtV(totalAberto)}</div>
     </div>
 
-    <!-- LISTA POR CREDOR -->
-    <div style="display:flex;flex-direction:column;gap:12px;">
-      ${Object.entries(grupos).map(([base, g]) => {
-        const pagas = g.contas.filter(c=>c.status==='pago').length;
-        const total = g.contas.length;
-        const valorPago = g.contas.filter(c=>c.status==='pago').reduce((s,c)=>s+(parseFloat(c.valor)||0),0);
-        const valorAberto = g.contas.filter(c=>c.status!=='pago').reduce((s,c)=>s+(parseFloat(c.valor)||0),0);
-        const progresso = total > 1 ? Math.round((pagas/total)*100) : null;
-        const proxVenc = g.contas.filter(c=>c.status!=='pago' && c.vencimento).sort((a,b)=>a.vencimento.localeCompare(b.vencimento))[0];
+    <!-- LISTA -->
+    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
+      ${Object.entries(grupos).map(([base, contas]) => {
+        const pagas = contas.filter(c=>c.status==='pago').length;
+        const total = contas.length;
+        const valorAberto = contas.filter(c=>c.status!=='pago').reduce((s,c)=>s+(parseFloat(c.valor)||0),0);
+        const proxVenc = contas.filter(c=>c.status!=='pago'&&c.vencimento).sort((a,b)=>a.vencimento.localeCompare(b.vencimento))[0];
         const vencida = proxVenc && proxVenc.vencimento < hoje;
+        const quitada = valorAberto === 0;
 
-        return `<div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
-          <div style="padding:16px 20px;border-bottom:1px solid #f0f0f0;">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
-              <div>
-                <div style="font-size:14px;font-weight:700;color:#333;">${base}</div>
-                <div style="font-size:11px;color:#888;margin-top:3px;">${g.cat}${total>1?' · '+pagas+'/'+total+' parcelas pagas':''}</div>
-                ${proxVenc ? `<div style="font-size:11px;color:${vencida?'#B85A4A':'#888'};margin-top:3px;">📅 Próximo venc: ${fmtDt(proxVenc.vencimento)}${vencida?' ⚠️ VENCIDA':''}</div>` : ''}
-              </div>
-              <div style="text-align:right;">
-                ${valorAberto>0 ? `<div style="font-size:16px;font-weight:800;color:#B85A4A;">${fmtV(valorAberto)} em aberto</div>` : '<div style="font-size:14px;font-weight:700;color:#2E7D32;">✅ Quitada</div>'}
-                ${valorPago>0 ? `<div style="font-size:11px;color:#2E7D32;">Pago: ${fmtV(valorPago)}</div>` : ''}
-              </div>
-            </div>
-            ${progresso !== null ? `
-            <div style="margin-top:10px;">
-              <div style="background:#f0f0f0;border-radius:99px;height:6px;overflow:hidden;">
-                <div style="background:#2E7D32;height:100%;width:${progresso}%;border-radius:99px;transition:width .3s;"></div>
-              </div>
-              <div style="font-size:10px;color:#888;margin-top:4px;">${progresso}% pago</div>
-            </div>` : ''}
+        return `<div style="padding:14px 20px;border-bottom:1px solid #f5f5f5;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:#333;">${base}</div>
+            ${total>1?`<div style="font-size:11px;color:#888;">${pagas}/${total} parcelas pagas</div>`:''}
+            ${proxVenc?`<div style="font-size:11px;color:${vencida?'#B85A4A':'#888'};">📅 ${fmtDt(proxVenc.vencimento)}${vencida?' ⚠️':''}</div>`:''}
+          </div>
+          <div style="text-align:right;">
+            ${quitada
+              ? `<div style="font-size:13px;font-weight:700;color:#2E7D32;">✅ Quitada</div>`
+              : `<div style="font-size:16px;font-weight:800;color:#B85A4A;">${fmtV(valorAberto)}</div>`
+            }
           </div>
         </div>`;
       }).join('')}

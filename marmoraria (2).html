@@ -230,6 +230,8 @@
   .acabamentos-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; }
   .custos-adicionais-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; }
 
+  /* Botão mover escondido no desktop */
+  .btn-mover-mobile { display: none; }
   @media(max-width:768px){
     /* Botão mover aparece só no mobile */
     .btn-mover-mobile { display: block !important; }
@@ -1229,7 +1231,7 @@ function createCard(o) {
     </button>`:''}
     ${_canDrag?`
     <button onclick="abrirMenuMoverPedido('${o.id}','${o.stage}');event.stopPropagation()"
-      style="width:100%;margin-top:6px;padding:8px;background:#f0f0f0;color:#555;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:none;" 
+      style="width:100%;margin-top:6px;padding:8px;background:#f0f0f0;color:#555;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;" 
       class="btn-mover-mobile">
       ➡️ Mover para...
     </button>`:''}

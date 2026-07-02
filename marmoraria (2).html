@@ -2096,6 +2096,10 @@ function iniciarApp() {
   if (typeof carregarOrcamentosDoSupabase === 'function') {
     carregarOrcamentosDoSupabase();
   }
+  // Carrega configurações do Supabase (preços, pedras, bancos, gastos)
+  if (typeof carregarConfigsDoSupabase === 'function') {
+    carregarConfigsDoSupabase();
+  }
   // Restaura sessão salva (evita login ao recarregar)
   var sessaoSalva = localStorage.getItem('mf_sessao');
   if (sessaoSalva && PROFILES[sessaoSalva]) {
@@ -8538,6 +8542,7 @@ function salvarPedraExtra(nome, cat) {
   if (!extras.find(p => p.nome.toLowerCase() === nome.toLowerCase())) {
     extras.push({nome, cat: cat||'Outros'});
     localStorage.setItem('pedras_extras', JSON.stringify(extras));
+    syncConfigToSupabase('pedras_extras', extras);
   }
 }
 function todasAsPedras() {
@@ -8649,6 +8654,33 @@ const CONFIG_ORC_DEFAULT = {
   custoInsumo: 5,
 };
 
+
+// ============================================================
+// HELPER — Sincroniza configurações com Supabase
+// ============================================================
+async function syncConfigToSupabase(chave, valor) {
+  try {
+    await getSB().from('configuracoes_app').upsert({ chave, valor, updated_at: new Date().toISOString() }, { onConflict: 'chave' });
+  } catch(e) { console.error('Erro ao salvar config:', chave, e); }
+}
+
+async function loadConfigFromSupabase(chave) {
+  try {
+    const { data } = await getSB().from('configuracoes_app').select('valor').eq('chave', chave).maybeSingle();
+    return data ? data.valor : null;
+  } catch(e) { return null; }
+}
+
+async function carregarConfigsDoSupabase() {
+  const chaves = ['config_orcamento', 'pedras_cadastradas', 'pedras_extras', 'mf_bancos', 'gastos_marmorflow'];
+  for (const chave of chaves) {
+    try {
+      const val = await loadConfigFromSupabase(chave);
+      if (val !== null) localStorage.setItem(chave, JSON.stringify(val));
+    } catch(e) {}
+  }
+}
+
 function getConfigOrc() {
   try {
     const s = localStorage.getItem('config_orcamento');
@@ -8657,6 +8689,7 @@ function getConfigOrc() {
 }
 function salvarConfigOrc(cfg) {
   localStorage.setItem('config_orcamento', JSON.stringify(cfg));
+  syncConfigToSupabase('config_orcamento', cfg);
 }
 
 // Pedras cadastradas (salvas no localStorage)
@@ -8668,6 +8701,7 @@ function getPedrasCadastradas() {
 }
 function salvarPedras(pedras) {
   localStorage.setItem('pedras_cadastradas', JSON.stringify(pedras));
+  syncConfigToSupabase('pedras_cadastradas', pedras);
 }
 
 // Resolve pedra por ID primeiro, depois por nome (fallback para versões antigas)
@@ -11859,7 +11893,7 @@ function getGastos() {
     return s ? JSON.parse(s) : JSON.parse(JSON.stringify(GASTOS_DEFAULT));
   } catch(e) { return JSON.parse(JSON.stringify(GASTOS_DEFAULT)); }
 }
-function salvarGastos(g) { localStorage.setItem('gastos_marmorflow', JSON.stringify(g)); }
+function salvarGastos(g) { localStorage.setItem('gastos_marmorflow', JSON.stringify(g)); syncConfigToSupabase('gastos_marmorflow', g); }
 
 function renderConfiguracoes() {
   const el = document.getElementById('configuracoes-content');
@@ -11914,7 +11948,7 @@ function getBancos() {
     ];
   } catch(e) { return []; }
 }
-function salvarBancos(bancos) { localStorage.setItem('mf_bancos', JSON.stringify(bancos)); }
+function salvarBancos(bancos) { localStorage.setItem('mf_bancos', JSON.stringify(bancos)); syncConfigToSupabase('mf_bancos', bancos); }
 
 function renderBancos() {
   const el = document.getElementById('bancos-content');

@@ -5583,8 +5583,6 @@ async function renderFinanceiro() {
   const mesAtual = new Date().toISOString().substring(0,7);
   const filtroMes = localStorage.getItem('fin_mes') || mesAtual;
   const abaFin = localStorage.getItem('fin_aba') || 'geral';
-  // Resetar para geral se estava em dívidas (não deve abrir automaticamente)
-  if (abaFin === 'dividas') { localStorage.setItem('fin_aba', 'geral'); }
   const parseValor = o => parseFloat((o.valor||'0').toString().replace(',','.').replace(/[^0-9.]/g,''))||0;
 
   // Dados
@@ -6152,7 +6150,7 @@ async function renderDividas() {
 
 function finSwitchAba(aba) {
   localStorage.setItem('fin_aba', aba);
-  ['geral','receber','pagar','analise'].forEach(a => {
+  ['geral','receber','pagar','dividas','analise'].forEach(a => {
     const btn = document.getElementById('fin-aba-'+a);
     const panel = document.getElementById('fin-painel-'+a);
     if (btn) { btn.style.background = a===aba?'var(--gold)':'var(--cream-dark)'; btn.style.color = a===aba?'white':'var(--stone)'; }

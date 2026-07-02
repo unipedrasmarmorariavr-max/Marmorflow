@@ -2833,11 +2833,11 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
       <div id="dash-analise-inner" style="color:#888;padding:20px;text-align:center;">Carregando análise...</div>
     </div>
   `;
-}
   setTimeout(function() {
     const el = document.getElementById('dash-analise-inner');
     if (el) el.innerHTML = renderAnaliseFinanceiro(txMes, filtroAtual);
   }, 100);
+}
 
 function card(icon,title,value,sub,bg,color) {
   return `<div style="background:${bg};border-radius:14px;padding:20px;">

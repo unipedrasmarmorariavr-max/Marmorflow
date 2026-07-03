@@ -2640,7 +2640,7 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
   const saldoInicialDash = saldoInicialSicrediD + saldoInicialCaixaD + saldoInicialMPD;
   const txDesdeSaldo = dataSaldoInicialDash ? transacoes.filter(t => (t.data||'') >= dataSaldoInicialDash && t.categoria !== 'Transferência entre Bancos') : transacoes.filter(t => t.categoria !== 'Transferência entre Bancos');
   const entSicrediD = txDesdeSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Sicredi').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
-  const saiSicrediD = txDesdeSaldo.filter(t=>t.tipo==='saida'&&t.banco==='Sicredi').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const saiSicrediD = txDesdeSaldo.filter(t=>t.tipo==='saida'&&(t.banco==='Sicredi'||!t.banco)).reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const entCaixaD = txDesdeSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Caixa').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const saiCaixaD = txDesdeSaldo.filter(t=>t.tipo==='saida'&&t.banco==='Caixa').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const entMPD = txDesdeSaldo.filter(t=>t.tipo==='entrada'&&(t.banco==='Mercado Pago'||t.banco==='MP')).reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
@@ -3604,8 +3604,8 @@ async function pagarConta(id) {
       <div>
         <label class="form-label">Banco *</label>
         <select class="form-select" id="pag-banco">
-          <option value="${c.banco||''}">${c.banco||'Selecione...'}</option>
-          ${bancos.filter(b => b.nome !== c.banco).map(b => `<option value="${b.nome}">${b.nome}</option>`).join('')}
+          <option value="">Selecione o banco *</option>
+          ${['Sicredi','Caixa','Mercado Pago'].map(b => `<option value="${b}" ${(c.banco===b)?'selected':''}>${b}</option>`).join('')}
         </select>
       </div>
     </div>`;
@@ -3623,6 +3623,7 @@ async function confirmarPagamento() {
   const data = document.getElementById('pag-data')?.value;
   const banco = document.getElementById('pag-banco')?.value;
   if (!valor || !data) { showNotif('Preencha valor e data!','error'); return; }
+  if (!banco) { showNotif('Selecione o banco!','error'); return; }
 
   const contas = getContasPagar();
   const idx = contas.findIndex(c => c.id === contaId);
@@ -3755,6 +3756,7 @@ async function salvarTransacao(tipo) {
   const data = document.getElementById('fin-data').value;
   const bancoCat = document.getElementById('fin-banco-cat').value;
   if (!valor || !descricao || !data) { alert('Preencha todos os campos!'); return; }
+  if (tipo === 'saida' && !bancoCat) { alert('Selecione a categoria!'); return; }
   showLoading('Salvando...');
   const tx = {
     tipo,
@@ -5881,7 +5883,7 @@ async function renderFinanceiro() {
 
   // Saldo por banco = inicial + entradas - saídas de cada banco
   const entSicredi = txParaSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Sicredi').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
-  const saiSicredi = txParaSaldo.filter(t=>t.tipo==='saida'&&t.banco==='Sicredi').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const saiSicredi = txParaSaldo.filter(t=>t.tipo==='saida'&&t.banco==='Sicredi'||!t.banco).reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const entCaixa = txParaSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Caixa').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const saiCaixa = txParaSaldo.filter(t=>t.tipo==='saida'&&t.banco==='Caixa').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const entMP = txParaSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Mercado Pago').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);

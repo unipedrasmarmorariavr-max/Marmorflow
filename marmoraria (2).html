@@ -3276,6 +3276,15 @@ function removerChapa(id) {
   showNotif('Chapa removida', 'error');
 }
 
+const BANCOS = ['Sicredi','Caixa','Mercado Pago'];
+const CAT_SAIDA = [
+  'Folha de Pagamento','Fornecedor','Insumos de Instalação','Insumos de Produção',
+  'Aluguel','Combustível','Marketing','Alimentação (Vale/Cesta)','Energia Elétrica',
+  'Água','Celular','Contabilidade','Software (MarmóPrice)','Manutenção de Máquina',
+  'Assistência Saúde','Impostos','Despesas Financeiras (Banco)','Dívida',
+  'Financiamento/Refinanciamento','Material de Escritório','A Identificar','Outros'
+];
+
 function abrirLancamento(tipo) {
   const isEntrada = tipo === 'entrada';
   const title = isEntrada ? '+ Nova Entrada' : '- Nova Saída';
@@ -3669,7 +3678,10 @@ function abrirModalTransacao(tipo) {
               <option value="">Selecione o banco...</option>
               ${bancos.map(b => `<option value="${b.nome}">${b.nome}</option>`).join('')}
             </select>`
-          : `<input class="form-input" id="fin-banco-cat" placeholder="Ex: Fornecedor, Energia, Impostos...">`
+          : `<select class="form-select" id="fin-banco-cat">
+              <option value="">Selecione a categoria...</option>
+              ${CAT_SAIDA.map(c => `<option value="${c}">${c}</option>`).join('')}
+            </select>`
         }
       </div>
       ${isEntrada ? `
@@ -5525,10 +5537,11 @@ function abrirModalLancamento(t, mesForcado) {
   const mesAtual = mesForcado || localStorage.getItem('fin_mes') || new Date().toISOString().substring(0,7);
   const dataDefault = t ? t.data : mesAtual + '-01';
   const isEdit = !!t;
-  const cats = ['Recebimento de Cliente','Folha de Pagamento','Fornecedor','Insumos de Instalacao',
-    'Aluguel','Combustivel','Marketing','Alimentacao (Vale/Cesta)','Energia Eletrica','Agua',
-    'Celular','Contabilidade','Software (MarmoPrice)','Manutencao de Maquina','Assistencia Saude',
-    'Despesas Financeiras (Banco)','Divida','Material de Escritorio','A Identificar','Outros'];
+  const cats = ['Recebimento de Cliente','Folha de Pagamento','Fornecedor','Insumos de Instalação',
+    'Insumos de Produção','Aluguel','Combustível','Marketing','Alimentação (Vale/Cesta)','Energia Elétrica',
+    'Água','Celular','Contabilidade','Software (MarmóPrice)','Manutenção de Máquina','Assistência Saúde',
+    'Impostos','Despesas Financeiras (Banco)','Dívida','Financiamento/Refinanciamento',
+    'Material de Escritório','A Identificar','Outros'];
   const bancos = ['Sicredi','Caixa','Mercado Pago'];
   const formas = ['pix','cartao','boleto','dinheiro','ted','debito'];
   let modal = document.getElementById('modal-lancamento');

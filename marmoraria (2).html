@@ -2626,16 +2626,28 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
   const { data: txAll } = await getSB().from('transacoes').select('*');
   const transacoes = txAll || [];
 
-  // Saldo Inicial — para mostrar o saldo bancário real
-  let saldoInicialDash = 0, dataSaldoInicialDash = '';
+  // Saldo por Banco — mesmo cálculo do Financeiro
+  let saldoInicialSicrediD = 0, saldoInicialCaixaD = 0, saldoInicialMPD = 0, dataSaldoInicialDash = '';
   try {
-    const { data: cfgDash } = await getSB().from('configuracoes').select('*').eq('chave','saldo_inicial').maybeSingle();
-    if (cfgDash) { saldoInicialDash = parseFloat(cfgDash.valor)||0; dataSaldoInicialDash = cfgDash.data_referencia || ''; }
+    const { data: cfgs } = await getSB().from('configuracoes').select('*').in('chave', ['saldo_sicredi','saldo_caixa','saldo_mp']);
+    if (cfgs) {
+      const get = (chave) => cfgs.find(c=>c.chave===chave);
+      const cS = get('saldo_sicredi'); if (cS) { saldoInicialSicrediD = parseFloat(cS.valor)||0; dataSaldoInicialDash = cS.data_referencia||''; }
+      const cC = get('saldo_caixa'); if (cC) saldoInicialCaixaD = parseFloat(cC.valor)||0;
+      const cM = get('saldo_mp'); if (cM) saldoInicialMPD = parseFloat(cM.valor)||0;
+    }
   } catch(e) {}
-  const txDesdeSaldo = dataSaldoInicialDash ? transacoes.filter(t => (t.data||'') >= dataSaldoInicialDash) : transacoes;
-  const entDesdeSaldo = txDesdeSaldo.filter(t=>t.tipo==='entrada').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
-  const saiDesdeSaldo = txDesdeSaldo.filter(t=>t.tipo==='saida').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
-  const saldoBancarioReal = saldoInicialDash + entDesdeSaldo - saiDesdeSaldo;
+  const saldoInicialDash = saldoInicialSicrediD + saldoInicialCaixaD + saldoInicialMPD;
+  const txDesdeSaldo = dataSaldoInicialDash ? transacoes.filter(t => (t.data||'') >= dataSaldoInicialDash && t.categoria !== 'Transferência entre Bancos') : transacoes.filter(t => t.categoria !== 'Transferência entre Bancos');
+  const entSicrediD = txDesdeSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Sicredi').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const saiSicrediD = txDesdeSaldo.filter(t=>t.tipo==='saida'&&t.banco==='Sicredi').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const entCaixaD = txDesdeSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Caixa').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const saiCaixaD = txDesdeSaldo.filter(t=>t.tipo==='saida'&&t.banco==='Caixa').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const entMPD = txDesdeSaldo.filter(t=>t.tipo==='entrada'&&(t.banco==='Mercado Pago'||t.banco==='MP')).reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const saiMPD = txDesdeSaldo.filter(t=>t.tipo==='saida'&&(t.banco==='Mercado Pago'||t.banco==='MP')).reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const saldoBancarioReal = (saldoInicialSicrediD + entSicrediD - saiSicrediD) + (saldoInicialCaixaD + entCaixaD - saiCaixaD) + (saldoInicialMPD + entMPD - saiMPD);
+  const entDesdeSaldo = entSicrediD + entCaixaD + entMPD;
+  const saiDesdeSaldo = saiSicrediD + saiCaixaD + saiMPD;
 
   const CATS_DIVIDA = ['Dívida','Despesas Financeiras (Banco)'];
 

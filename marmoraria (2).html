@@ -3276,6 +3276,15 @@ function removerChapa(id) {
   showNotif('Chapa removida', 'error');
 }
 
+const BANCOS = ['Sicredi','Caixa','Mercado Pago'];
+const CAT_SAIDA = [
+  'Folha de Pagamento','Fornecedor','Insumos de Instalação','Insumos de Produção',
+  'Aluguel','Combustível','Marketing','Alimentação (Vale/Cesta)','Energia Elétrica',
+  'Água','Celular','Contabilidade','Software (MarmóPrice)','Manutenção de Máquina',
+  'Assistência Saúde','Impostos','Despesas Financeiras (Banco)','Dívida',
+  'Financiamento/Refinanciamento','Material de Escritório','A Identificar','Outros'
+];
+
 function abrirLancamento(tipo) {
   const isEntrada = tipo === 'entrada';
   const title = isEntrada ? '+ Nova Entrada' : '- Nova Saída';

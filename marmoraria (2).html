@@ -3693,6 +3693,12 @@ function abrirModalTransacao(tipo) {
           <option>Cartão Crédito</option><option>Transferência</option><option>Boleto</option><option>Parcelado</option>
         </select>
       </div>` : ''}
+      <div style="margin-top:8px;">
+        <button onclick="salvarTransacao('${tipo}')"
+          style="width:100%;background:${isEntrada?'#2E7D32':'#B85A4A'};color:white;border:none;padding:14px;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;">
+          ${isEntrada?'✅ Salvar Entrada':'✅ Salvar Saída'}
+        </button>
+      </div>
     </div>`;
   document.getElementById('modal-footer').innerHTML = `
     <button class="btn-secondary" onclick="closeModal('modal-detail')">Cancelar</button>

@@ -5710,14 +5710,12 @@ async function renderFinanceiro() {
   // Filtra transações a partir da data de referência do saldo inicial (se definida)
   const txParaSaldo = dataSaldoInicial ? transacoes.filter(t => (t.data||'') >= dataSaldoInicial) : transacoes;
   const totalEnt = txParaSaldo.filter(t => t.tipo==='entrada').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
-  const saiSicredi = txParaSaldo.filter(t => t.banco==='Sicredi' && t.tipo==='saida').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
-  const saiCaixa = txParaSaldo.filter(t => t.banco==='Caixa' && t.tipo==='saida').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
-  const totalSai = saiSicredi + saiCaixa;
+  const totalSai = txParaSaldo.filter(t => t.tipo==='saida').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const saldoTotal = saldoInicial + totalEnt - totalSai;
-  const entSicredi = totalEnt; // para exibição
+  const saiSicredi = totalSai; // para exibição
+  const saiCaixa = 0;
+  const entSicredi = totalEnt;
   const entCaixa = 0;
-  const saldoSicredi = saiSicredi;
-  const saldoCaixa = saiCaixa;
   const saldoMP = 0;
 
   el.innerHTML = `

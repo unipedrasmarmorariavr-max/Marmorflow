@@ -3653,6 +3653,11 @@ function excluirContaPagar(id) {
   showNotif('Conta excluída','error');
 }
 
+function toggleParcelasEntrada(forma) {
+  const wrap = document.getElementById('wrap-parcelas-entrada');
+  if (wrap) wrap.style.display = forma === 'Boleto Parcelado' ? 'block' : 'none';
+}
+
 function abrirModalTransacao(tipo) {
   const isEntrada = tipo === 'entrada';
   const bancos = getBancos();
@@ -3687,11 +3692,34 @@ function abrirModalTransacao(tipo) {
       ${isEntrada ? `
       <div>
         <label class="form-label">Forma de Pagamento</label>
-        <select class="form-select" id="fin-forma">
+        <select class="form-select" id="fin-forma" onchange="toggleParcelasEntrada(this.value)">
           <option value="">Selecione...</option>
           <option>Pix</option><option>Dinheiro</option><option>Cartão Débito</option>
-          <option>Cartão Crédito</option><option>Transferência</option><option>Boleto</option><option>Parcelado</option>
+          <option>Cartão Crédito</option><option>Transferência</option>
+          <option value="Boleto Parcelado">Boleto Parcelado</option>
         </select>
+      </div>
+      <div id="wrap-parcelas-entrada" style="display:none;background:#f8f9fa;border-radius:10px;padding:14px;border:1px solid #e0e0e0;">
+        <div style="font-size:13px;font-weight:700;color:#555;margin-bottom:10px;">📋 Parcelamento do restante</div>
+        <div style="font-size:12px;color:#888;margin-bottom:12px;">O valor acima é a entrada já recebida. Configure abaixo as parcelas restantes que vão para Contas a Receber.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#333;display:block;margin-bottom:4px;">Valor por parcela (R$)</label>
+            <input id="parc-valor" type="number" step="0.01" placeholder="0,00" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#333;display:block;margin-bottom:4px;">Nº de parcelas</label>
+            <input id="parc-qtd" type="number" min="1" max="60" placeholder="Ex: 4" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+          </div>
+        </div>
+        <div style="margin-top:10px;">
+          <label style="font-size:12px;font-weight:600;color:#333;display:block;margin-bottom:4px;">Vencimento da 1ª parcela</label>
+          <input id="parc-inicio" type="date" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+        </div>
+        <div style="margin-top:10px;">
+          <label style="font-size:12px;font-weight:600;color:#333;display:block;margin-bottom:4px;">Cliente (para A Receber)</label>
+          <input id="parc-cliente" type="text" placeholder="Nome do cliente" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;">
+        </div>
       </div>` : ''}
       <div style="margin-top:8px;">
         <button onclick="salvarTransacao('${tipo}')"
@@ -3726,6 +3754,36 @@ async function salvarTransacao(tipo) {
     created_by: currentUser
   };
   await getSB().from('transacoes').insert(tx);
+
+  // Se boleto parcelado, criar parcelas no A Receber
+  if (tipo === 'entrada') {
+    const forma = document.getElementById('fin-forma')?.value;
+    if (forma === 'Boleto Parcelado') {
+      const parcValor = parseFloat(document.getElementById('parc-valor')?.value || 0);
+      const parcQtd = parseInt(document.getElementById('parc-qtd')?.value || 0);
+      const parcInicio = document.getElementById('parc-inicio')?.value;
+      const parcCliente = document.getElementById('parc-cliente')?.value || descricao;
+      if (parcValor > 0 && parcQtd > 0 && parcInicio) {
+        for (let i = 0; i < parcQtd; i++) {
+          const d = new Date(parcInicio + 'T12:00:00');
+          const diaOriginal = d.getDate();
+          d.setMonth(d.getMonth() + i);
+          const ultimoDia = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+          d.setDate(Math.min(diaOriginal, ultimoDia));
+          const venc = d.toISOString().substring(0,10);
+          await getSB().from('contas_receber').insert({
+            cliente: parcCliente,
+            descricao: descricao + ' (' + (i+1) + '/' + parcQtd + ')',
+            valor: parcValor,
+            vencimento: venc,
+            status: 'pendente'
+          });
+        }
+        showNotif('✅ Entrada salva + ' + parcQtd + ' parcelas criadas no A Receber!', 'success');
+      }
+    }
+  }
+
   hideLoading();
   closeModal('modal-detail');
   renderFinanceiro();

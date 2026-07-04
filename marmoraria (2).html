@@ -5834,7 +5834,12 @@ async function renderFinanceiro() {
   const totalEntradas = entradas.reduce((s,t) => s+(parseFloat(t.valor)||0), 0);
   const totalSaidas = saidas.reduce((s,t) => s+(parseFloat(t.valor)||0), 0);
   const saldo = totalEntradas - totalSaidas;
-  const totalAReceber = aReceber.reduce((s,o) => s+parseValor(o), 0);
+  // A Receber = pedidos Kanban + contas a receber manuais (pendentes)
+  const totalAReceberKanban = aReceber.reduce((s,o) => s+parseValor(o), 0);
+  let contasReceberManuais = [];
+  try { const cr = await getSB().from('contas_receber').select('valor').eq('status','pendente'); contasReceberManuais = cr.data || []; } catch(e) {}
+  const totalAReceberManual = contasReceberManuais.reduce((s,c) => s+(parseFloat(c.valor)||0), 0);
+  const totalAReceber = totalAReceberKanban + totalAReceberManual;
 
   const contas = getContasPagar();
   const contasPendentes = contas.filter(c => c.status === 'pendente');
@@ -5967,7 +5972,7 @@ async function renderFinanceiro() {
       <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid #8B6914;">
         <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">A Receber</div>
         <div style="font-size:20px;font-weight:800;color:#8B6914;">${fmtV(totalAReceber)}</div>
-        <div style="font-size:11px;color:#888;">${aReceber.length} pedido(s)</div>
+        <div style="font-size:11px;color:#888;">${aReceber.length} pedido(s) + ${contasReceberManuais.length} manual(is)</div>
       </div>
       <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:4px solid ${contasVencidas.length>0?'#B85A4A':'#5B4A8B'};">
         <div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">A Pagar ${filtroMes.substring(5,7)}/${filtroMes.substring(0,4)}</div>

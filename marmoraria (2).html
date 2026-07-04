@@ -12806,17 +12806,91 @@ async function salvarContaReceber() {
 }
 
 async function baixarContaReceber(id) {
-  if (!confirm('Confirmar recebimento?\nIsso vai lançar uma entrada no financeiro.')) return;
   const { data: conta } = await getSB().from('contas_receber').select('*').eq('id', id).single();
   if (!conta) return;
+
+  // Abre modal de recebimento parcial/total
+  let m = document.getElementById('modal-receber-parcial');
+  if (m) m.remove();
+  m = document.createElement('div');
+  m.id = 'modal-receber-parcial';
+  m.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
   const hoje = new Date().toISOString().substring(0,10);
+  const fmtV = v => 'R$ '+(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  m.innerHTML = `
+    <div style="background:white;border-radius:16px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+      <div style="background:#2E7D32;color:white;padding:16px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:15px;font-weight:700;">💵 Registrar Recebimento</div>
+        <button onclick="document.getElementById('modal-receber-parcial').remove()" style="background:none;border:none;color:white;font-size:22px;cursor:pointer;">×</button>
+      </div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+        <div style="background:#f8f9fa;border-radius:8px;padding:12px;">
+          <div style="font-size:13px;font-weight:700;color:#333;">${conta.cliente}</div>
+          <div style="font-size:12px;color:#888;">${conta.descricao||''}</div>
+          <div style="font-size:15px;font-weight:800;color:#B85A4A;margin-top:4px;">Total a receber: ${fmtV(conta.valor)}</div>
+        </div>
+        <div>
+          <label style="font-size:13px;font-weight:600;color:#333;display:block;margin-bottom:6px;">Valor Recebido *</label>
+          <input id="rp-valor" type="number" step="0.01" value="${conta.valor}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:16px;font-weight:700;box-sizing:border-box;color:#2E7D32;">
+          <div style="font-size:11px;color:#888;margin-top:4px;">Se parcial, o saldo restante ficará pendente</div>
+        </div>
+        <div>
+          <label style="font-size:13px;font-weight:600;color:#333;display:block;margin-bottom:6px;">Banco *</label>
+          <select id="rp-banco" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;">
+            <option value="">Selecione o banco</option>
+            <option value="Sicredi">🟢 Sicredi</option>
+            <option value="Caixa">🔵 Caixa</option>
+            <option value="Mercado Pago">💛 Mercado Pago</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:13px;font-weight:600;color:#333;display:block;margin-bottom:6px;">Data *</label>
+          <input id="rp-data" type="date" value="${hoje}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;">
+        </div>
+        <div style="display:flex;gap:10px;margin-top:4px;">
+          <button onclick="confirmarRecebimentoParcial('${id}', ${conta.valor})" style="flex:1;background:#2E7D32;color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✅ Confirmar Recebimento</button>
+          <button onclick="document.getElementById('modal-receber-parcial').remove()" style="background:#eee;color:#333;border:none;padding:12px 16px;border-radius:8px;font-size:14px;cursor:pointer;">Cancelar</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(m);
+}
+
+async function confirmarRecebimentoParcial(id, valorTotal) {
+  const valorRecebido = parseFloat(document.getElementById('rp-valor').value);
+  const banco = document.getElementById('rp-banco').value;
+  const data = document.getElementById('rp-data').value;
+  if (!valorRecebido || valorRecebido <= 0) { alert('Informe o valor recebido!'); return; }
+  if (!banco) { alert('Selecione o banco!'); return; }
+  if (!data) { alert('Informe a data!'); return; }
+
+  const { data: conta } = await getSB().from('contas_receber').select('*').eq('id', id).single();
+  if (!conta) return;
+
+  document.getElementById('modal-receber-parcial').remove();
+  showLoading('Registrando recebimento...');
+
+  // Lança entrada no financeiro
   await getSB().from('transacoes').insert({
-    tipo: 'entrada', valor: conta.valor,
+    tipo: 'entrada', valor: valorRecebido,
     descricao: 'Recebimento — ' + conta.cliente + (conta.descricao ? ' (' + conta.descricao + ')' : ''),
-    data: hoje, categoria: 'Recebimento de Cliente', banco: 'Sicredi', forma: 'pix', created_by: 'dono'
+    data, categoria: 'Recebimento de Cliente', banco, forma: 'pix', created_by: 'dono'
   });
-  await getSB().from('contas_receber').update({ status: 'recebido' }).eq('id', id);
-  showNotif('✅ Recebimento registrado e entrada lançada!', 'success');
+
+  const saldoRestante = parseFloat(conta.valor) - valorRecebido;
+
+  if (saldoRestante <= 0.01) {
+    // Pagamento total — marca como recebido
+    await getSB().from('contas_receber').update({ status: 'recebido' }).eq('id', id);
+    showNotif('✅ Recebimento total registrado!', 'success');
+  } else {
+    // Pagamento parcial — atualiza valor restante
+    await getSB().from('contas_receber').update({ valor: saldoRestante }).eq('id', id);
+    const fmtV = v => 'R$ '+(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+    showNotif('✅ Recebimento parcial! Saldo restante: ' + fmtV(saldoRestante), 'success');
+  }
+
+  hideLoading();
   renderContasReceber();
   renderFinanceiro();
 }

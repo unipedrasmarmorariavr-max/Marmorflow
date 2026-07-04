@@ -2107,33 +2107,14 @@ function ativarSessao(perfil) {
   if (tabFin) tabFin.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
   if (tabPortal) tabPortal.style.display = (isDono||isComercial||isFinanceiro) ? 'block' : 'none';
   if (tabAgenda) tabAgenda.style.display = (isDono||isComercial||isProducao||isMedidor||isFinanceiro) ? 'block' : 'none';
-  // Financeiro abre na aba financeiro por padrão, mas pode navegar em todas
-  if (isFinanceiro) {
-    var abaFin = localStorage.getItem('mf_aba');
-    if (!abaFin || abaFin === 'orcamento') abaFin = 'financeiro';
-    loadOrders().then(function() {
-      renderKanban();
-      showTab(abaFin);
-    });
-    return true;
-  }
+  // Sempre abre no Kanban ao fazer login — exceto Medidor que abre na Agenda
   loadOrders().then(function() {
     renderKanban();
-    // Restaura aba anterior para TODOS os perfis
-    var abaAnterior = localStorage.getItem('mf_aba');
-    if (isMedidor && !abaAnterior) {
-      // Primeira vez do medidor → abre agenda
+    if (isMedidor) {
       localStorage.setItem('agenda_aba','medicao');
       showTab('agenda');
-    } else if (abaAnterior && abaAnterior !== 'orcamento' &&
-        document.getElementById('panel-'+abaAnterior)) {
-      if (abaAnterior === 'agenda' && isMedidor) {
-        localStorage.setItem('agenda_aba','medicao');
-      }
-      showTab(abaAnterior);
-    } else if (isMedidor) {
-      localStorage.setItem('agenda_aba','medicao');
-      showTab('agenda');
+    } else {
+      showTab('kanban');
     }
     // Restaura orçamento se estava aberto antes do reload
     const orcAberto = localStorage.getItem('mf_orc_aberto');

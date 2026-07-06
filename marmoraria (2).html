@@ -1306,8 +1306,12 @@ async function abrirVerProjeto(id) {
       </div>
       ${croquiImgs.length > 0 ? `
         <div class="images-protected" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-          ${croquiImgs.map(img=>`<div class="img-zoom-wrap" onclick="openLightbox('${img}')">
-            <img src="${img}" style="width:100px;height:100px;object-fit:cover;border-radius:8px;border:2px solid #ddd;cursor:pointer;">
+          ${croquiImgs.map((img,idx)=>`<div style="position:relative;">
+            <div class="img-zoom-wrap" onclick="openLightbox('${img}')">
+              <img src="${img}" style="width:100px;height:100px;object-fit:cover;border-radius:8px;border:2px solid #ddd;cursor:pointer;">
+            </div>
+            ${podeCroqui ? `<button onclick="excluirCroqui('${o.id}',${idx});event.stopPropagation()"
+              style="position:absolute;top:2px;right:2px;background:#B85A4A;color:white;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:13px;line-height:22px;text-align:center;font-weight:700;">×</button>` : ''}
           </div>`).join('')}
         </div>` : `<div style="font-size:13px;color:#888;margin-bottom:8px;">Nenhum croqui adicionado ainda</div>`}
       
@@ -1430,6 +1434,19 @@ function imprimirCroqui(id) {
   if (!win) { showNotif('Permita popups para imprimir.', 'error'); return; }
   win.document.write(html);
   win.document.close();
+}
+
+async function excluirCroqui(pedidoId, idx) {
+  if (!confirm('Excluir esta imagem do croqui?')) return;
+  const order = orders.find(o => o.id === pedidoId);
+  if (!order) return;
+  const croquiImgs = Array.isArray(order.croqui) ? [...order.croqui] : (order.croqui ? [order.croqui] : []);
+  croquiImgs.splice(idx, 1);
+  const { error } = await getSB().from('pedidos').update({ croqui: croquiImgs }).eq('id', pedidoId);
+  if (error) { showNotif('Erro ao excluir imagem.', 'error'); return; }
+  order.croqui = croquiImgs;
+  showNotif('✅ Imagem excluída!', 'success');
+  abrirVerProjeto(pedidoId);
 }
 
 function previewNovoCroqui() {

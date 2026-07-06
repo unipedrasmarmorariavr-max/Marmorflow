@@ -3700,7 +3700,7 @@ function abrirModalTransacao(tipo) {
         <input class="form-input" id="fin-data" type="date" value="${new Date().toISOString().substring(0,10)}">
       </div>
       <div>
-        <label class="form-label">${isEntrada?'Banco *':'Categoria'}</label>
+        <label class="form-label">${isEntrada?'Banco *':'Categoria *'}</label>
         ${isEntrada
           ? `<select class="form-select" id="fin-banco-cat">
               <option value="">Selecione o banco...</option>
@@ -3712,6 +3712,16 @@ function abrirModalTransacao(tipo) {
             </select>`
         }
       </div>
+      ${!isEntrada ? `
+      <div>
+        <label class="form-label">Banco *</label>
+        <select class="form-select" id="fin-banco-saida">
+          <option value="">Selecione o banco...</option>
+          <option value="Sicredi">🟢 Sicredi</option>
+          <option value="Caixa">🔵 Caixa</option>
+          <option value="Mercado Pago">💛 Mercado Pago</option>
+        </select>
+      </div>` : ''}
       ${isEntrada ? `
       <div>
         <label class="form-label">Forma de Pagamento</label>
@@ -3765,15 +3775,18 @@ async function salvarTransacao(tipo) {
   const descricao = document.getElementById('fin-descricao').value.trim();
   const data = document.getElementById('fin-data').value;
   const bancoCat = document.getElementById('fin-banco-cat').value;
+  const bancoSaida = tipo === 'saida' ? (document.getElementById('fin-banco-saida')?.value || '') : '';
   if (!valor || !descricao || !data) { alert('Preencha todos os campos!'); return; }
   if (tipo === 'saida' && !bancoCat) { alert('Selecione a categoria!'); return; }
+  if (tipo === 'saida' && !bancoSaida) { alert('Selecione o banco!'); return; }
   showLoading('Salvando...');
   const tx = {
     tipo,
     valor: parseFloat(valor),
     descricao,
     data,
-    [tipo==='entrada'?'banco':'categoria']: bancoCat,
+    banco: tipo==='entrada' ? bancoCat : bancoSaida,
+    categoria: tipo==='saida' ? bancoCat : 'Recebimento de Cliente',
     forma: tipo==='entrada' ? (document.getElementById('fin-forma')?.value||'') : '',
     created_by: currentUser
   };

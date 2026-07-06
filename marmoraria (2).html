@@ -3606,35 +3606,47 @@ async function confirmarPagamento() {
   if (!valor || !data) { showNotif('Preencha valor e data!','error'); return; }
   if (!banco) { showNotif('Selecione o banco!','error'); return; }
 
-  const contas = getContasPagar();
-  const idx = contas.findIndex(c => c.id === contaId);
-  if (idx >= 0) {
-    contas[idx].status = 'pago';
-    contas[idx].dataPagamento = data;
-    contas[idx].valorPago = valor;
-    contas[idx].bancoPago = banco;
-    // Se recorrente, cria próximo mês
-    if (contas[idx].recorrencia === 'mensal') {
-      const venc = new Date(contas[idx].vencimento+'T12:00:00');
-      venc.setMonth(venc.getMonth()+1);
-      contas.push({
-        ...contas[idx],
-        id: 'CP-'+Date.now(),
-        status: 'pendente',
-        vencimento: venc.toISOString().substring(0,10),
-        dataPagamento: null, valorPago: null, bancoPago: null,
-        criadoEm: new Date().toISOString()
-      });
+  // Atualiza no Supabase
+  const { data: contaDB } = await getSB().from('contas_pagar').select('*').eq('id', contaId).maybeSingle();
+  
+  let descricaoConta = 'Conta a pagar';
+  let categoriaConta = '';
+  let recorrencia = null;
+  let vencimentoAtual = null;
+
+  if (contaDB) {
+    descricaoConta = contaDB.descricao || descricaoConta;
+    categoriaConta = contaDB.categoria || '';
+    recorrencia = contaDB.recorrencia;
+    vencimentoAtual = contaDB.vencimento;
+    // Marca como pago no Supabase
+    await getSB().from('contas_pagar').update({
+      status: 'pago',
+      data_pagamento: data,
+    }).eq('id', contaId);
+  } else {
+    // Fallback: localStorage
+    const contas = getContasPagar();
+    const idx = contas.findIndex(c => c.id === contaId);
+    if (idx >= 0) {
+      descricaoConta = contas[idx].descricao || descricaoConta;
+      categoriaConta = contas[idx].categoria || '';
+      recorrencia = contas[idx].recorrencia;
+      vencimentoAtual = contas[idx].vencimento;
+      contas[idx].status = 'pago';
+      contas[idx].dataPagamento = data;
+      salvarContasPagar(contas);
     }
   }
-  salvarContasPagar(contas);
+
   // Registra como saída no financeiro
   await getSB().from('transacoes').insert({
     tipo: 'saida', valor, data,
-    descricao: contas[idx]?.descricao||'Conta a pagar',
-    banco, categoria: contas[idx]?.categoria||'',
+    descricao: descricaoConta,
+    banco, categoria: categoriaConta,
     created_by: currentUser
   });
+
   closeModal('modal-detail');
   renderFinanceiro();
   showNotif('Pagamento confirmado! ✓', 'success');
@@ -5803,6 +5815,19 @@ async function renderFinanceiro() {
   if (!el) return;
   el.innerHTML = `<div style="padding:40px;text-align:center;color:#888;">Carregando...</div>`;
 
+  // Recarrega contas a pagar do Supabase para manter em sync
+  try {
+    const { data: cpDB } = await getSB().from('contas_pagar').select('*').order('vencimento', { ascending: true });
+    if (cpDB && cpDB.length > 0) {
+      const cpLocal = cpDB.map(c => ({
+        id: c.id, descricao: c.descricao, valor: c.valor,
+        vencimento: c.vencimento, status: c.status, categoria: c.categoria,
+        recorrencia: c.recorrencia, dataPagamento: c.data_pagamento
+      }));
+      localStorage.setItem('mf_contas_pagar', JSON.stringify(cpLocal));
+    }
+  } catch(e) {}
+
   const bancos = getBancos();
   let transacoes = [];
   try {
@@ -6196,21 +6221,22 @@ async function renderFinanceiro() {
       </div>
     </div>
 
-    <!-- CONTAS A RECEBER MANUAIS -->
-    <div id="fin-contas-receber" style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;margin-top:16px;">
-      <div style="background:#2E7D32;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-size:14px;font-weight:700;">💰 Contas a Receber — Lançamentos Manuais</div>
-          <div style="font-size:12px;opacity:.8;" id="cr-subtitulo">Carregando...</div>
+      <!-- CONTAS A RECEBER MANUAIS -->
+      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;margin-top:16px;">
+        <div style="background:#2E7D32;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:14px;font-weight:700;">💰 Contas a Receber — Lançamentos Manuais</div>
+            <div style="font-size:12px;opacity:.8;" id="cr-subtitulo">Carregando...</div>
+          </div>
+          <button onclick="abrirModalContaReceber()" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Nova</button>
         </div>
-        <button onclick="abrirModalContaReceber()" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Nova</button>
+        <div style="padding:10px 16px;border-bottom:1px solid #f0f0f0;">
+          <input id="cr-busca" type="text" placeholder="🔍 Buscar por cliente..." 
+            oninput="renderContasReceber(this.value)"
+            style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;">
+        </div>
+        <div id="cr-lista">Carregando...</div>
       </div>
-      <div style="padding:10px 16px;border-bottom:1px solid #f0f0f0;">
-        <input id="cr-busca" type="text" placeholder="🔍 Buscar por cliente..." 
-          oninput="renderContasReceber(this.value)"
-          style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;">
-      </div>
-      <div id="cr-lista">Carregando...</div>
     </div>
 
     <!-- PAINEL CONTAS A PAGAR -->

@@ -6219,7 +6219,6 @@ async function renderFinanceiro() {
           </div>`;
         }).join('')}
       </div>
-    </div>
 
       <!-- CONTAS A RECEBER MANUAIS -->
       <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;margin-top:16px;">
@@ -6326,6 +6325,19 @@ async function renderFinanceiro() {
   </div>`;
 
 }
+  // Re-aplica a aba ativa após renderizar para evitar painéis sobrepostos
+  setTimeout(function() {
+    const abaAtiva = sessionStorage.getItem('fin_aba') || 'geral';
+    ['geral','receber','pagar','dividas','analise'].forEach(function(a) {
+      const panel = document.getElementById('fin-painel-'+a);
+      const btn = document.getElementById('fin-aba-'+a);
+      if (panel) panel.style.display = a===abaAtiva?'block':'none';
+      if (btn) { btn.style.background = a===abaAtiva?'var(--gold)':'var(--cream-dark)'; btn.style.color = a===abaAtiva?'white':'var(--stone)'; }
+    });
+    if (abaAtiva === 'receber') renderContasReceber();
+    if (abaAtiva === 'dividas') renderDividas();
+  }, 150);
+
 setTimeout(aplicarEstilosMobile,50);
 
 function renderAnaliseFinanceiro(txMes, filtroMes) {

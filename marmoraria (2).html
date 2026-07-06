@@ -6205,6 +6205,11 @@ async function renderFinanceiro() {
         </div>
         <button onclick="abrirModalContaReceber()" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Nova</button>
       </div>
+      <div style="padding:10px 16px;border-bottom:1px solid #f0f0f0;">
+        <input id="cr-busca" type="text" placeholder="🔍 Buscar por cliente..." 
+          oninput="renderContasReceber(this.value)"
+          style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;">
+      </div>
       <div id="cr-lista">Carregando...</div>
     </div>
 
@@ -12717,12 +12722,15 @@ async function carregarContasReceber() {
   } catch(e) { return []; }
 }
 
-async function renderContasReceber() {
+async function renderContasReceber(filtro) {
   const lista = document.getElementById('cr-lista');
   const subtitulo = document.getElementById('cr-subtitulo');
   if (!lista) return;
   const contas = await carregarContasReceber();
-  const pendentes = contas.filter(c => c.status === 'pendente');
+  // Aplica filtro de busca
+  const termoBusca = (filtro || document.getElementById('cr-busca')?.value || '').toLowerCase().trim();
+  const contasFiltradas = termoBusca ? contas.filter(c => (c.cliente||'').toLowerCase().includes(termoBusca) || (c.descricao||'').toLowerCase().includes(termoBusca)) : contas;
+  const pendentes = contasFiltradas.filter(c => c.status === 'pendente');
   const totalPendente = pendentes.reduce((s,c) => s+(parseFloat(c.valor)||0), 0);
   const fmtV = v => 'R$ '+(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
   const fmtDt = d => d ? d.substring(8,10)+'/'+d.substring(5,7)+'/'+d.substring(0,4) : '-';
@@ -12732,7 +12740,7 @@ async function renderContasReceber() {
     lista.innerHTML = '<div style="padding:30px;text-align:center;color:#888;">Nenhuma conta a receber lançada. Clique em + Nova para adicionar.</div>';
     return;
   }
-  lista.innerHTML = contas.map(c => {
+  lista.innerHTML = contasFiltradas.map(c => {
     const vencida = c.status === 'pendente' && c.vencimento && c.vencimento < hoje;
     const cor = c.status === 'recebido' ? '#2E7D32' : vencida ? '#B85A4A' : '#8B6914';
     const label = c.status === 'recebido' ? '✅ Recebido' : vencida ? '⚠️ Vencida' : '🕐 Pendente';

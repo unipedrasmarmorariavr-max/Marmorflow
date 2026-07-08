@@ -9005,6 +9005,8 @@ const CONFIG_ORC_DEFAULT = {
   pessoasInstalacao: 2,
   horasEntregaM2: 0.33,
   pessoasEntrega: 1,
+  horasRetiradaM2: 0,
+  pessoasRetirada: 0,
   // Transporte
   consumoCombustivel: 8,
   custoCombustivel: 7.00,
@@ -9417,7 +9419,7 @@ function calcularItem(item, pedra, cfg) {
   // Quando custoInsumoInstal = 0, comportamento igual ao MarmóPrice (não cobra automaticamente)
   const margemFrac   = (parseFloat(item.margemOverride??pedra.margem??30))/100;
   const precoOps     = custosOp / (1 - margemFrac);
-  const custoInsumos = custoInsumoInstal > 0 ? precoOps * ((cfg.custoInsumo||5) / 100) : 0;
+  const custoInsumos = precoOps * ((cfg.custoInsumo||5) / 100);
   const custoTotal   = custosOp + custoInsumos;
   const precoFinal   = custoTotal / (1 - margemFrac);
   const lucroLiquido = precoFinal - custoTotal;
@@ -12562,14 +12564,10 @@ function renderTempos() {
     ['Chanfro Alongado (hr/m)', 'chanfroAlongado', 2],
     ['Water Jet (R$/m)', 'waterJet', 20],
     ['Horas Produtivas/Mês', 'horasProdMes', 176],
-    ['Custo Combustível (R$/L)', 'custoCombustivel', 7.00],
-    ['Consumo Combustível (km/L)', 'consumoCombustivel', 8],
-    ['Horas de Instalação por m²', 'horasInstalacaoM2', 1.5],
-    ['Pessoas na Instalação/Entrega', 'pessoasInstalacao', 2],
   ];
 
   el.innerHTML = `
-  <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:14px;">
+  <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:14px;margin-bottom:16px;">
     <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:20px;">⏱️ Informações de Produção — Atualize as informações de produção.</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:12px;">
       ${campos.map(([label, key, def]) => `
@@ -12579,9 +12577,102 @@ function renderTempos() {
           oninput="salvarTempoCfg('${key}',this.value)">
       </div>`).join('')}
     </div>
-    <div style="margin-top:20px;text-align:right;">
-      <button onclick="salvarTodosTempos()" style="background:var(--green);color:white;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">💾 Salvar Tempos</button>
+  </div>
+
+  <!-- DEPRECIAÇÃO -->
+  <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:14px;margin-bottom:16px;">
+    <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:16px;">🏗️ Depreciação de Máquinas</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:12px;">
+      <div>
+        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Valor de Investimentos (Máquinas)*</label>
+        <input class="form-input" id="tempo-valorMaquinas" type="number" step="0.01" value="${cfg.valorMaquinas||13800}"
+          oninput="salvarTempoCfg('valorMaquinas',this.value)">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Anos de Depreciação*</label>
+        <input class="form-input" id="tempo-anosDepreciacao" type="number" step="1" value="${cfg.anosDepreciacao||10}"
+          oninput="salvarTempoCfg('anosDepreciacao',this.value)">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Valor do Investimento após Depreciação (%)*</label>
+        <input class="form-input" id="tempo-valorResidual" type="number" step="1" value="${cfg.valorResidual||70}"
+          oninput="salvarTempoCfg('valorResidual',this.value)">
+      </div>
     </div>
+  </div>
+
+  <!-- TRANSPORTE -->
+  <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:14px;margin-bottom:16px;">
+    <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:16px;">🚚 Transporte</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:12px;margin-bottom:16px;">
+      <div>
+        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Média de Gasto de Comb. por Veículo (Km/L)*</label>
+        <input class="form-input" id="tempo-consumoCombustivel" type="number" step="0.1" value="${cfg.consumoCombustivel||8}"
+          oninput="salvarTempoCfg('consumoCombustivel',this.value)">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Custo do Combustível*</label>
+        <input class="form-input" id="tempo-custoCombustivel" type="number" step="0.01" value="${cfg.custoCombustivel||7}"
+          oninput="salvarTempoCfg('custoCombustivel',this.value)">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Min/Km Médio Trânsito Lento*</label>
+        <input class="form-input" id="tempo-minKmLento" type="number" step="0.1" value="${cfg.minKmLento||3}"
+          oninput="salvarTempoCfg('minKmLento',this.value)">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Min/Km Médio Trânsito Intermediário*</label>
+        <input class="form-input" id="tempo-minKmIntermediario" type="number" step="0.1" value="${cfg.minKmIntermediario||2}"
+          oninput="salvarTempoCfg('minKmIntermediario',this.value)">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Min/Km Médio Trânsito Rápido*</label>
+        <input class="form-input" id="tempo-minKmRapido" type="number" step="0.1" value="${cfg.minKmRapido||1}"
+          oninput="salvarTempoCfg('minKmRapido',this.value)">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Trânsito Padrão*</label>
+        <select class="form-select" id="tempo-transito" onchange="salvarTempoCfg('transito',this.value)">
+          <option value="lento" ${cfg.transito==='lento'?'selected':''}>Lento</option>
+          <option value="intermediario" ${cfg.transito==='intermediario'?'selected':''}>Intermediário</option>
+          <option value="rapido" ${(!cfg.transito||cfg.transito==='rapido')?'selected':''}>Rápido</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:16px;">
+      <div style="background:var(--cream);border-radius:10px;padding:12px;">
+        <div style="font-size:12px;font-weight:700;color:var(--stone);margin-bottom:10px;">Com instalação</div>
+        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Horas por m²*</label>
+        <input class="form-input" id="tempo-horasInstalacaoM2" type="number" step="0.01" value="${cfg.horasInstalacaoM2||1.5}" style="margin-bottom:8px;"
+          oninput="salvarTempoCfg('horasInstalacaoM2',this.value)">
+        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Quantid. de pessoas*</label>
+        <input class="form-input" id="tempo-pessoasInstalacao" type="number" step="1" value="${cfg.pessoasInstalacao||2}"
+          oninput="salvarTempoCfg('pessoasInstalacao',this.value)">
+      </div>
+      <div style="background:var(--cream);border-radius:10px;padding:12px;">
+        <div style="font-size:12px;font-weight:700;color:var(--stone);margin-bottom:10px;">Somente entrega</div>
+        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Horas por m²*</label>
+        <input class="form-input" id="tempo-horasEntregaM2" type="number" step="0.01" value="${cfg.horasEntregaM2||0.33}" style="margin-bottom:8px;"
+          oninput="salvarTempoCfg('horasEntregaM2',this.value)">
+        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Quantid. de pessoas*</label>
+        <input class="form-input" id="tempo-pessoasEntrega" type="number" step="1" value="${cfg.pessoasEntrega||1}"
+          oninput="salvarTempoCfg('pessoasEntrega',this.value)">
+      </div>
+      <div style="background:var(--cream);border-radius:10px;padding:12px;">
+        <div style="font-size:12px;font-weight:700;color:var(--stone);margin-bottom:10px;">Cliente retira na empresa</div>
+        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Horas por m²*</label>
+        <input class="form-input" id="tempo-horasRetiradaM2" type="number" step="0.01" value="${cfg.horasRetiradaM2||0}" style="margin-bottom:8px;"
+          oninput="salvarTempoCfg('horasRetiradaM2',this.value)">
+        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Quantid. de pessoas*</label>
+        <input class="form-input" id="tempo-pessoasRetirada" type="number" step="1" value="${cfg.pessoasRetirada||0}"
+          oninput="salvarTempoCfg('pessoasRetirada',this.value)">
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:right;">
+    <button onclick="salvarTodosTempos()" style="background:var(--green);color:white;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">💾 Salvar Tempos</button>
   </div>`;
 }
 

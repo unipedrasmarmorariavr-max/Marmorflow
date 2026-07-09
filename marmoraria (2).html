@@ -7225,7 +7225,11 @@ function getDiasOcupados() {
   const vistos = new Set();
   const doPedidos = orders
     .filter(o => {
-      const temInstalacao = o.tipoentrega === 'entrega_instalacao' || o.tipoentrega === 'so_instalacao';
+      // Considera que TEM instalação por padrão — só exclui quando o pedido
+      // foi explicitamente marcado como "só entrega" ou "retirada na loja".
+      // Isso cobre tanto pedidos novos quanto os fechados antes dessa correção
+      // (que tinham o campo tipoentrega vazio e por isso nunca apareciam aqui).
+      const temInstalacao = !['so_entrega','retirada'].includes(o.tipoentrega);
       const emProducao = stagesAgenda.includes(o.stage);
       const temData = !!o.dataentrega;
       return temInstalacao && emProducao && temData;
@@ -8758,7 +8762,8 @@ async function confirmarFechamentoComData() {
     stage:'fechado', history, dataentrega: dataEscolhida, 
     material: materialFinal, acabamento: acabamentoFinal, 
     levigado_do_polido: levigadoDoPolicdo, 
-    num_pedido_fechado: numPedidoFechado
+    num_pedido_fechado: numPedidoFechado,
+    tipoentrega: semInstalacao ? 'so_entrega' : 'entrega_instalacao'
   };
   if (itensAprovados.length > 0) updateData.itens_aprovados = itensAprovados;
   if (valorAprovado) updateData.valor = valorAprovado;
@@ -8771,6 +8776,7 @@ async function confirmarFechamentoComData() {
   order.dataentrega = dataEscolhida;
   order.stage = 'fechado';
   order.history = history;
+  order.tipoentrega = updateData.tipoentrega;
   const novoId = await nextId();
   const historyCorte = [...history, {stage:'corte', date:hoje}];
   const copia = {...order, id:novoId, stage:'corte', history:historyCorte, ref_fechado:id, dataentrega:dataEscolhida};

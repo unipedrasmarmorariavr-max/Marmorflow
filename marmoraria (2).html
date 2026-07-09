@@ -10786,9 +10786,16 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
             </div>
           </div>`).join('')}
         </div>
-        <div style="font-size:12px;color:#333;margin-top:8px;">
-          Área Total de Pedra (m²) <span style="color:#999;font-size:11px;cursor:pointer;" title="Editar manualmente">✏️</span>
+        <div style="font-size:12px;color:#333;margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span>Área Total de Pedra (m²)</span>
           <strong id="area-total-${idx}">${areaTotal.toFixed(2)}</strong>
+          <span style="color:#888;font-size:11px;">ou</span>
+          <span style="font-size:11px;color:#8B6914;font-weight:600;">inserir m² direto:</span>
+          <input type="number" step="0.01" placeholder="Ex: 9.99"
+            value="${item.m2Override||''}"
+            oninput="orcamentoAtual.itens[${idx}].m2Override=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"
+            style="width:90px;padding:4px 8px;border:2px solid #D4AF6E;border-radius:6px;font-size:13px;font-weight:700;color:#8B6914;text-align:center;">
+          ${item.m2Override>0?'<span style="font-size:10px;color:#8B6914;">✓ usando m² manual</span><button onclick="orcamentoAtual.itens['+idx+'].m2Override=0;recalcularTelaOrc(''+orderId+'')" style="background:none;border:none;color:#B85A4A;cursor:pointer;font-size:11px;">✕ limpar</button>':''}
         </div>
       </div>
 
@@ -11280,6 +11287,8 @@ function parseMedidas(str) {
 }
 
 function calcAreaTotalItem(item) {
+  // Se m² direto foi preenchido, usa ele
+  if (item.m2Override && item.m2Override > 0) return item.m2Override;
   return (item.pecas||[]).reduce((s,p) => {
     const m = parseMedidas(p.medidas);
     const areaPeca = Math.round(m.l * m.c * (parseInt(p.qtd)||1) * 100) / 100;

@@ -9285,8 +9285,12 @@ function calcularItem(item, pedra, cfg) {
   const { custoHoraEmpresa, custoHoraHomem } = calcularCustoHora();
 
   // ── ÁREA ─────────────────────────────────────────────────────────────────
+  // Prioridade igual à de calcAreaTotalItem(): m² direto > peça a peça > campos legados
   let areaBase = 0, areaBaseExata = 0;
-  if (item.pecas && item.pecas.length > 0 && item.pecas.some(p => (p.medidas||'').trim())) {
+  if (item.m2Override && item.m2Override > 0) {
+    areaBase = parseFloat(item.m2Override) || 0;
+    areaBaseExata = areaBase;
+  } else if (item.pecas && item.pecas.length > 0 && item.pecas.some(p => (p.medidas||'').trim())) {
     item.pecas.forEach(p => {
       const m = parseMedidas(p.medidas);
       const qtd = parseInt(p.qtd)||1;
@@ -9295,11 +9299,8 @@ function calcularItem(item, pedra, cfg) {
       areaBase += Math.round(exata * 100) / 100;
     });
   } else {
-    if (item.modoEntrada === 'm2direto' && item.m2Direto > 0) {
-      areaBase = parseFloat(item.m2Direto)||0;
-    } else {
-      areaBase = (parseFloat(item.largura)||0)*(parseFloat(item.comprimento)||0)*(parseInt(item.quantidade)||1);
-    }
+    // Fallback legado (orçamentos antigos sem peça a peça e sem m² direto)
+    areaBase = (parseFloat(item.largura)||0)*(parseFloat(item.comprimento)||0)*(parseInt(item.quantidade)||1);
     areaBaseExata = areaBase;
   }
 

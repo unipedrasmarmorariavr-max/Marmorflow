@@ -9278,6 +9278,50 @@ function calcularCustoHora() {
   };
 }
 
+// ─── VALOR DE VENDA MANUAL → RECALCULA MARGEM AUTOMATICAMENTE ────────────────
+// A fórmula tem os Insumos (%) calculados sobre o preço já com margem embutida,
+// então "voltar" de um valor de venda para a margem exige resolver uma equação
+// (não é uma regra de três simples). Resolvemos como uma equação quadrática em
+// x = 1/(1-margem):
+//   precoFinal = custosOp*x + custosOp*insumoFrac*x²
+function resolverMargemPorValor(valorAlvo, custosOp, insumoFrac) {
+  if (!custosOp || custosOp <= 0) return 30;
+  if (!valorAlvo || valorAlvo <= 0) return 30;
+  if (!insumoFrac || insumoFrac <= 0) {
+    // Sem insumo percentual: relação linear direta
+    return (1 - (custosOp / valorAlvo)) * 100;
+  }
+  const a = custosOp * insumoFrac;
+  const b = custosOp;
+  const c = -valorAlvo;
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return 30;
+  const x = (-b + Math.sqrt(disc)) / (2 * a);
+  if (x <= 0) return 30;
+  return (1 - (1 / x)) * 100;
+}
+
+function ajustarValorVendaManual(idx, orderId, valorDigitado) {
+  const item = orcamentoAtual?.itens?.[idx];
+  if (!item || !item.calc) { recalcularTelaOrc(orderId); return; }
+
+  // Aceita formatos "R$ 3.121,35", "3121,35" ou "3121.35"
+  let s = String(valorDigitado).replace('R$', '').trim();
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  const valorNum = parseFloat(s) || 0;
+
+  if (valorNum <= 0) { recalcularTelaOrc(orderId); return; }
+
+  const custosOp = item.calc.custoTotal - item.calc.custoInsumos;
+  const cfg = getConfigOrc();
+  const insumoFrac = (cfg.custoInsumo || 5) / 100;
+
+  const novaMargem = resolverMargemPorValor(valorNum, custosOp, insumoFrac);
+  item.margemOverride = Math.round(novaMargem * 1000) / 1000; // 3 casas, igual Marmoprice
+
+  recalcularTelaOrc(orderId);
+}
+
 function calcularItem(item, pedra, cfg) {
   if (!pedra) return null;
   const grupo = GRUPOS_DIFICULDADE.find(g => g.id === (pedra.grupoId||1)) || GRUPOS_DIFICULDADE[0];
@@ -10916,10 +10960,13 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
           <input class="form-input" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
           <input class="form-input" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
           <input class="form-input" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
-          <!-- Valor de Venda -->
-          <input id="mat-valor-${idx}" class="form-input"
-            style="padding:6px 8px;font-size:13px;font-weight:700;color:#006382;background:#f5f5f5;" readonly
-            value="${calc?fmt(calc.precoFinal):'—'}">
+          <!-- Valor de Venda (editável — digite e a margem recalcula sozinha) -->
+          <input id="mat-valor-${idx}" class="form-input" type="text"
+            style="padding:6px 8px;font-size:13px;font-weight:700;color:#006382;border:2px solid #006382;"
+            value="${calc?fmt(calc.precoFinal):'—'}"
+            onfocus="this.select()"
+            onblur="ajustarValorVendaManual(${idx},'${orderId}',this.value)"
+            title="Digite um valor de venda negociado — a margem de lucro é recalculada automaticamente">
           <!-- LL/H -->
           <input id="mat-llh-${idx}" class="form-input"
             style="padding:6px 8px;font-size:13px;background:#f5f5f5;" readonly

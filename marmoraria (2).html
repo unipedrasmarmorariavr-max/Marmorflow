@@ -8310,6 +8310,7 @@ function renderAgendaInstalacao() {
           const corDia = diasR<=3?'#B85A4A':diasR<=7?'#B8760A':'#4A7C59';
           const btnResp = podeEditar ? '<button onclick="definirResponsavelInstalacao(\'' + (o.id||'') + '\',\'' + o.data + '\',\'' + o.tipo + '\')" style="background:#f0f0f0;border:1px solid #ddd;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;">👷 ' + (o.responsavel?'Trocar':'Definir') + ' responsável</button>' : '';
         const btnExcluir = (podeEditar && o.tipo === 'manual') ? '<button onclick="excluirInstalacao(\'' + o.id + '\')" style="background:#FDEAEA;border:1px solid #B85A4A;color:#B85A4A;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;margin-left:4px;">🗑 Excluir</button>' : '';
+        const btnCorrigir = (podeEditar && o.tipo === 'pedido') ? '<button onclick="marcarComoSoEntrega(\'' + o.id + '\')" style="background:#FFF8E8;border:1px solid var(--gold);color:#8B6914;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;margin-left:4px;">🚚 É só entrega</button>' : '';
         return '<div style="background:#f9f9f9;border-radius:10px;padding:12px 14px;margin-bottom:8px;border-left:3px solid '+corDia+';">'
           + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">'
           + '<div style="flex:1;">'
@@ -8321,12 +8322,44 @@ function renderAgendaInstalacao() {
           + '<div style="text-align:right;flex-shrink:0;">'
           + '<div style="font-size:14px;font-weight:700;color:'+corDia+';">'+dias[dd.getDay()]+', '+dd.getDate()+'/'+(dd.getMonth()+1)+'</div>'
           + '<div style="font-size:11px;color:#888;">'+(diasR===0?'Hoje':diasR===1?'Amanhã':diasR+' dias')+'</div>'
-          + btnResp + btnExcluir
+          + btnResp + btnExcluir + btnCorrigir
           + '</div></div></div>';
         }).join('');
       })()}
     </div>
   </div>`;
+}
+
+async function marcarComoSoEntrega(pedidoId) {
+  const order = orders.find(o => o.id === pedidoId);
+  if (!order) return;
+  if (!confirm('Marcar "' + (order.cliente||pedidoId) + '" como Só Entrega?\n\nEle vai sair da Agenda de Instalação, mas continua com a data de entrega salva no pedido.')) return;
+
+  showLoading('Corrigindo...');
+  try {
+    await getSB().from('pedidos').update({ tipoentrega: 'so_entrega' }).eq('id', pedidoId);
+    order.tipoentrega = 'so_entrega';
+
+    // Se essa era a cópia em produção (ref_fechado), corrige o pedido original também
+    if (order.ref_fechado) {
+      await getSB().from('pedidos').update({ tipoentrega: 'so_entrega' }).eq('id', order.ref_fechado);
+      const orig = orders.find(o => o.id === order.ref_fechado);
+      if (orig) orig.tipoentrega = 'so_entrega';
+    }
+    // Se existe uma cópia derivada desse pedido, corrige ela também
+    const copia = orders.find(o => o.ref_fechado === pedidoId);
+    if (copia) {
+      await getSB().from('pedidos').update({ tipoentrega: 'so_entrega' }).eq('id', copia.id);
+      copia.tipoentrega = 'so_entrega';
+    }
+  } catch(e) {
+    hideLoading();
+    showNotif('Erro ao corrigir: ' + e.message, 'error');
+    return;
+  }
+  hideLoading();
+  renderAgendaInstalacao();
+  showNotif('✅ Corrigido! Não vai mais aparecer como instalação.', 'success');
 }
 
 // ─── AGENDA DE INSTALAÇÃO ────────────────────────────────────────────────────

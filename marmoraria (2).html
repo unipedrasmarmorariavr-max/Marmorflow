@@ -8633,6 +8633,17 @@ function abrirModalConfirmarData(id) {
     // Salvar referência ao orçamento para usar no fechamento
     window._orcFechamento = orc;
     atualizarTotalItens(id);
+
+    // Detecta automaticamente se existe instalação real olhando os itens do orçamento.
+    // Só considera "tem instalação" se ALGUM item foi marcado como 'Com instalação'.
+    // Se todos os itens forem 'Somente entrega' ou 'Retirada', pré-marca o checkbox
+    // "Sem instalação" pra esse pedido não ocupar a agenda de instalação.
+    const temInstalacaoReal = orc.itens.some(it => it.tipoEntrega === 'instalacao');
+    const chkAuto = document.getElementById('chk-sem-instalacao');
+    if (chkAuto) {
+      chkAuto.checked = !temInstalacaoReal;
+      toggleSemInstalacao();
+    }
   } else {
     if (blocoItens) blocoItens.style.display = 'none';
     window._orcFechamento = null;
@@ -12897,7 +12908,7 @@ function toggleOrigemOrc() {
             onchange="toggleSemInstalacao()">
           <div>
             <div style="font-size:13px;font-weight:700;color:var(--stone);">Sem instalação — só entrega</div>
-            <div style="font-size:11px;color:#888;">Ex: soleira, peitoril — informe a data de entrega abaixo</div>
+            <div style="font-size:11px;color:#888;">Ex: soleira, peitoril — informe a data de entrega abaixo. <span style="color:var(--gold);font-weight:600;">Pré-marcado automaticamente conforme os itens do orçamento — pode ajustar se precisar.</span></div>
           </div>
         </label>
 

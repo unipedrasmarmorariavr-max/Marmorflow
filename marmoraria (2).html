@@ -931,7 +931,7 @@ async function mostrarPedidoCliente(id) {
   const progress = Math.round(((stageIdx+1)/STAGES.length)*100);
   const history = o.history||[];
   const dias = getDiasRestantes(o);
-  const urg = getUrgencia(dias);
+  const urg = ['entregue','fechado'].includes(o.stage) ? null : getUrgencia(dias);
   const tlHTML = STAGES.map((s,i)=>{
     const done = history.some(h=>h.stage===s.id);
     const current = o.stage===s.id;
@@ -1846,7 +1846,7 @@ async function deleteOrder(id) {
 function openDetail(id) {
   const o=orders.find(o=>o.id===id); if(!o) return;
   const stage=STAGES.find(s=>s.id===o.stage);
-  const dias=getDiasRestantes(o); const urg=getUrgencia(dias);
+  const dias=getDiasRestantes(o); const urg=['entregue','fechado'].includes(o.stage)?null:getUrgencia(dias);
   document.getElementById('detail-title').textContent=o.cliente;
   document.getElementById('detail-id').textContent=o.id+(o.ref_fechado?' (cópia de '+o.ref_fechado+')':'');
   const history=o.history||[];

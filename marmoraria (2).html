@@ -1184,8 +1184,8 @@ function createCard(o) {
   if (_canDrag) div.ondragstart=e=>e.dataTransfer.setData('text/plain',o.id);
   else div.style.cursor='default';
   const dias=getDiasRestantes(o);
-  // Não mostrar alerta de atraso para pedidos entregues
-  const urg = o.stage === 'entregue' ? null : getUrgencia(dias);
+  // Não mostrar alerta de atraso para pedidos entregues ou fechados (original do contrato)
+  const urg = ['entregue','fechado'].includes(o.stage) ? null : getUrgencia(dias);
   const p=PROFILES[currentUser];
   const showFechar = (p.canFechar && (o.stage==='medicao'||o.stage==='aguardando'||o.stage==='negociacao'));
 

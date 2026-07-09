@@ -10277,23 +10277,16 @@ function abrirTelaOrcamentoPedido(id) {
   pedidoOrcAtual = id;
   localStorage.setItem('mf_orc_aberto', id); // salva para restaurar após reload
 
-  // Chave única baseada no created_at do Supabase — único por registro
-  const tsUnico = order.created_at ? order.created_at.replace(/[^0-9]/g,'').substring(0,17) : (id + Date.now());
-  const orcKey = 'ORC_' + id + '_' + tsUnico;
+  // Chave estável baseada só no ID do pedido (MRM-XXX já é único por si só) —
+  // NÃO usa mais timestamp/created_at, que era frágil e podia gerar uma chave
+  // diferente a cada abertura, fazendo o sistema "perder" o orçamento salvo
+  // (e até apagá-lo, achando que era lixo de uma chave antiga).
+  const orcKey = 'ORC_' + id;
 
   let orcs = getOrcamentos();
 
-  // Busca orçamento SOMENTE pela chave exata E valida que o cliente bate
-  const orcSalvo = orcs.find(o => o.pedidoKey === orcKey);
-  const clienteBate = orcSalvo && (orcSalvo.cliente||'').toLowerCase().trim() === (order.cliente||'').toLowerCase().trim();
-  let orc = clienteBate ? orcSalvo : null;
-  
-  // Se não achou orçamento válido, limpa qualquer lixo com esse pedidoId e começa do zero
-  if (!orc) {
-    // Remove orçamentos antigos deste pedido (evita acúmulo de lixo)
-    const orcsLimpos = orcs.filter(o => o.pedidoId !== id && o.pedidoKey !== orcKey);
-    salvarOrcamentos(orcsLimpos);
-  }
+  // Busca o orçamento SEMPRE pelo pedidoId — chave estável e confiável
+  let orc = orcs.find(o => o.pedidoId === id) || null;
 
   if (!orc) {
     // Sempre começa do zero — sem herdar nada
@@ -10377,9 +10370,9 @@ function limparOrcamentoAtual() {
   const order = orders.find(o => o.id === pedidoOrcAtual);
   if (!order) return;
 
-  // Remove do localStorage
-  const orcKey = pedidoOrcAtual + '_' + (order.created_at || pedidoOrcAtual);
-  const orcs = getOrcamentos().filter(o => o.pedidoKey !== orcKey && o.pedidoId !== pedidoOrcAtual);
+  // Remove do localStorage (todos os orçamentos ligados a esse pedido)
+  const orcKey = 'ORC_' + pedidoOrcAtual;
+  const orcs = getOrcamentos().filter(o => o.pedidoId !== pedidoOrcAtual);
   salvarOrcamentos(orcs);
 
   // Cria orçamento zerado na memória
@@ -10677,7 +10670,7 @@ function renderTelaOrcamentoPedido(order) {
 
     <!-- RODAPÉ FIXO (igual Marmoprice) -->
     <div class="orc-rodape-fixo" style="position:fixed;bottom:0;left:0;right:0;background:white;border-top:1px solid #ddd;padding:10px 24px;display:flex;gap:12px;align-items:center;z-index:99;box-shadow:0 -2px 8px rgba(0,0,0,0.08);">
-      <div style="display:flex;align-items:center;gap:8px;background:#f5f5f5;padding:8px 14px;border-radius:6px;cursor:pointer;" onclick="abrirDescontoGeral(${custoTotal}, ${totalGeral}, ${margem.toFixed(3)}, ${lucroTotal}, ${llh.toFixed(2)})">
+      <div style="display:flex;align-items:center;gap:8px;background:#f5f5f5;padding:8px 14px;border-radius:6px;cursor:pointer;" onclick="abrirDescontoGeral()">
         <span style="font-size:18px;">🧮</span>
         <span style="font-size:12px;font-weight:600;color:#333;">Desconto<br>Geral</span>
       </div>
@@ -11790,9 +11783,21 @@ function imprimirOrcamento() {
   win.document.close();
 }
 // ─── SIMULADOR DE PREÇO ──────────────────────────────────────────────────────
-function abrirDescontoGeral(custoTotal, totalGeral, margem, lucroTotal, llh) {
+function abrirDescontoGeral() {
+  // Recalcula tudo NA HORA, direto do orçamento atual — nunca usa valores
+  // "congelados" de uma renderização anterior (isso causava o bug de às vezes
+  // não mostrar a margem certa, ou mostrar tudo zerado).
+  if (!orcamentoAtual || !orcamentoAtual.itens) { showNotif('Abra um orçamento primeiro.', 'error'); return; }
+
+  const totalGeral  = orcamentoAtual.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
+  const custoTotal  = orcamentoAtual.itens.reduce((s,it) => s + (it.calc?.custoTotal||0), 0);
+  const lucroTotal  = orcamentoAtual.itens.reduce((s,it) => s + (it.calc?.lucroLiquido||0), 0);
+  const margem      = totalGeral > 0 ? (lucroTotal/totalGeral*100) : 0;
+  const tempoProdTotal = orcamentoAtual.itens.reduce((s,it) => s+(it.calc?.tempoProdTotal||0), 0);
+  const llh         = tempoProdTotal > 0 ? lucroTotal/tempoProdTotal : 0;
+
   // Abre modal com simulador completo igual ao Marmoprice
-  const tpp = orcamentoAtual?.itens?.reduce((s,it) => s+(it.calc?.tempoProdInterno||0), 0) || 1;
+  const tpp = tempoProdTotal || 1;
 
   document.getElementById('body-desconto-geral').innerHTML = `
     <div style="padding:4px 0 16px;">

@@ -990,10 +990,30 @@ function doLogout() {
 // ============ DB ============
 async function loadOrders() {
   showLoading('Carregando pedidos...');
-  const { data, error } = await getSB().from('pedidos').select('*').order('created_at',{ascending:false});
+  try {
+    // Busca em páginas de 500 para evitar limite do Supabase e timeout por payload grande
+    let allOrders = [];
+    let from = 0;
+    const pageSize = 500;
+    while (true) {
+      const { data, error } = await getSB()
+        .from('pedidos')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      allOrders = allOrders.concat(data);
+      if (data.length < pageSize) break; // última página
+      from += pageSize;
+    }
+    orders = allOrders;
+  } catch(e) {
+    hideLoading();
+    showNotif('Erro ao carregar pedidos', 'error');
+    return;
+  }
   hideLoading();
-  if (error) { showNotif('Erro ao carregar','error'); return; }
-  orders = data||[];
   // Carrega cache de medições em paralelo
   try {
     const { data: meds } = await getSB().from('medicoes').select('*');
@@ -10886,7 +10906,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
             oninput="orcamentoAtual.itens[${idx}].ambiente=this.value"></div>
         <div><label style="font-size:10px;color:#666;">Tipo de entrega</label>
           <select class="form-select" style="padding:6px 10px;"
-            onchange="orcamentoAtual.itens[${idx}].tipoEntrega=this.value;recalcularTelaOrc('${orderId}')">
+            onchange="orcamentoAtual.itens[${idx}].tipoEntrega=this.value;orcamentoAtual.itens[${idx}].nPessoasInstal=null;recalcularTelaOrc('${orderId}')">
             <option value="instalacao" ${item.tipoEntrega==='instalacao'?'selected':''}>Com instalação</option>
             <option value="entrega" ${item.tipoEntrega==='entrega'?'selected':''}>Somente entrega</option>
             <option value="retirada" ${item.tipoEntrega==='retirada'?'selected':''}>Retirada</option>
@@ -10984,7 +11004,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
           if (isAutoPessoas) {
             const temInstalItem = item.tipoEntrega === 'instalacao' || item.tipoEntrega === 'entrega_instalacao' || item.tipoEntrega === 'so_instalacao';
             const defaultPessoas = temInstalItem ? (cfg.pessoasInstalacao||2) : 1;
-            currentVal = (item.nPessoasInstal !== null && item.nPessoasInstal !== undefined && item.nPessoasInstal !== '') ? item.nPessoasInstal : defaultPessoas;
+            currentVal = (item.nPessoasInstal !== null && item.nPessoasInstal !== undefined && item.nPessoasInstal !== '') ? parseInt(item.nPessoasInstal) : defaultPessoas;
           }
           return `<div>
             <label style="font-size:10px;color:#666;display:block;margin-bottom:3px;">${label}${autoLabel}</label>

@@ -2582,8 +2582,11 @@ function renderDashProducao() {
 }
 
 function renderMetricasProducao(orders) {
-  // Só pedidos com stage === 'fechado' (não duplica com corte/acabamento/etc)
+  // Só pedidos com stage === 'fechado' (não duplica)
   const pedidosFechados = orders.filter(o => o.stage === 'fechado' && !o.ref_fechado);
+
+  // Busca todos os orçamentos salvos (localStorage + sincronizado do Supabase)
+  const todosOrcs = getOrcamentos ? getOrcamentos() : [];
 
   const hoje = new Date();
   const meses = [];
@@ -2599,27 +2602,22 @@ function renderMetricasProducao(orders) {
     let corte45 = 0, polReto2cm = 0, cubas = 0, furos = 0, rebaixoAm = 0, instalacoes = 0;
 
     pedidosMes.forEach(o => {
-      // Tenta ler orçamento salvo no localStorage
-      let itens = [];
-      const orcKey = Object.keys(localStorage).find(k => k.startsWith('ORC_' + o.id + '_'));
-      if (orcKey) {
-        try { itens = JSON.parse(localStorage.getItem(orcKey))?.itens || []; } catch(e) {}
-      }
-      // Fallback: itens_aprovados
-      if (!itens.length && o.itens_aprovados) {
-        try { itens = typeof o.itens_aprovados === 'string' ? JSON.parse(o.itens_aprovados) : (o.itens_aprovados || []); } catch(e) {}
-      }
+      // Busca orçamento vinculado ao pedido
+      const orc = todosOrcs.find(r => r.pedidoId === o.id || r.pedidoKey === o.id);
+      const itens = orc?.itens || [];
 
       itens.forEach(item => {
         const qty = parseInt(item.quantidade) || 1;
-        corte45    += (parseFloat(item.compCorte45)       || 0) * qty;
+        corte45    += (parseFloat(item.compCorte45)        || 0) * qty;
         polReto2cm += (parseFloat(item.compPolimentoManual) || 0) * qty;
-        cubas      += (parseInt(item.numCubas)   || parseInt(item.recortesPolimento) || 0) * qty;
-        furos      += (parseInt(item.numFuros)   || parseInt(item.furosRecorte)      || 0) * qty;
-        rebaixoAm  += (parseFloat(item.rebaixoAmericano)  || 0) * qty;
+        cubas      += (parseInt(item.numCubas)    || parseInt(item.recortesPolimento) || 0) * qty;
+        furos      += (parseInt(item.numFuros)    || parseInt(item.furosRecorte)      || 0) * qty;
+        rebaixoAm  += (parseFloat(item.rebaixoAmericano)   || 0) * qty;
       });
 
-      if (o.tipoentrega === 'entrega_instalacao' || o.tipoentrega === 'so_instalacao') {
+      // Instalações via tipo de entrega do pedido ou do orçamento
+      const tipoEnt = o.tipoentrega || orc?.transito || '';
+      if (tipoEnt === 'entrega_instalacao' || tipoEnt === 'so_instalacao') {
         instalacoes++;
       }
     });
@@ -2647,12 +2645,12 @@ function renderMetricasProducao(orders) {
       + '<div style="font-size:12px;color:#888;">' + m.n + ' pedido' + (m.n > 1 ? 's' : '') + ' fechado' + (m.n > 1 ? 's' : '') + '</div>'
       + '</div>'
       + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 20px;background:white;">'
-      + metrica('📐', 'Corte 45°',      fmt1(m.corte45),    'm lineares', '#8B6914')
+      + metrica('📐', 'Corte 45°',       fmt1(m.corte45),    'm lineares', '#8B6914')
       + metrica('📏', 'Polim. Reto 2cm', fmt1(m.polReto2cm), 'm lineares', '#006382')
-      + metrica('🚿', 'Cubas',           m.cubas,            'recortes',   '#2E7D32')
-      + metrica('🔩', 'Furos',           m.furos,            'rec. brutos','#5C3D8F')
-      + metrica('🪵', 'Rebaixo Am.',     fmt1(m.rebaixoAm),  'm²',         '#C47A3A')
-      + metrica('🔧', 'Instalações',     m.instalacoes,      'pedidos',    '#B85A4A')
+      + metrica('🚿', 'Cubas',            m.cubas,            'recortes',   '#2E7D32')
+      + metrica('🔩', 'Furos',            m.furos,            'rec. brutos','#5C3D8F')
+      + metrica('🪵', 'Rebaixo Am.',      fmt1(m.rebaixoAm),  'm²',         '#C47A3A')
+      + metrica('🔧', 'Instalações',      m.instalacoes,      'pedidos',    '#B85A4A')
       + '</div></div>';
   }).join('');
 

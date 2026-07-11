@@ -9506,8 +9506,8 @@ function calcularItem(item, pedra, cfg) {
   // Padrão de pessoas: 2 para instalação, 1 para só entrega (igual Marmoprice)
   const temInstal = item.tipoEntrega === 'instalacao' || item.tipoEntrega === 'entrega_instalacao' || item.tipoEntrega === 'so_instalacao';
   const nPessoasDefault = temInstal ? (cfg.pessoasInstalacao||2) : 1;
-  // Se nPessoasInstal não foi definido manualmente, usa o default
-  const nPessoas = (item.nPessoasInstal && item.nPessoasInstal > 0) ? parseInt(item.nPessoasInstal) : nPessoasDefault;
+  // null/undefined = automático; valor numérico = manual
+  const nPessoas = (item.nPessoasInstal !== null && item.nPessoasInstal !== undefined && item.nPessoasInstal !== '') ? parseInt(item.nPessoasInstal) : nPessoasDefault;
 
   const tempoDeslocamento = (distancia * 2 * minKm * idas) / 60;
 
@@ -10359,7 +10359,7 @@ function abrirTelaOrcamentoPedido(id) {
         pecas: [{nome:'', medidas:'', qtd:'1'}],
         tipoEntrega: 'instalacao',
         tempoInstalManual: '',
-        nPessoasInstal: 1,
+        nPessoasInstal: null,
         areaBipolida:0, horasAdicionais:'00:00',
         compCorte45:0, compMontagem45:0, compCorte45Interno:0,
         compPolimentoManual:0, compPolimentoAuto:0,
@@ -10447,7 +10447,7 @@ function limparOrcamentoAtual() {
       pecas: [{nome:'', medidas:'', qtd:'1'}],
       tipoEntrega: 'instalacao',
       tempoInstalManual: '',
-      nPessoasInstal: 1,
+      nPessoasInstal: null,
       areaBipolida:0, horasAdicionais:'00:00',
       compCorte45:0, compMontagem45:0, compCorte45Interno:0,
       compPolimentoManual:0, compPolimentoAuto:0,
@@ -10981,7 +10981,11 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
               currentVal = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
             } else { currentVal = '00:00'; }
           }
-          if (isAutoPessoas) currentVal = item.nPessoasInstal || (item.tipoEntrega === 'instalacao' ? (cfg.pessoasInstalacao||2) : 1);
+          if (isAutoPessoas) {
+            const temInstalItem = item.tipoEntrega === 'instalacao' || item.tipoEntrega === 'entrega_instalacao' || item.tipoEntrega === 'so_instalacao';
+            const defaultPessoas = temInstalItem ? (cfg.pessoasInstalacao||2) : 1;
+            currentVal = (item.nPessoasInstal !== null && item.nPessoasInstal !== undefined && item.nPessoasInstal !== '') ? item.nPessoasInstal : defaultPessoas;
+          }
           return `<div>
             <label style="font-size:10px;color:#666;display:block;margin-bottom:3px;">${label}${autoLabel}</label>
             <input id="${isAutoInstal?'campo-tempo-instal-'+idx:isAutoPessoas?'campo-pessoas-'+idx:''}"
@@ -10989,7 +10993,10 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
               style="padding:6px 8px;font-size:13px;${autoStyle}" value="${currentVal}"
               onblur="(function(){
                 var v=this.value;
-                orcamentoAtual.itens[${idx}]['${field}']=${type==='number'?'parseFloat(v)||0':'v'};
+                ${isAutoPessoas
+                  ? `orcamentoAtual.itens[${idx}].nPessoasInstal = (v===''||v===null) ? null : parseInt(v)||null;`
+                  : `orcamentoAtual.itens[${idx}]['${field}']=${type==='number'?'parseFloat(v)||0':'v'};`
+                }
                 recalcularTelaOrc('${orderId}');
               }).call(this)">
           </div>`;
@@ -11310,7 +11317,7 @@ function adicionarItemTelaOrc(orderId) {
     compCubEsculpida:0, compColagemTopo:0, compWaterJet:0,
     areaRebaixoItaliano:0, areaRebaixoAmericano:0,
     qtdFlush:0, qtdFlath:0, qtdRecortes:0, qtdCubas:0,
-    tempoInstalManual:'', nPessoasInstal:'',
+    tempoInstalManual:'', nPessoasInstal:null,
     custoAcessorios:0, custoInsumoInstal:0, custoArgamassa:0, custoAdicionais:0, custoCantoneira:0,
     apoioMovel:false, calc:null
   });

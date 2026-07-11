@@ -2532,36 +2532,18 @@ function renderDashProducao() {
   if (!el) return;
 
   const hoje = new Date();
-  const fmtV = v => 'R$ '+(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
 
   // Pedidos por etapa de produção
   const emCorte     = orders.filter(o => o.stage==='corte' && !o.ref_fechado);
   const emAcabamento= orders.filter(o => o.stage==='acabamento' && !o.ref_fechado);
   const prontos     = orders.filter(o => o.stage==='pronto' && !o.ref_fechado);
-  const entregues   = orders.filter(o => o.stage==='entregue' && !o.ref_fechado);
 
   // Pedidos atrasados (data entrega < hoje)
   const hojeStr = hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
-  const atrasados = orders.filter(o => 
-    ['corte','acabamento','pronto'].includes(o.stage) && 
+  const atrasados = orders.filter(o =>
+    ['corte','acabamento','pronto'].includes(o.stage) &&
     o.dataentrega && o.dataentrega < hojeStr && !o.ref_fechado
   );
-
-  // Faturamento mês a mês (últimos 6 meses)
-  const meses = [];
-  for (let i=5; i>=0; i--) {
-    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
-    const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
-    const label = d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'});
-    const pedidosMes = orders.filter(o => 
-      ['fechado','corte','acabamento','pronto','entregue'].includes(o.stage) &&
-      !o.ref_fechado &&
-      (o.created_at||'').substring(0,7) === key
-    );
-    const total = pedidosMes.reduce((s,o) => s+(parseFloat((o.valor||'0').replace(',','.'))||0), 0);
-    meses.push({ label, total, n: pedidosMes.length });
-  }
-  const maxVal = Math.max(...meses.map(m=>m.total), 1);
 
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,45%),1fr));gap:12px;margin-bottom:24px;">
@@ -2578,21 +2560,8 @@ function renderDashProducao() {
         </div>`).join('')}
     </div>
 
-    <!-- Gráfico de volume por mês -->
-    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;margin-bottom:20px;">
-      <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:16px;">📊 Pedidos Fechados — Últimos 6 Meses</div>
-      <div style="display:flex;align-items:flex-end;gap:12px;height:160px;">
-        ${meses.map(m=>`
-          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
-            <div style="font-size:11px;color:#888;font-weight:600;">${m.n > 0 ? m.n+'x' : ''}</div>
-            <div style="width:100%;background:${m.total>0?'var(--gold)':'#f0f0f0'};border-radius:6px 6px 0 0;
-                        height:${m.total>0?Math.max(20,Math.round(m.total/maxVal*120)):4}px;
-                        transition:height .3s;position:relative;" title="${fmtV(m.total)}">
-            </div>
-            <div style="font-size:10px;color:#888;">${m.label}</div>
-          </div>`).join('')}
-      </div>
-    </div>
+    <!-- Métricas de Produção por Mês -->
+    ${renderMetricasProducao(orders)}
 
     <!-- Lista atrasados -->
     ${atrasados.length > 0 ? `
@@ -2610,6 +2579,88 @@ function renderDashProducao() {
         </div>`).join('')}
     </div>` : ''}
   `;
+}
+
+function renderMetricasProducao(orders) {
+  // Só pedidos com stage === 'fechado' (não duplica com corte/acabamento/etc)
+  const pedidosFechados = orders.filter(o => o.stage === 'fechado' && !o.ref_fechado);
+
+  const hoje = new Date();
+  const meses = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const labelMes = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    meses.push({ key, label: labelMes });
+  }
+
+  const calcMetricasMes = (key) => {
+    const pedidosMes = pedidosFechados.filter(o => (o.created_at || '').substring(0, 7) === key);
+    let corte45 = 0, polReto2cm = 0, cubas = 0, furos = 0, rebaixoAm = 0, instalacoes = 0;
+
+    pedidosMes.forEach(o => {
+      // Tenta ler orçamento salvo no localStorage
+      let itens = [];
+      const orcKey = Object.keys(localStorage).find(k => k.startsWith('ORC_' + o.id + '_'));
+      if (orcKey) {
+        try { itens = JSON.parse(localStorage.getItem(orcKey))?.itens || []; } catch(e) {}
+      }
+      // Fallback: itens_aprovados
+      if (!itens.length && o.itens_aprovados) {
+        try { itens = typeof o.itens_aprovados === 'string' ? JSON.parse(o.itens_aprovados) : (o.itens_aprovados || []); } catch(e) {}
+      }
+
+      itens.forEach(item => {
+        const qty = parseInt(item.quantidade) || 1;
+        corte45    += (parseFloat(item.compCorte45)       || 0) * qty;
+        polReto2cm += (parseFloat(item.compPolimentoManual) || 0) * qty;
+        cubas      += (parseInt(item.numCubas)   || parseInt(item.recortesPolimento) || 0) * qty;
+        furos      += (parseInt(item.numFuros)   || parseInt(item.furosRecorte)      || 0) * qty;
+        rebaixoAm  += (parseFloat(item.rebaixoAmericano)  || 0) * qty;
+      });
+
+      if (o.tipoentrega === 'entrega_instalacao' || o.tipoentrega === 'so_instalacao') {
+        instalacoes++;
+      }
+    });
+
+    return { n: pedidosMes.length, corte45, polReto2cm, cubas, furos, rebaixoAm, instalacoes };
+  };
+
+  const fmt1 = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  const metrica = (icon, label, valor, unit, cor) =>
+    '<div style="text-align:center;padding:8px 4px;">'
+    + '<div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;margin-bottom:4px;">' + icon + ' ' + label + '</div>'
+    + '<div style="font-size:20px;font-weight:800;color:' + cor + ';">' + valor + '</div>'
+    + '<div style="font-size:10px;color:#aaa;">' + unit + '</div>'
+    + '</div>';
+
+  const rows = meses.map(({ key, label }) => {
+    const m = calcMetricasMes(key);
+    if (m.n === 0) return '<div style="padding:14px 20px;border-bottom:0.5px solid var(--cream-dark);font-size:13px;color:#bbb;">'
+      + label + ' — nenhum pedido fechado</div>';
+
+    return '<div style="border-bottom:0.5px solid var(--cream-dark);">'
+      + '<div style="padding:12px 20px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;background:#fafaf8;" onclick="var n=this.nextElementSibling;n.style.display=n.style.display===\'none\'?\'block\':\'none\'">'
+      + '<div style="font-size:13px;font-weight:700;color:var(--stone);">' + label + '</div>'
+      + '<div style="font-size:12px;color:#888;">' + m.n + ' pedido' + (m.n > 1 ? 's' : '') + ' fechado' + (m.n > 1 ? 's' : '') + '</div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 20px;background:white;">'
+      + metrica('📐', 'Corte 45°',      fmt1(m.corte45),    'm lineares', '#8B6914')
+      + metrica('📏', 'Polim. Reto 2cm', fmt1(m.polReto2cm), 'm lineares', '#006382')
+      + metrica('🚿', 'Cubas',           m.cubas,            'recortes',   '#2E7D32')
+      + metrica('🔩', 'Furos',           m.furos,            'rec. brutos','#5C3D8F')
+      + metrica('🪵', 'Rebaixo Am.',     fmt1(m.rebaixoAm),  'm²',         '#C47A3A')
+      + metrica('🔧', 'Instalações',     m.instalacoes,      'pedidos',    '#B85A4A')
+      + '</div></div>';
+  }).join('');
+
+  return '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:20px;">'
+    + '<div style="background:var(--stone);color:white;padding:14px 20px;font-size:14px;font-weight:700;">'
+    + '📊 Métricas de Produção por Mês <span style="font-size:12px;opacity:.7;">(pedidos Fechados · clique para expandir)</span></div>'
+    + rows
+    + '</div>';
 }
 
 async function renderDashFinanceiro(filtroMesSelecionado) {

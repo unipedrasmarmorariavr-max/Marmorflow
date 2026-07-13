@@ -990,30 +990,10 @@ function doLogout() {
 // ============ DB ============
 async function loadOrders() {
   showLoading('Carregando pedidos...');
-  try {
-    // Busca em páginas de 500 para evitar limite do Supabase e timeout por payload grande
-    let allOrders = [];
-    let from = 0;
-    const pageSize = 500;
-    while (true) {
-      const { data, error } = await getSB()
-        .from('pedidos')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .range(from, from + pageSize - 1);
-      if (error) throw error;
-      if (!data || data.length === 0) break;
-      allOrders = allOrders.concat(data);
-      if (data.length < pageSize) break; // última página
-      from += pageSize;
-    }
-    orders = allOrders;
-  } catch(e) {
-    hideLoading();
-    showNotif('Erro ao carregar pedidos', 'error');
-    return;
-  }
+  const { data, error } = await getSB().from('pedidos').select('*').order('created_at',{ascending:false}).limit(1000);
   hideLoading();
+  if (error) { showNotif('Erro ao carregar','error'); return; }
+  orders = data||[];
   // Carrega cache de medições em paralelo
   try {
     const { data: meds } = await getSB().from('medicoes').select('*');

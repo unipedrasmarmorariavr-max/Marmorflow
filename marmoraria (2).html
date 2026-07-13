@@ -9523,10 +9523,10 @@ function calcularItem(item, pedra, cfg) {
   const distancia = parseFloat(item.distancia)||0;
   const idas = parseInt(item.idas)||1;
   const minKm = cfg.transito==='lento'?(cfg.minKmLento||3):cfg.transito==='intermediario'?(cfg.minKmIntermediario||2):(cfg.minKmRapido||1);
-  // Padrão de pessoas: 2 para instalação, 1 para só entrega (igual Marmoprice)
+  // Padrão de pessoas: cfg.pessoasInstalacao para instalação, cfg.pessoasEntrega para só entrega
   const temInstal = item.tipoEntrega === 'instalacao' || item.tipoEntrega === 'entrega_instalacao' || item.tipoEntrega === 'so_instalacao';
-  const nPessoasDefault = temInstal ? (cfg.pessoasInstalacao||2) : 1;
-  // null/undefined = automático; valor numérico = manual
+  const nPessoasDefault = temInstal ? (cfg.pessoasInstalacao||2) : (cfg.pessoasEntrega||1);
+  // null/undefined/'' = automático; valor numérico = manual
   const nPessoas = (item.nPessoasInstal !== null && item.nPessoasInstal !== undefined && item.nPessoasInstal !== '') ? parseInt(item.nPessoasInstal) : nPessoasDefault;
 
   const tempoDeslocamento = (distancia * 2 * minKm * idas) / 60;
@@ -11003,7 +11003,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
           }
           if (isAutoPessoas) {
             const temInstalItem = item.tipoEntrega === 'instalacao' || item.tipoEntrega === 'entrega_instalacao' || item.tipoEntrega === 'so_instalacao';
-            const defaultPessoas = temInstalItem ? (cfg.pessoasInstalacao||2) : 1;
+            const defaultPessoas = temInstalItem ? (cfg.pessoasInstalacao||2) : (cfg.pessoasEntrega||1);
             currentVal = (item.nPessoasInstal !== null && item.nPessoasInstal !== undefined && item.nPessoasInstal !== '') ? parseInt(item.nPessoasInstal) : defaultPessoas;
           }
           return `<div>

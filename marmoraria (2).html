@@ -11685,8 +11685,8 @@ function imprimirOrcamento() {
 
   const totalGeral = orc.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
   const dataHoje = new Date().toLocaleDateString('pt-BR');
-  // Número curto igual ao Marmoprice
-  const numOrc = orc.numPedido || orc.id.replace('ORC-','').substring(0,10);
+  // Número do orçamento = número do pedido no kanban (MRM-071, etc.)
+  const numOrc = orc.pedidoId || orc.pedidoKey || orc.numPedido || orc.id.replace('ORC-','').substring(0,10);
 
   // Agrupa itens por ambiente
   const ambientes = {};

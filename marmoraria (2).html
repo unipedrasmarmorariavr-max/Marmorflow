@@ -3426,15 +3426,18 @@ function salvarContasPagar(c) {
   sincronizarContasPagarSupabase(c);
 }
 
-// Sincroniza o array completo de contas a pagar com o Supabase (salva tudo de novo)
+// Sincroniza o array completo de contas a pagar com o Supabase (upsert preserva os IDs)
 let _syncContasPagarTimeout = null;
 function sincronizarContasPagarSupabase(contas) {
   clearTimeout(_syncContasPagarTimeout);
   _syncContasPagarTimeout = setTimeout(async () => {
     try {
-      await getSB().from('contas_pagar').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      if (contas.length) {
-        const rows = contas.map(c => ({
+      const comId = contas.filter(c => c.id);
+      const semId = contas.filter(c => !c.id);
+
+      if (comId.length) {
+        const rowsComId = comId.map(c => ({
+          id: c.id,
           descricao: c.descricao || '',
           valor: parseFloat(c.valor) || 0,
           vencimento: c.vencimento || null,
@@ -3443,7 +3446,37 @@ function sincronizarContasPagarSupabase(contas) {
           recorrencia: c.recorrencia || null,
           data_pagamento: c.dataPagamento || null
         }));
-        await getSB().from('contas_pagar').insert(rows);
+        await getSB().from('contas_pagar').upsert(rowsComId, { onConflict: 'id' });
+      }
+
+      // Remove no Supabase as contas que não existem mais localmente
+      const idsAtuais = comId.map(c => c.id);
+      const { data: existentes } = await getSB().from('contas_pagar').select('id');
+      const idsParaExcluir = (existentes || []).map(r => r.id).filter(id => !idsAtuais.includes(id));
+      if (idsParaExcluir.length) {
+        await getSB().from('contas_pagar').delete().in('id', idsParaExcluir);
+      }
+
+      // Contas novas sem id local ainda: insere e atualiza o localStorage com os IDs gerados
+      if (semId.length) {
+        const rowsSemId = semId.map(c => ({
+          descricao: c.descricao || '',
+          valor: parseFloat(c.valor) || 0,
+          vencimento: c.vencimento || null,
+          status: c.status || 'pendente',
+          categoria: c.categoria || null,
+          recorrencia: c.recorrencia || null,
+          data_pagamento: c.dataPagamento || null
+        }));
+        const { data: inseridas } = await getSB().from('contas_pagar').insert(rowsSemId).select('id');
+        if (inseridas && inseridas.length === semId.length) {
+          const todasContas = getContasPagar();
+          semId.forEach((c, i) => {
+            const idx = todasContas.findIndex(t => t === c || (t.descricao === c.descricao && t.vencimento === c.vencimento && !t.id));
+            if (idx >= 0) todasContas[idx].id = inseridas[i].id;
+          });
+          localStorage.setItem('mf_contas_pagar', JSON.stringify(todasContas));
+        }
       }
     } catch(e) { console.error('Erro ao sincronizar contas a pagar:', e); }
   }, 800);
@@ -3649,12 +3682,21 @@ function salvarContaPagar() {
 }
 
 async function pagarConta(id) {
-  const contas = getContasPagar();
-  const c = contas.find(x => x.id === id);
-  if (!c) return;
-  const bancos = getBancos();
-  document.getElementById('modal-title').textContent = '✓ Confirmar Pagamento';
-  document.getElementById('modal-body').innerHTML = `
+  let contas = getContasPagar();
+  let c = contas.find(x => x.id === id);
+  if (!c) {
+    // Cache local desatualizado — recarrega do Supabase antes de desistir
+    await carregarContasPagarDoSupabase();
+    contas = getContasPagar();
+    c = contas.find(x => x.id === id);
+  }
+  if (!c) {
+    showNotif('Não foi possível encontrar essa conta. Atualize a página (Ctrl+Shift+R) e tente de novo.', 'error');
+    return;
+  }
+  document.getElementById('detail-title').textContent = '✓ Confirmar Pagamento';
+  document.getElementById('detail-id').textContent = '';
+  document.getElementById('detail-body').innerHTML = `
     <input type="hidden" id="pag-conta-id" value="${id}">
     <div style="background:#fff5f5;border-radius:8px;padding:12px 16px;margin-bottom:16px;">
       <div style="font-weight:700;color:var(--stone);">${c.descricao}</div>

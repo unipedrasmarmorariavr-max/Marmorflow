@@ -1210,7 +1210,7 @@ function createCard(o) {
     <div style="background:#fafafa;border:1px dashed #ccc;border-radius:6px;padding:5px 8px;margin-bottom:6px;font-size:11px;color:#888;">
       📐 Sem medição agendada
     </div>` : ''}
-    <div class="card-id">${o.id}${o.num_pedido_fechado?` · <span style="color:var(--gold);font-weight:800;">${o.num_pedido_fechado}</span>`:''}</div>
+    <div class="card-id">${o.ref_fechado || o.id}${o.num_pedido_fechado?` · <span style="color:var(--gold);font-weight:800;">${o.num_pedido_fechado}</span>`:''}</div>
     <div class="card-client">${o.cliente}</div>
     <div class="card-desc">${o.peca||''}${o.material?' · '+o.material:''}</div>
     ${(currentUser!=='producao'&&o.valor)?`<div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:4px;">R$ ${o.valor}</div>`:''}
@@ -1636,18 +1636,24 @@ async function drop(e,stage) {
     return;
   }
 
-  // Se estava em Pedido Fechado e voltou para Negociação → remove cópia em Corte e limpa data da agenda
+  // Se estava em Pedido Fechado e voltou para Negociação → remove cópia em Corte
   if (order.stage === 'fechado' && stage === 'negociacao') {
     const copia = orders.find(o => o.ref_fechado === id);
     if (copia) {
-      if (!confirm(`Ao voltar para Negociação, a cópia ${copia.id} em Em Corte será removida e a data de instalação será cancelada na agenda. Confirmar?`)) return;
+      if (!confirm(`Ao voltar para Negociação, a cópia ${id} em Em Corte será removida. Confirmar?`)) return;
       await getSB().from('pedidos').delete().eq('id', copia.id);
       orders = orders.filter(o => o.id !== copia.id);
-      showNotif(`Cópia ${copia.id} removida de Em Corte`, 'error');
     } else {
-      if (!confirm(`Ao voltar para Negociação, a data de instalação agendada será removida da agenda. Confirmar?`)) return;
+      if (!confirm(`Ao voltar para Negociação, a data de instalação agendada será removida. Confirmar?`)) return;
     }
-    // Remove a data de instalação da agenda
+    order.dataentrega = null;
+    await getSB().from('pedidos').update({ dataentrega: null }).eq('id', id);
+    showNotif('📅 Data de instalação removida da agenda', 'error');
+  }
+
+  // Se estava em Corte/Acabamento/Pronto e voltou para Negociação → limpa data
+  if (['corte','acabamento','pronto'].includes(order.stage) && stage === 'negociacao') {
+    if (!confirm(`Ao voltar para Negociação, a data de instalação agendada será removida. Confirmar?`)) return;
     order.dataentrega = null;
     await getSB().from('pedidos').update({ dataentrega: null }).eq('id', id);
     showNotif('📅 Data de instalação removida da agenda', 'error');
@@ -8865,16 +8871,25 @@ async function confirmarFechamentoComData() {
 
   if (error) { hideLoading(); showNotif('Erro: ' + error.message, 'error'); return; }
 
-  // Cria cópia em Em Corte com a mesma data
+  // Cria cópia em Em Corte — usa o mesmo número do pedido original com sufixo -P
+  // para manter o MRM-023 visível no Pedido Fechado E em Em Corte
   order.dataentrega = dataEscolhida;
   order.stage = 'fechado';
   order.history = history;
   order.tipoentrega = updateData.tipoentrega;
-  const novoId = await nextId();
+
+  const idCopia = id + '-P'; // MRM-023-P — mesmo número, só indica "em produção"
   const historyCorte = [...history, {stage:'corte', date:hoje}];
-  const copia = {...order, id:novoId, stage:'corte', history:historyCorte, ref_fechado:id, dataentrega:dataEscolhida};
+  const copia = {...order, id:idCopia, stage:'corte', history:historyCorte, ref_fechado:id, dataentrega:dataEscolhida};
   delete copia.created_at;
-  await getSB().from('pedidos').insert(copia);
+
+  // Verifica se já existe cópia para não duplicar
+  const copiaExistente = orders.find(o => o.ref_fechado === id);
+  if (copiaExistente) {
+    await getSB().from('pedidos').update({stage:'corte', history:historyCorte, dataentrega:dataEscolhida}).eq('id', copiaExistente.id);
+  } else {
+    await getSB().from('pedidos').insert(copia);
+  }
 
   hideLoading();
   closeModal('modal-confirmar-data');

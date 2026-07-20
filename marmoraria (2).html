@@ -1239,45 +1239,26 @@ function limparFiltros() {
 }
 
 function filterKanban() {
-  const busca    = (document.getElementById('search-kanban')?.value || '').toLowerCase();
-  const stage    = document.getElementById('filt-stage')?.value || '';
-  const dataIni  = document.getElementById('filt-data-ini')?.value || '';
-  const dataFim  = document.getElementById('filt-data-fim')?.value || '';
-  const valorMin = parseFloat(document.getElementById('filt-valor-min')?.value) || 0;
-  const valorMax = parseFloat(document.getElementById('filt-valor-max')?.value) || 0;
-  renderKanban(busca, { stage, dataIni, dataFim, valorMin, valorMax });
+  renderKanban(document.getElementById('search-kanban')?.value || '');
 }
 
-function renderKanban(filter='', filtros={}) {
+function renderKanban(filter='') {
   const board = document.getElementById('kanban-board');
+  if (!board) return;
   board.innerHTML='';
-  let totalFiltrado = 0;
   STAGES.forEach(stg=>{
-    // Sempre mostra todas as colunas — filtra só os cards dentro delas
-    let filtered = orders.filter(o => {
-      if (o.stage !== stg.id) return false;
-      if (filter && !o.cliente.toLowerCase().includes(filter) && !o.id.toLowerCase().includes(filter)) return false;
-      if (filtros.stage && filtros.stage !== stg.id) return false;
-      if (filtros.dataIni && (o.created_at||'').substring(0,10) < filtros.dataIni) return false;
-      if (filtros.dataFim && (o.created_at||'').substring(0,10) > filtros.dataFim) return false;
-      const val = parseFloat((o.valor||'0').toString().replace(',','.')) || 0;
-      if (filtros.valorMin && val < filtros.valorMin) return false;
-      if (filtros.valorMax && val > filtros.valorMax) return false;
-      return true;
-    });
+    let filtered = orders.filter(o =>
+      o.stage === stg.id &&
+      (!filter || o.cliente.toLowerCase().includes(filter.toLowerCase()) || o.id.toLowerCase().includes(filter.toLowerCase()))
+    );
     if (stg.id==='corte'||stg.id==='acabamento') filtered=sortByEntrega(filtered);
-    totalFiltrado += filtered.length;
     const col=document.createElement('div');
     col.className='kanban-col';
     col.innerHTML=`<div class="col-header"><div class="col-title"><span class="col-dot" style="background:${stg.color}"></span>${stg.label}</div><div class="col-count">${filtered.length}</div></div><div class="cards-area" id="col-${stg.id}" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event,'${stg.id}')">${filtered.length===0?'<div class="empty-state" style="padding:16px 0;font-size:11px;">Nenhum pedido</div>':''}</div>`;
     board.appendChild(col);
     filtered.forEach(o=>col.querySelector('.cards-area').appendChild(createCard(o)));
   });
-  const temFiltro = filter || filtros.stage || filtros.dataIni || filtros.dataFim || filtros.valorMin || filtros.valorMax;
-  const res = document.getElementById('filt-resultado');
-  if (res) res.textContent = temFiltro ? `${totalFiltrado} pedido(s) encontrado(s)` : '';
 }
-
 
 // ─── VER PROJETO / CROQUI ─────────────────────────────────────────────────
 async function abrirVerProjeto(id) {

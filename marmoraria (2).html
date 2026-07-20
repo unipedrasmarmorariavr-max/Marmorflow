@@ -1253,10 +1253,11 @@ function renderKanban(filter='', filtros={}) {
   board.innerHTML='';
   let totalFiltrado = 0;
   STAGES.forEach(stg=>{
-    if (filtros.stage && filtros.stage !== stg.id) return;
+    // Sempre mostra todas as colunas — filtra só os cards dentro delas
     let filtered = orders.filter(o => {
       if (o.stage !== stg.id) return false;
       if (filter && !o.cliente.toLowerCase().includes(filter) && !o.id.toLowerCase().includes(filter)) return false;
+      if (filtros.stage && filtros.stage !== stg.id) return false;
       if (filtros.dataIni && (o.created_at||'').substring(0,10) < filtros.dataIni) return false;
       if (filtros.dataFim && (o.created_at||'').substring(0,10) > filtros.dataFim) return false;
       const val = parseFloat((o.valor||'0').toString().replace(',','.')) || 0;

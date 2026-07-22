@@ -1334,10 +1334,21 @@ function renderCRM() {
 
   // Dias parado = diferença entre hoje e último histórico do pedido
   const diasParado = (o) => {
-    const hist = o.history || [];
-    const ultimo = hist.length ? hist[hist.length-1].date : o.created_at?.substring(0,10) || hojeStr;
-    const d1 = new Date(hojeStr), d2 = new Date(ultimo);
-    return Math.floor((d1-d2)/(1000*60*60*24));
+    try {
+      const hist = o.history || [];
+      let ultimaData = '';
+      if (hist.length) {
+        // history pode ter formato {date: '2026-07-01'} ou {data: '2026-07-01'}
+        const ultimo = hist[hist.length-1];
+        ultimaData = ultimo.date || ultimo.data || '';
+      }
+      if (!ultimaData) ultimaData = (o.created_at||'').substring(0,10);
+      if (!ultimaData) return 0;
+      const d1 = new Date(hojeStr + 'T12:00:00');
+      const d2 = new Date(ultimaData + 'T12:00:00');
+      if (isNaN(d1) || isNaN(d2)) return 0;
+      return Math.max(0, Math.floor((d1-d2)/(1000*60*60*24)));
+    } catch(e) { return 0; }
   };
 
   const badgeDias = (dias) => {

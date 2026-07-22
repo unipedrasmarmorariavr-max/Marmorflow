@@ -813,7 +813,6 @@ const PROFILES = {
   financeiro: { name:'Financeiro', icon:'💰', canCreate:false, canDelete:false, canEdit:false, canMoveAll:false, canFechar:false, canFinanceiro:true  }
 };
 const STAGES = [
-  { id:'medicao',    label:'Medição',             color:'#7A7268', bg:'#F0EEE9' },
   { id:'aguardando', label:'Aguardando Orçamento', color:'#5B7B9C', bg:'#E8F2FA' },
   { id:'negociacao', label:'Negociação',           color:'#4A6C8C', bg:'#E8EFF6' },
   { id:'fechado',    label:'Pedido Fechado',       color:'#B8965A', bg:'#F5EDE0' },
@@ -2170,8 +2169,8 @@ async function saveMedidor() {
     andar:document.getElementById('m-andar').value.trim(),
     obsAcesso:document.getElementById('m-obs-acesso').value.trim(),
     croqui:tempImages.croqui, local:tempImages.local,
-    stage:editingId?(orders.find(o=>o.id===editingId)?.stage||'medicao'):'medicao',
-    history:editingId?(orders.find(o=>o.id===editingId)?.history||[]):[{stage:'medicao',date:new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}]
+    stage:editingId?(orders.find(o=>o.id===editingId)?.stage||'aguardando'):'aguardando',
+    history:editingId?(orders.find(o=>o.id===editingId)?.history||[]):[{stage:'aguardando',date:new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}]
   };
   let result;
   if (editingId) result=await getSB().from('pedidos').update(data).eq('id',editingId).select().single();

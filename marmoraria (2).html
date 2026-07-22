@@ -436,6 +436,7 @@
     <button class="tab-btn" onclick="showTab('materiais')" id="tab-materiais">🪨 Materiais</button>
     <button class="tab-btn" onclick="showTab('produtos')" id="tab-produtos" style="display:none;">🪨 Produtos</button>
     <button class="tab-btn" onclick="showTab('financeiro')" id="tab-financeiro">💰 Financeiro</button>
+    <button class="tab-btn" onclick="showTab('crm')" id="tab-crm">🤝 CRM</button>
     <button class="tab-btn" onclick="showTab('dashboard')" id="tab-dashboard" style="display:none;">📊 Dashboard</button>
     <button class="tab-btn" onclick="showTab('portal')" id="tab-portal">🔗 Link Cliente</button>
     <button class="tab-btn" onclick="showTab('configuracoes')" id="tab-configuracoes" style="display:none;">⚙️ Configurações</button>
@@ -509,6 +510,7 @@
       <div id="agenda-content"></div>
     </div>
     <div class="panel" id="panel-financeiro">
+    <div class="panel" id="panel-crm"><div id="crm-content" style="padding:20px;"></div></div>
       <div id="financeiro-content"></div>
     </div>
     <div class="panel" id="panel-orcamento">
@@ -683,6 +685,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Origem da Venda *</label>
+function toggleFiltroAv() {
           <select class="form-select" id="c-origem" onchange="toggleOrigem()">
             <option value="">Selecione...</option>
             <option value="whatsapp">📱 WhatsApp</option>
@@ -1070,6 +1073,7 @@ function showTab(tab, addHistory = true) {
   if (tab==='agenda') renderAgenda();
   if (tab==='produtos') renderProdutos();
   if (tab==='configuracoes') renderConfiguracoes();
+  if (tab==='crm') renderCRM();
   // Registra no histórico do navegador para o botão ← funcionar
   if (addHistory) {
     history.pushState({ tab }, '', window.location.pathname + window.location.search + '#' + tab);
@@ -1318,6 +1322,152 @@ function createCard(o) {
     </button>`:''}
     </div>`;
   return div;
+}
+
+function renderCRM() {
+  const el = document.getElementById('crm-content');
+  if (!el) return;
+
+  const hoje = new Date();
+  const hojeStr = hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
+  const fmt = v => 'R$ ' + (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+
+  // Dias parado = diferença entre hoje e último histórico do pedido
+  const diasParado = (o) => {
+    const hist = o.history || [];
+    const ultimo = hist.length ? hist[hist.length-1].date : o.created_at?.substring(0,10) || hojeStr;
+    const d1 = new Date(hojeStr), d2 = new Date(ultimo);
+    return Math.floor((d1-d2)/(1000*60*60*24));
+  };
+
+  const badgeDias = (dias) => {
+    const cor = dias >= 10 ? '#B85A4A' : dias >= 5 ? '#8B6914' : '#2E7D32';
+    const bg  = dias >= 10 ? '#FDEAEA' : dias >= 5 ? '#FFF8E7' : '#EAF3DE';
+    return `<span style="background:${bg};color:${cor};font-size:11px;font-weight:700;padding:3px 8px;border-radius:12px;">⏰ ${dias}d parado</span>`;
+  };
+
+  // ── ABA STATE ──
+  const abaAtiva = localStorage.getItem('crm_aba') || 'negociacoes';
+
+  // ── SEÇÃO 1: NEGOCIAÇÕES ──
+  const negociacoes = orders
+    .filter(o => o.stage === 'negociacao')
+    .map(o => ({ ...o, dias: diasParado(o) }))
+    .sort((a,b) => b.dias - a.dias);
+
+  const htmlNeg = negociacoes.length === 0
+    ? '<div style="padding:40px;text-align:center;color:#888;">Nenhuma negociação em aberto 🎉</div>'
+    : negociacoes.map(o => {
+        const tel = (o.telefone||'').replace(/\D/g,'');
+        return '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:0.5px solid var(--cream-dark);hover:background:#fafaf8;">'
+          + '<div style="flex:1;min-width:0;">'
+          + '<div style="font-size:14px;font-weight:700;color:var(--stone);">' + o.cliente + '</div>'
+          + '<div style="font-size:11px;color:#888;">' + o.id + (o.peca?' · '+o.peca:'') + (o.valor?' · '+fmt(parseFloat((o.valor||'0').replace(',','.'))):'') + '</div>'
+          + '</div>'
+          + badgeDias(o.dias)
+          + (tel ? '<a href="https://wa.me/55'+tel+'" target="_blank" style="background:#25D366;color:white;border:none;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;text-decoration:none;">📱 WhatsApp</a>' : '')
+          + '<button onclick="openDetail(\''+o.id+'\')" style="background:var(--cream-dark);border:none;color:var(--stone);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">👁 Ver</button>'
+          + '</div>';
+      }).join('');
+
+  // ── SEÇÃO 2: CLIENTES ──
+  const clienteMap = {};
+  orders.forEach(o => {
+    if (!o.cliente) return;
+    const nome = o.cliente.trim().toUpperCase();
+    if (!clienteMap[nome]) clienteMap[nome] = { nome: o.cliente, pedidos: [], totalGasto: 0, ultimoPedido: '' };
+    clienteMap[nome].pedidos.push(o);
+    if (['fechado','corte','acabamento','pronto','entregue'].includes(o.stage)) {
+      clienteMap[nome].totalGasto += parseFloat((o.valor||'0').toString().replace(',','.')) || 0;
+    }
+    if (!clienteMap[nome].ultimoPedido || o.created_at > clienteMap[nome].ultimoPedido) {
+      clienteMap[nome].ultimoPedido = o.created_at?.substring(0,10) || '';
+    }
+  });
+
+  const clientes = Object.values(clienteMap).sort((a,b) => b.totalGasto - a.totalGasto);
+
+  const htmlClientes = clientes.length === 0
+    ? '<div style="padding:40px;text-align:center;color:#888;">Nenhum cliente encontrado</div>'
+    : clientes.map(c => {
+        const isVip = c.totalGasto >= 5000 || c.pedidos.filter(p => ['fechado','corte','acabamento','pronto','entregue'].includes(p.stage)).length >= 2;
+        const pedFechados = c.pedidos.filter(p => ['fechado','corte','acabamento','pronto','entregue'].includes(p.stage)).length;
+        return '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:0.5px solid var(--cream-dark);">'
+          + '<div style="flex:1;min-width:0;">'
+          + '<div style="font-size:14px;font-weight:700;color:var(--stone);">'
+          + (isVip ? '<span style="background:#FFD700;color:#5C3D00;font-size:10px;font-weight:800;padding:2px 6px;border-radius:4px;margin-right:6px;">⭐ VIP</span>' : '')
+          + c.nome + '</div>'
+          + '<div style="font-size:11px;color:#888;">'+ c.pedidos.length +' pedido(s) · '+ pedFechados +' fechado(s) · Último: '+(c.ultimoPedido ? new Date(c.ultimoPedido+'T12:00:00').toLocaleDateString('pt-BR') : '—')+'</div>'
+          + '</div>'
+          + (c.totalGasto > 0 ? '<div style="font-size:13px;font-weight:700;color:#2E7D32;white-space:nowrap;">'+ fmt(c.totalGasto) +'</div>' : '')
+          + '</div>';
+      }).join('');
+
+  // ── SEÇÃO 3: FUNIL ──
+  const STAGE_LABELS = {
+    medicao:'Medição', aguardando:'Ag. Orçamento', negociacao:'Negociação',
+    fechado:'Pedido Fechado', corte:'Em Corte', acabamento:'Acabamento',
+    pronto:'Pronto', entregue:'Entregue'
+  };
+  const totalPedidos = orders.length;
+  const porStage = {};
+  orders.forEach(o => { porStage[o.stage] = (porStage[o.stage]||0) + 1; });
+  const taxaConversao = totalPedidos > 0
+    ? Math.round((orders.filter(o=>['fechado','corte','acabamento','pronto','entregue'].includes(o.stage)).length / totalPedidos)*100)
+    : 0;
+
+  const htmlFunil = Object.entries(STAGE_LABELS).map(([id, label]) => {
+    const n = porStage[id] || 0;
+    const pct = totalPedidos > 0 ? Math.round(n/totalPedidos*100) : 0;
+    const cores = {medicao:'#888',aguardando:'#006382',negociacao:'#8B6914',fechado:'#2E7D32',corte:'#006382',acabamento:'#8B6914',pronto:'#2E7D32',entregue:'#555'};
+    const cor = cores[id] || '#888';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--cream-dark);">'
+      + '<div style="width:130px;font-size:13px;color:var(--stone);font-weight:600;">' + label + '</div>'
+      + '<div style="flex:1;background:#f0f0f0;border-radius:4px;height:10px;overflow:hidden;">'
+      + '<div style="width:'+pct+'%;height:100%;background:'+cor+';border-radius:4px;transition:width .3s;"></div>'
+      + '</div>'
+      + '<div style="width:30px;text-align:right;font-size:13px;font-weight:700;color:'+cor+';">' + n + '</div>'
+      + '<div style="width:36px;text-align:right;font-size:11px;color:#888;">' + pct + '%</div>'
+      + '</div>';
+  }).join('');
+
+  // ── RENDER ──
+  el.innerHTML = `
+    <div style="max-width:900px;margin:0 auto;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+        <div style="font-size:22px;font-weight:800;color:var(--stone);">🤝 CRM</div>
+        <div style="font-size:12px;color:#888;">${orders.length} pedidos · ${clientes.length} clientes · conversão ${taxaConversao}%</div>
+      </div>
+
+      <!-- Abas -->
+      <div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:2px solid var(--cream-dark);padding-bottom:0;">
+        ${[['negociacoes','📋 Negociações ('+negociacoes.length+')'],['clientes','👥 Clientes ('+clientes.length+')'],['funil','📊 Funil']].map(([id,label])=>`
+        <button onclick="localStorage.setItem('crm_aba','${id}');renderCRM()" 
+          style="padding:8px 16px;border:none;border-bottom:3px solid ${abaAtiva===id?'var(--gold)':'transparent'};background:transparent;color:${abaAtiva===id?'var(--gold)':'#888'};font-size:13px;font-weight:700;cursor:pointer;">
+          ${label}
+        </button>`).join('')}
+      </div>
+
+      <!-- Conteúdo das abas -->
+      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
+        ${abaAtiva==='negociacoes' ? htmlNeg : abaAtiva==='clientes' ? htmlClientes : `
+        <div style="padding:20px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
+            <div style="background:var(--cream);border-radius:10px;padding:16px;">
+              <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;">Taxa de Conversão</div>
+              <div style="font-size:32px;font-weight:900;color:var(--gold);">${taxaConversao}%</div>
+              <div style="font-size:11px;color:#888;">de orçamentos que fecham</div>
+            </div>
+            <div style="background:var(--cream);border-radius:10px;padding:16px;">
+              <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;">Em Negociação</div>
+              <div style="font-size:32px;font-weight:900;color:#8B6914;">${negociacoes.length}</div>
+              <div style="font-size:11px;color:#888;">aguardando fechamento</div>
+            </div>
+          </div>
+          ${htmlFunil}
+        </div>`}
+      </div>
+    </div>`;
 }
 
 function toggleFiltroAv() {
@@ -2255,6 +2405,8 @@ function ativarSessao(perfil) {
   if (tabFin) tabFin.style.display = (isDono||isFinanceiro) ? 'block' : 'none';
   if (tabPortal) tabPortal.style.display = (isDono||isComercial||isFinanceiro) ? 'block' : 'none';
   if (tabAgenda) tabAgenda.style.display = (isDono||isComercial||isProducao||isMedidor||isFinanceiro) ? 'block' : 'none';
+  var tabCrm = document.getElementById('tab-crm');
+  if (tabCrm) tabCrm.style.display = (isDono||isComercial) ? 'block' : 'none';
   // Sempre abre no Kanban ao fazer login — exceto Medidor que abre na Agenda
   loadOrders().then(function() {
     renderKanban();

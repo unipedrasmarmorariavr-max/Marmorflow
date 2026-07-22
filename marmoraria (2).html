@@ -1293,7 +1293,7 @@ function createCard(o) {
     <div class="card-id">${o.ref_fechado || o.id}${o.num_pedido_fechado?` · <span style="color:var(--gold);font-weight:800;">${o.num_pedido_fechado}</span>`:''}</div>
     <div class="card-client">${o.cliente}</div>
     <div class="card-desc">${o.peca||''}${o.material?' · '+o.material:''}</div>
-    ${(currentUser!=='producao'&&o.valor)?`<div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:4px;">R$ ${o.valor}</div>`:''}
+    ${(currentUser!=='producao'&&currentUser!=='medidor'&&o.valor)?`<div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:4px;">R$ ${o.valor}</div>`:''}
     <div class="card-footer">
       <div class="card-date">${o.dataentrega?'📅 '+formatDate(o.dataentrega):''}</div>
       <div class="card-actions">
@@ -10693,7 +10693,7 @@ function renderTelaOrcamentoPedido(order) {
         <button onclick="fecharTelaOrcamentoPedido()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:white;padding:7px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">← Voltar</button>
         <div>
           <div style="font-size:16px;font-weight:700;">${order.cliente} — Orçamento</div>
-          <div style="font-size:11px;opacity:0.6;">${order.id} · ${order.peca||''} · Custo/h: ${fmt(custoHoraEmpresa)} · Criado em: ${orc.criadoEm ? new Date(orc.criadoEm).toLocaleDateString('pt-BR') : '—'}</div>
+          <div style="font-size:11px;opacity:0.6;">${order.id} · ${order.peca||''} · Custo/h: ${fmt(custoHoraEmpresa)} · Criado em: ${(orcamentoAtual?.criadoEm||orc?.criadoEm) ? new Date(orcamentoAtual?.criadoEm||orc?.criadoEm).toLocaleDateString('pt-BR') : '—'}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">

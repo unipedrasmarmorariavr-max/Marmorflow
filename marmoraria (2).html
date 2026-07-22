@@ -551,7 +551,13 @@
     <div class="modal-body">
       <div class="form-section">Cliente</div>
       <div class="form-grid">
-        <div class="form-group"><label class="form-label">Nome do Cliente *</label><input type="text" class="form-input" id="m-cliente"></div>
+        <div class="form-group" style="position:relative;">
+          <label class="form-label">Nome do Cliente *</label>
+          <input type="text" class="form-input" id="m-cliente" autocomplete="off"
+            oninput="buscarCliente(this.value)" onblur="setTimeout(()=>fecharSugestoes(),200)"
+            placeholder="Digite o nome ou telefone...">
+          <div id="sugestoes-cliente" style="display:none;position:absolute;top:100%;left:0;right:0;background:white;border:1px solid var(--vein);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:999;max-height:200px;overflow-y:auto;"></div>
+        </div>
         <div class="form-group"><label class="form-label">Telefone / WhatsApp</label><input type="text" class="form-input" id="m-telefone" placeholder="(21) 99999-9999"></div>
         <div class="form-group span2"><label class="form-label">Endereço</label><input type="text" class="form-input" id="m-endereco" placeholder="Rua, número, bairro, cidade"></div>
       </div>
@@ -1324,6 +1330,104 @@ function createCard(o) {
   return div;
 }
 
+// ============ CLIENTES ============
+let _clientes = [];
+
+async function carregarClientes() {
+  try {
+    const { data } = await getSB().from('clientes').select('*').order('nome');
+    _clientes = data || [];
+  } catch(e) { _clientes = []; }
+}
+
+function buscarCliente(valor) {
+  const div = document.getElementById('sugestoes-cliente');
+  if (!div) return;
+  if (!valor || valor.length < 2) { div.style.display = 'none'; return; }
+
+  const busca = valor.toLowerCase();
+  const encontrados = _clientes.filter(c =>
+    c.nome.toLowerCase().includes(busca) ||
+    (c.telefone||'').replace(/\D/g,'').includes(busca.replace(/\D/g,''))
+  ).slice(0, 8);
+
+  if (encontrados.length === 0) {
+    div.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:#888;">Nenhum cliente encontrado — será cadastrado ao salvar</div>';
+  } else {
+    div.innerHTML = encontrados.map(c => `
+      <div onclick="selecionarCliente('${c.id}')"
+        style="padding:10px 14px;cursor:pointer;border-bottom:0.5px solid var(--cream-dark);font-size:13px;"
+        onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='white'">
+        <div style="font-weight:600;color:var(--stone);">${c.nome}</div>
+        <div style="font-size:11px;color:#888;">${c.telefone||''}${c.endereco?' · '+c.endereco:''}</div>
+      </div>`).join('');
+  }
+  div.style.display = 'block';
+}
+
+function selecionarCliente(id) {
+  const c = _clientes.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('m-cliente').value = c.nome;
+  if (c.telefone) document.getElementById('m-telefone').value = c.telefone;
+  if (c.endereco) document.getElementById('m-endereco').value = c.endereco;
+  fecharSugestoes();
+}
+
+function fecharSugestoes() {
+  const div = document.getElementById('sugestoes-cliente');
+  if (div) div.style.display = 'none';
+}
+
+async function salvarOuAtualizarCliente(nome, telefone, endereco) {
+  if (!nome) return;
+  try {
+    // Verifica se já existe pelo nome exato
+    const existente = _clientes.find(c => c.nome.trim().toLowerCase() === nome.trim().toLowerCase());
+    if (existente) {
+      // Atualiza telefone/endereço se vieram preenchidos
+      const updates = {};
+      if (telefone && !existente.telefone) updates.telefone = telefone;
+      if (endereco && !existente.endereco) updates.endereco = endereco;
+      if (Object.keys(updates).length > 0) {
+        await getSB().from('clientes').update(updates).eq('id', existente.id);
+        Object.assign(existente, updates);
+      }
+    } else {
+      // Cadastra novo cliente
+      const { data } = await getSB().from('clientes').insert({
+        nome: nome.trim(), telefone: telefone||'', endereco: endereco||''
+      }).select().single();
+      if (data) _clientes.push(data);
+    }
+  } catch(e) { console.warn('Erro ao salvar cliente:', e); }
+}
+
+async function renderCRMClientes() {
+  await carregarClientes();
+  // agrupa pedidos por cliente
+  const clienteMap = {};
+  orders.forEach(o => {
+    if (!o.cliente) return;
+    const nome = o.cliente.trim().toUpperCase();
+    if (!clienteMap[nome]) clienteMap[nome] = { nome: o.cliente, pedidos: [], totalGasto: 0, ultimoPedido: '' };
+    clienteMap[nome].pedidos.push(o);
+    if (['fechado','corte','acabamento','pronto','entregue'].includes(o.stage)) {
+      clienteMap[nome].totalGasto += parseFloat((o.valor||'0').toString().replace(',','.')) || 0;
+    }
+    if (!clienteMap[nome].ultimoPedido || o.created_at > clienteMap[nome].ultimoPedido) {
+      clienteMap[nome].ultimoPedido = o.created_at?.substring(0,10) || '';
+    }
+  });
+  // Mescla com cadastro de clientes
+  _clientes.forEach(c => {
+    const key = c.nome.trim().toUpperCase();
+    if (!clienteMap[key]) clienteMap[key] = { nome: c.nome, pedidos: [], totalGasto: 0, ultimoPedido: c.created_at?.substring(0,10)||'' };
+    if (c.telefone && !clienteMap[key].telefone) clienteMap[key].telefone = c.telefone;
+  });
+  return Object.values(clienteMap).sort((a,b) => b.totalGasto - a.totalGasto);
+}
+
 function renderCRM() {
   const el = document.getElementById('crm-content');
   if (!el) return;
@@ -2020,6 +2124,8 @@ async function saveMedidor() {
   if (result.error){showNotif('Erro: '+result.error.message,'error');return;}
   if (editingId){const idx=orders.findIndex(o=>o.id===editingId);if(idx>=0)orders[idx]=result.data;}
   else orders.unshift(result.data);
+  // Salva/atualiza cliente automaticamente
+  salvarOuAtualizarCliente(cliente, data.telefone, data.endereco);
   renderKanban(document.getElementById('search-kanban').value);
   closeModal('modal-medidor');
   showNotif(editingId?'Medição atualizada!':'Pedido criado: '+id,'success');
@@ -2432,6 +2538,7 @@ function ativarSessao(perfil) {
   if (tabCrm) tabCrm.style.display = (isDono||isComercial) ? 'block' : 'none';
   // Sempre abre no Kanban ao fazer login — exceto Medidor que abre na Agenda
   loadOrders().then(function() {
+    carregarClientes(); // carrega clientes em paralelo
     renderKanban();
     if (isMedidor) {
       localStorage.setItem('agenda_aba','medicao');

@@ -446,9 +446,57 @@
         <div class="kanban-title">Pedidos em Andamento</div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <input type="text" class="search-input" placeholder="🔍 Buscar..." id="search-kanban" oninput="filterKanban()" style="width:190px;">
+          <button onclick="toggleFiltroAv()" id="btn-filtro-av"
+            style="background:var(--cream-dark);border:1px solid var(--vein);color:var(--stone);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
+            ⚙️ Filtros
+          </button>
           <button class="btn-new" onclick="openNewOrder()" id="btn-new-order" style="display:flex!important;">＋ Novo Pedido</button>
         </div>
       </div>
+
+      <!-- Painel filtros avançados -->
+      <div id="painel-filt-av" style="display:none;background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px 20px;margin-bottom:14px;border:1px solid var(--cream-dark);">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;align-items:end;">
+          <div>
+            <label style="font-size:11px;color:#888;font-weight:600;display:block;margin-bottom:4px;">ETAPA</label>
+            <select id="fav-stage" class="form-select" style="font-size:13px;" onchange="filterKanban()">
+              <option value="">Todas</option>
+              <option value="medicao">Medição</option>
+              <option value="aguardando">Ag. Orçamento</option>
+              <option value="negociacao">Negociação</option>
+              <option value="fechado">Pedido Fechado</option>
+              <option value="corte">Em Corte</option>
+              <option value="acabamento">Acabamento</option>
+              <option value="pronto">Pronto</option>
+              <option value="entregue">Entregue</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:#888;font-weight:600;display:block;margin-bottom:4px;">DATA INÍCIO</label>
+            <input type="date" id="fav-data-ini" class="form-input" style="font-size:13px;" onchange="filterKanban()">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#888;font-weight:600;display:block;margin-bottom:4px;">DATA FIM</label>
+            <input type="date" id="fav-data-fim" class="form-input" style="font-size:13px;" onchange="filterKanban()">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#888;font-weight:600;display:block;margin-bottom:4px;">VALOR MÍN (R$)</label>
+            <input type="number" id="fav-vmin" class="form-input" placeholder="Ex: 3000" style="font-size:13px;" oninput="filterKanban()">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#888;font-weight:600;display:block;margin-bottom:4px;">VALOR MÁX (R$)</label>
+            <input type="number" id="fav-vmax" class="form-input" placeholder="Ex: 10000" style="font-size:13px;" oninput="filterKanban()">
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button onclick="limparFiltrosAv()"
+              style="background:#f5f5f5;color:#666;border:1px solid #ddd;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;width:100%;">
+              🗑 Limpar
+            </button>
+          </div>
+        </div>
+        <div id="fav-resultado" style="margin-top:8px;font-size:12px;color:#888;"></div>
+      </div>
+
       <div class="kanban-board" id="kanban-board"></div>
     </div>
     <div class="panel" id="panel-dashboard">
@@ -1272,7 +1320,51 @@ function createCard(o) {
   return div;
 }
 
-function filterKanban(){renderKanban(document.getElementById('search-kanban').value);}
+function toggleFiltroAv() {
+  const p = document.getElementById('painel-filt-av');
+  const b = document.getElementById('btn-filtro-av');
+  if (!p) return;
+  const aberto = p.style.display !== 'none';
+  p.style.display = aberto ? 'none' : 'block';
+  if (b) { b.style.background = aberto ? 'var(--cream-dark)' : 'var(--gold)'; b.style.color = aberto ? 'var(--stone)' : 'white'; }
+}
+
+function limparFiltrosAv() {
+  ['fav-stage','fav-data-ini','fav-data-fim','fav-vmin','fav-vmax'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  filterKanban();
+}
+
+function filterKanban() {
+  const busca   = (document.getElementById('search-kanban')?.value || '').toLowerCase();
+  const stage   = document.getElementById('fav-stage')?.value || '';
+  const dataIni = document.getElementById('fav-data-ini')?.value || '';
+  const dataFim = document.getElementById('fav-data-fim')?.value || '';
+  const vMin    = parseFloat(document.getElementById('fav-vmin')?.value) || 0;
+  const vMax    = parseFloat(document.getElementById('fav-vmax')?.value) || 0;
+
+  // Filtra o array orders temporariamente e conta resultados
+  const ordersOriginal = orders;
+  orders = ordersOriginal.filter(o => {
+    if (busca && !o.cliente.toLowerCase().includes(busca) && !o.id.toLowerCase().includes(busca)) return false;
+    if (stage && o.stage !== stage) return false;
+    if (dataIni && (o.created_at||'').substring(0,10) < dataIni) return false;
+    if (dataFim && (o.created_at||'').substring(0,10) > dataFim) return false;
+    const val = parseFloat((o.valor||'0').toString().replace(',','.')) || 0;
+    if (vMin && val < vMin) return false;
+    if (vMax && val > vMax) return false;
+    return true;
+  });
+
+  const total = orders.length;
+  renderKanban();
+  orders = ordersOriginal; // restaura array original
+
+  const temFiltro = busca || stage || dataIni || dataFim || vMin || vMax;
+  const res = document.getElementById('fav-resultado');
+  if (res) res.textContent = temFiltro ? `${total} pedido(s) encontrado(s)` : '';
+}
 
 // ─── VER PROJETO / CROQUI ─────────────────────────────────────────────────
 async function abrirVerProjeto(id) {
@@ -10601,7 +10693,7 @@ function renderTelaOrcamentoPedido(order) {
         <button onclick="fecharTelaOrcamentoPedido()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:white;padding:7px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">← Voltar</button>
         <div>
           <div style="font-size:16px;font-weight:700;">${order.cliente} — Orçamento</div>
-          <div style="font-size:11px;opacity:0.6;">${order.id} · ${order.peca||''} · Custo/h: ${fmt(custoHoraEmpresa)}</div>
+          <div style="font-size:11px;opacity:0.6;">${order.id} · ${order.peca||''} · Custo/h: ${fmt(custoHoraEmpresa)} · Criado em: ${orc.criadoEm ? new Date(orc.criadoEm).toLocaleDateString('pt-BR') : '—'}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">

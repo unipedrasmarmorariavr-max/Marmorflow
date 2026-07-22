@@ -1530,40 +1530,111 @@ function renderCRM() {
           + '</div>';
       }).join('');
 
-  // ── SEÇÃO 3: FUNIL ──
-  const STAGE_LABELS = {
-    medicao:'Medição', aguardando:'Ag. Orçamento', negociacao:'Negociação',
-    fechado:'Pedido Fechado', corte:'Em Corte', acabamento:'Acabamento',
-    pronto:'Pronto', entregue:'Entregue'
-  };
-  const totalPedidos = orders.length;
-  const porStage = {};
-  orders.forEach(o => { porStage[o.stage] = (porStage[o.stage]||0) + 1; });
-  const taxaConversao = totalPedidos > 0
-    ? Math.round((orders.filter(o=>['fechado','corte','acabamento','pronto','entregue'].includes(o.stage)).length / totalPedidos)*100)
-    : 0;
+  // ── SEÇÃO 3: FUNIL DE VENDAS REAL ──
+  const mesAtual = new Date().toISOString().substring(0,7); // 2026-07
 
-  const htmlFunil = Object.entries(STAGE_LABELS).map(([id, label]) => {
-    const n = porStage[id] || 0;
-    const pct = totalPedidos > 0 ? Math.round(n/totalPedidos*100) : 0;
-    const cores = {medicao:'#888',aguardando:'#006382',negociacao:'#8B6914',fechado:'#2E7D32',corte:'#006382',acabamento:'#8B6914',pronto:'#2E7D32',entregue:'#555'};
-    const cor = cores[id] || '#888';
-    return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--cream-dark);">'
-      + '<div style="width:130px;font-size:13px;color:var(--stone);font-weight:600;">' + label + '</div>'
-      + '<div style="flex:1;background:#f0f0f0;border-radius:4px;height:10px;overflow:hidden;">'
-      + '<div style="width:'+pct+'%;height:100%;background:'+cor+';border-radius:4px;transition:width .3s;"></div>'
-      + '</div>'
-      + '<div style="width:30px;text-align:right;font-size:13px;font-weight:700;color:'+cor+';">' + n + '</div>'
-      + '<div style="width:36px;text-align:right;font-size:11px;color:#888;">' + pct + '%</div>'
-      + '</div>';
-  }).join('');
+  // Orçamentos criados este mês (pedidos que entraram no sistema)
+  const orcMes = orders.filter(o => (o.created_at||'').substring(0,7) === mesAtual);
+
+  // Em negociação agora
+  const emNeg = orders.filter(o => o.stage === 'negociacao');
+
+  // Fechados este mês
+  const fechadosMes = orders.filter(o => {
+    if (!['fechado','corte','acabamento','pronto','entregue'].includes(o.stage)) return false;
+    // Pega data de fechamento do histórico
+    const hist = o.history || [];
+    const hFechado = hist.find(h => h.stage === 'fechado');
+    const dataFech = hFechado?.date || o.created_at?.substring(0,7) || '';
+    // Tenta extrair ano-mês
+    if (dataFech.includes('/')) {
+      const partes = dataFech.split('/');
+      if (partes.length >= 2) {
+        const mm = partes[1]?.padStart(2,'0');
+        const yyyy = partes[2] || new Date().getFullYear();
+        return `${yyyy}-${mm}` === mesAtual;
+      }
+    }
+    return dataFech.substring(0,7) === mesAtual;
+  });
+
+  // Ticket médio dos fechados este mês
+  const totalFechMes = fechadosMes.reduce((s,o) => s + (parseFloat((o.valor||'0').toString().replace(',','.')) || 0), 0);
+  const ticketMedio = fechadosMes.length > 0 ? totalFechMes / fechadosMes.length : 0;
+
+  // Taxa de conversão do mês
+  const txConvMes = orcMes.length > 0 ? Math.round(fechadosMes.length / orcMes.length * 100) : 0;
+
+  // Tempo médio para fechar (dias entre criação e fechamento)
+  let tempoMedioFech = 0;
+  const tempos = fechadosMes.map(o => {
+    const criado = o.created_at?.substring(0,10);
+    const hist = o.history || [];
+    const hFech = hist.find(h => h.stage === 'fechado');
+    let dataFech = hFech?.date || '';
+    if (dataFech.includes('/')) {
+      const p = dataFech.split('/');
+      dataFech = p.length === 3 ? `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}` : '';
+    }
+    if (!criado || !dataFech) return null;
+    const diff = Math.floor((new Date(dataFech) - new Date(criado)) / (1000*60*60*24));
+    return diff >= 0 ? diff : null;
+  }).filter(v => v !== null);
+  if (tempos.length > 0) tempoMedioFech = Math.round(tempos.reduce((a,b)=>a+b,0) / tempos.length);
+
+  const fmtV = v => 'R$ ' + v.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0});
+
+  const etapas = [
+    { label: '📋 Orçamentos feitos', n: orcMes.length, cor: '#006382', bg: '#E6F1FB', desc: 'este mês' },
+    { label: '💬 Em negociação', n: emNeg.length, cor: '#8B6914', bg: '#FFF8E7', desc: 'aguardando decisão' },
+    { label: '✅ Fechados', n: fechadosMes.length, cor: '#2E7D32', bg: '#EAF3DE', desc: 'este mês' },
+  ];
+  const maxN = Math.max(...etapas.map(e => e.n), 1);
+
+  const htmlFunilNovo = '<div style="padding:24px;">'
+    + '<div style="font-size:13px;font-weight:700;color:var(--stone);margin-bottom:20px;">Funil de Vendas — ' + new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'}) + '</div>'
+
+    // Funil visual
+    + '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:28px;">'
+    + etapas.map((e, i) => {
+        const largura = Math.max(40, Math.round(e.n / maxN * 100));
+        const pct = etapas[0].n > 0 ? Math.round(e.n / etapas[0].n * 100) : 0;
+        return '<div>'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
+          + '<span style="font-size:13px;font-weight:600;color:var(--stone);">' + e.label + '</span>'
+          + '<span style="font-size:13px;font-weight:700;color:' + e.cor + ';">' + e.n + ' <span style="font-size:11px;color:#888;font-weight:400;">' + e.desc + '</span></span>'
+          + '</div>'
+          + '<div style="background:#f0f0f0;border-radius:6px;height:28px;overflow:hidden;">'
+          + '<div style="width:' + largura + '%;height:100%;background:' + e.cor + ';border-radius:6px;display:flex;align-items:center;padding-left:10px;transition:width .4s;">'
+          + (e.n > 0 ? '<span style="font-size:11px;color:white;font-weight:600;">' + (i > 0 ? pct + '% do topo' : '100%') + '</span>' : '')
+          + '</div></div>'
+          + '</div>';
+      }).join('')
+    + '</div>'
+
+    // Cards de métricas
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">'
+    + [
+        ['Taxa de conversão', txConvMes + '%', '#2E7D32', 'orçamentos → fechados'],
+        ['Ticket médio', fmtV(ticketMedio), '#8B6914', 'dos fechados este mês'],
+        ['Tempo médio', tempoMedioFech + ' dias', '#006382', 'para fechar um pedido'],
+        ['Total fechado', fmtV(totalFechMes), '#2E7D32', 'faturado este mês'],
+      ].map(([label, valor, cor, sub]) =>
+        '<div style="background:var(--cream);border-radius:10px;padding:14px;">'
+        + '<div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;margin-bottom:4px;">' + label + '</div>'
+        + '<div style="font-size:22px;font-weight:900;color:' + cor + ';">' + valor + '</div>'
+        + '<div style="font-size:11px;color:#888;">' + sub + '</div>'
+        + '</div>'
+      ).join('')
+    + '</div>'
+    + '</div>';
 
   // ── RENDER ──
   el.innerHTML = `
     <div style="max-width:900px;margin:0 auto;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
         <div style="font-size:22px;font-weight:800;color:var(--stone);">🤝 CRM</div>
-        <div style="font-size:12px;color:#888;">${orders.length} pedidos · ${clientes.length} clientes · conversão ${taxaConversao}%</div>
+        <div style="font-size:12px;color:#888;">${orders.length} pedidos · ${clientes.length} clientes · ${fechadosMes.length} fechados este mês</div>
       </div>
 
       <!-- Abas -->
@@ -1577,22 +1648,7 @@ function renderCRM() {
 
       <!-- Conteúdo das abas -->
       <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
-        ${abaAtiva==='negociacoes' ? htmlNeg : abaAtiva==='clientes' ? htmlClientes : `
-        <div style="padding:20px;">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
-            <div style="background:var(--cream);border-radius:10px;padding:16px;">
-              <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;">Taxa de Conversão</div>
-              <div style="font-size:32px;font-weight:900;color:var(--gold);">${taxaConversao}%</div>
-              <div style="font-size:11px;color:#888;">de orçamentos que fecham</div>
-            </div>
-            <div style="background:var(--cream);border-radius:10px;padding:16px;">
-              <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;">Em Negociação</div>
-              <div style="font-size:32px;font-weight:900;color:#8B6914;">${negociacoes.length}</div>
-              <div style="font-size:11px;color:#888;">aguardando fechamento</div>
-            </div>
-          </div>
-          ${htmlFunil}
-        </div>`}
+        ${abaAtiva==='negociacoes' ? htmlNeg : abaAtiva==='clientes' ? htmlClientes : htmlFunilNovo}
       </div>
     </div>`;
 }

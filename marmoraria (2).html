@@ -13041,16 +13041,36 @@ function renderConfiguracoes() {
         style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
         🏦 Bancos
       </button>
+      <button onclick="showSubConfig('manutencao')" id="subcfg-manutencao"
+        style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
+        🗄️ Manutenção
+      </button>
     </div>
     <div id="subcfg-panel-gastos"><div id="gastos-content"></div></div>
     <div id="subcfg-panel-tempos" style="display:none;"><div id="tempos-content"></div></div>
     <div id="subcfg-panel-bancos" style="display:none;"><div id="bancos-content"></div></div>
+    <div id="subcfg-panel-manutencao" style="display:none;">
+      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:24px;margin-top:8px;">
+        <div style="font-size:16px;font-weight:700;color:var(--stone);margin-bottom:8px;">🗄️ Migração de Fotos</div>
+        <div style="font-size:13px;color:#888;margin-bottom:20px;line-height:1.6;">
+          As fotos antigas estão salvas diretamente no banco de dados (base64), o que consome muito espaço.
+          Este botão migra todas as fotos antigas para o Supabase Storage, deixando o banco mais leve e rápido.
+          <br><br>
+          <strong style="color:#B85A4A;">⚠️ Isso pode demorar alguns minutos dependendo da quantidade de fotos. Não feche o sistema durante a migração.</strong>
+        </div>
+        <div id="migracao-status" style="margin-bottom:16px;"></div>
+        <button onclick="migrarFotosParaStorage()"
+          style="background:var(--gold);color:white;border:none;padding:14px 28px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;">
+          📤 Iniciar Migração de Fotos
+        </button>
+      </div>
+    </div>
   </div>`;
   renderGastos();
 }
 
 function showSubConfig(aba) {
-  ['gastos','tempos','bancos'].forEach(a => {
+  ['gastos','tempos','bancos','manutencao'].forEach(a => {
     const panel = document.getElementById('subcfg-panel-' + a);
     const btn = document.getElementById('subcfg-' + a);
     if (panel) panel.style.display = a === aba ? '' : 'none';
@@ -13062,6 +13082,69 @@ function showSubConfig(aba) {
   if (aba === 'gastos') renderGastos();
   if (aba === 'tempos') renderTempos();
   if (aba === 'bancos') renderBancos();
+}
+
+async function migrarFotosParaStorage() {
+  const statusEl = document.getElementById('migracao-status');
+  const log = (msg, cor) => {
+    if (statusEl) statusEl.innerHTML += `<div style="font-size:13px;color:${cor||'#555'};padding:3px 0;">${msg}</div>`;
+  };
+  if (statusEl) statusEl.innerHTML = '';
+
+  if (!confirm('Iniciar migração de fotos para o Supabase Storage? Isso pode demorar alguns minutos.')) return;
+
+  log('🔄 Buscando pedidos com fotos em base64...', '#006382');
+
+  // Busca todos os pedidos
+  const { data: pedidos, error } = await getSB().from('pedidos').select('id, croqui, local');
+  if (error) { log('❌ Erro ao buscar pedidos: ' + error.message, '#B85A4A'); return; }
+
+  let migrados = 0, erros = 0, pulados = 0;
+
+  for (const p of pedidos) {
+    // Migra croqui
+    const croquis = Array.isArray(p.croqui) ? p.croqui : (p.croqui ? [p.croqui] : []);
+    const locais  = Array.isArray(p.local)  ? p.local  : (p.local  ? [p.local]  : []);
+
+    const migrarArray = async (fotos, pasta) => {
+      const resultado = [];
+      for (const foto of fotos) {
+        // Se já é URL (já migrado), mantém
+        if (foto && (foto.startsWith('http') || foto.startsWith('blob'))) {
+          resultado.push(foto); pulados++;
+        } else if (foto && foto.startsWith('data:')) {
+          // É base64 — migra para Storage
+          const url = await uploadFotoStorage(foto, pasta);
+          if (url) { resultado.push(url); migrados++; }
+          else { resultado.push(foto); erros++; } // mantém base64 se falhar
+        } else {
+          resultado.push(foto);
+        }
+      }
+      return resultado;
+    };
+
+    const novosCroquis = await migrarArray(croquis, 'croquis/' + p.id);
+    const novosLocais  = await migrarArray(locais,  'locais/'  + p.id);
+
+    // Atualiza no banco apenas se houve mudança
+    const mudouCroqui = JSON.stringify(novosCroquis) !== JSON.stringify(croquis);
+    const mudouLocal  = JSON.stringify(novosLocais)  !== JSON.stringify(locais);
+
+    if (mudouCroqui || mudouLocal) {
+      const update = {};
+      if (mudouCroqui) update.croqui = novosCroquis;
+      if (mudouLocal)  update.local  = novosLocais;
+      await getSB().from('pedidos').update(update).eq('id', p.id);
+      log(`✅ ${p.id} — ${migrados} foto(s) migrada(s)`, '#2E7D32');
+    }
+  }
+
+  log(`<br>✅ Migração concluída! ${migrados} foto(s) migrada(s) · ${pulados} já estavam no Storage · ${erros} erro(s)`, '#2E7D32');
+  if (migrados > 0) {
+    await loadOrders(); // recarrega pedidos com URLs atualizadas
+    log('🔄 Pedidos recarregados!', '#006382');
+  }
 }
 
 // ─── BANCOS ──────────────────────────────────────────────────────────────────

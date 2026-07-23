@@ -1961,7 +1961,9 @@ async function salvarNovoCroqui(id) {
   });
 
   showLoading('Salvando croqui...');
-  const novasFotos = await Promise.all(allFiles.map(lerCompress));
+  const novasBase64 = await Promise.all(allFiles.map(lerCompress));
+  // Faz upload para Storage — fallback para base64 se falhar
+  const novasFotos = await Promise.all(novasBase64.map(b64 => uploadFotoStorage(b64, 'croquis').then(url => url || b64)));
   const o = orders.find(x => x.id === id);
   const fotosAntigas = Array.isArray(o?.croqui) ? o.croqui : (o?.croqui ? [o.croqui] : []);
   const todasFotos = [...fotosAntigas, ...novasFotos];
@@ -2421,7 +2423,7 @@ function handleUpload(e, type) {
     if (index >= files.length) return;
     const url = URL.createObjectURL(files[index]);
     const img = new Image();
-    img.onload = () => {
+    img.onload = async () => {
       try {
         let w = img.width, h = img.height;
         if (w > MAX_PX || h > MAX_PX) {
@@ -2431,9 +2433,12 @@ function handleUpload(e, type) {
         const c = document.createElement('canvas');
         c.width = w; c.height = h;
         c.getContext('2d').drawImage(img, 0, 0, w, h);
-        tempImages[type].push(c.toDataURL('image/jpeg', QUALITY));
+        const base64 = c.toDataURL('image/jpeg', QUALITY);
         URL.revokeObjectURL(url);
         c.width = 0; c.height = 0;
+        // Upload para Storage — fallback base64
+        const storageUrl = await uploadFotoStorage(base64, 'orcamentos/' + type);
+        tempImages[type].push(storageUrl || base64);
         renderPreviews();
         setTimeout(() => processarUm(index + 1), 200);
       } catch(err) { URL.revokeObjectURL(url); }
@@ -8575,25 +8580,53 @@ function escolherFotoGaleria() {
 // Mantém compatibilidade com chamadas antigas
 function escolherFoto() { escolherFotoCamera(); }
 
+// ── Upload foto para Supabase Storage ────────────────────────────────────
+async function uploadFotoStorage(base64, pasta) {
+  try {
+    // Converte base64 para Blob
+    const arr = base64.split(',');
+    const mime = arr[0].match(/:(.*?);/)[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) u8arr[n] = bstr.charCodeAt(n);
+    const blob = new Blob([u8arr], { type: mime });
+
+    // Nome único para o arquivo
+    const ext = mime.split('/')[1] || 'jpg';
+    const nome = pasta + '/' + Date.now() + '_' + Math.random().toString(36).substring(2,8) + '.' + ext;
+
+    const { data, error } = await getSB().storage
+      .from('marmorflow-fotos')
+      .upload(nome, blob, { contentType: mime, upsert: false });
+
+    if (error) throw error;
+
+    // Retorna URL pública assinada (válida por 10 anos)
+    const { data: urlData } = await getSB().storage
+      .from('marmorflow-fotos')
+      .createSignedUrl(nome, 60 * 60 * 24 * 365 * 10);
+
+    return urlData?.signedUrl || null;
+  } catch(e) {
+    console.warn('Erro upload Storage:', e);
+    return null; // fallback: continua com base64
+  }
+}
+
 function adicionarFotoMedicao(event, tipo) {
-  // Resolução máxima bem menor para não estourar RAM em Androids com pouca memória livre
   const MAX_PX = 800, QUALITY = 0.65;
-
   const files = Array.from(event.target.files);
-  event.target.value = ''; // libera o input imediatamente
+  event.target.value = '';
 
-  // Processa um arquivo por vez (evita carregar múltiplos na RAM simultaneamente)
   const processarUm = (index) => {
     if (index >= files.length) return;
     const file = files[index];
-
-    // Cria URL temporária sem carregar o arquivo inteiro na RAM de uma vez
     const url = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => {
+    img.onload = async () => {
       try {
         let w = img.width, h = img.height;
-        // Reduz agressivamente se a imagem for muito grande
         if (w > MAX_PX || h > MAX_PX) {
           if (w > h) { h = Math.round(h * MAX_PX / w); w = MAX_PX; }
           else { w = Math.round(w * MAX_PX / h); h = MAX_PX; }
@@ -8602,29 +8635,25 @@ function adicionarFotoMedicao(event, tipo) {
         c.width = w; c.height = h;
         c.getContext('2d').drawImage(img, 0, 0, w, h);
         const base64 = c.toDataURL('image/jpeg', QUALITY);
-
-        // Libera memória imediatamente
         URL.revokeObjectURL(url);
         c.width = 0; c.height = 0;
 
-        _fotosTemp[tipo].push(base64);
+        // Tenta upload para Storage — fallback para base64 se falhar
+        const storageUrl = await uploadFotoStorage(base64, 'medicoes/' + tipo);
+        const fotoFinal = storageUrl || base64;
+
+        _fotosTemp[tipo].push(fotoFinal);
         try { sessionStorage.setItem('mf_fotos_temp', JSON.stringify(_fotosTemp)); } catch(e){}
         renderFotosMedicao(tipo);
-
-        // Processa a próxima foto após pequeno delay para o GC liberar memória
         setTimeout(() => processarUm(index + 1), 300);
       } catch(err) {
         URL.revokeObjectURL(url);
-        showNotif('Foto muito grande. Tente tirar com menor resolução.', 'error');
+        showNotif('Foto muito grande. Tente com menor resolução.', 'error');
       }
     };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      showNotif('Erro ao carregar foto.', 'error');
-    };
+    img.onerror = () => URL.revokeObjectURL(url);
     img.src = url;
   };
-
   processarUm(0);
 }
 

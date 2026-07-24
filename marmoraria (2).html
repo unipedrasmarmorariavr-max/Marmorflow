@@ -13041,30 +13041,10 @@ function renderConfiguracoes() {
         style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
         🏦 Bancos
       </button>
-      <button onclick="showSubConfig('manutencao')" id="subcfg-manutencao"
-        style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
-        🗄️ Manutenção
-      </button>
     </div>
     <div id="subcfg-panel-gastos"><div id="gastos-content"></div></div>
     <div id="subcfg-panel-tempos" style="display:none;"><div id="tempos-content"></div></div>
     <div id="subcfg-panel-bancos" style="display:none;"><div id="bancos-content"></div></div>
-    <div id="subcfg-panel-manutencao" style="display:none;">
-      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:24px;margin-top:8px;">
-        <div style="font-size:16px;font-weight:700;color:var(--stone);margin-bottom:8px;">🗄️ Migração de Fotos</div>
-        <div style="font-size:13px;color:#888;margin-bottom:20px;line-height:1.6;">
-          As fotos antigas estão salvas diretamente no banco de dados (base64), o que consome muito espaço.
-          Este botão migra todas as fotos antigas para o Supabase Storage, deixando o banco mais leve e rápido.
-          <br><br>
-          <strong style="color:#B85A4A;">⚠️ Isso pode demorar alguns minutos dependendo da quantidade de fotos. Não feche o sistema durante a migração.</strong>
-        </div>
-        <div id="migracao-status" style="margin-bottom:16px;"></div>
-        <button onclick="migrarFotosParaStorage()"
-          style="background:var(--gold);color:white;border:none;padding:14px 28px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;">
-          📤 Iniciar Migração de Fotos
-        </button>
-      </div>
-    </div>
   </div>`;
   renderGastos();
 }

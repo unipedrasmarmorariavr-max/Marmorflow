@@ -2923,8 +2923,26 @@ PERGUNTA DO USUÁRIO: ${pergunta}`;
     });
     const data = await response.json();
     const texto = data.content?.[0]?.text || 'Não foi possível gerar a análise.';
-    respostaEl.style.whiteSpace = 'pre-wrap';
-    respostaEl.textContent = texto;
+    // Renderiza markdown básico
+    const html = texto
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/^#{3}\s+(.+)$/gm, '<h3 style="font-size:14px;font-weight:800;color:var(--stone);margin:16px 0 6px;">$1</h3>')
+      .replace(/^#{2}\s+(.+)$/gm, '<h2 style="font-size:15px;font-weight:800;color:var(--stone);margin:20px 0 8px;border-left:4px solid var(--gold);padding-left:10px;">$1</h2>')
+      .replace(/^#{1}\s+(.+)$/gm, '<h1 style="font-size:17px;font-weight:900;color:var(--stone);margin:0 0 16px;">$1</h1>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong style="color:var(--stone);">$1</strong>')
+      .replace(/^---$/gm, '<hr style="border:none;border-top:1px solid var(--cream-dark);margin:16px 0;">')
+      .replace(/^>\s+(.+)$/gm, '<blockquote style="background:var(--cream);border-left:4px solid var(--gold);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-style:italic;color:var(--stone);">$1</blockquote>')
+      .replace(/^\|\s*(.+?)\s*\|\s*(.+?)\s*\|$/gm, (_, a, b) => {
+        if (a.match(/^-+$/) && b.match(/^-+$/)) return '';
+        return `<div style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:0.5px solid var(--cream-dark);font-size:13px;"><span>${a}</span><span style="font-weight:700;color:#2E7D32;">${b}</span></div>`;
+      })
+      .replace(/^\d+\.\s+\*\*(.+?)\*\*\s*—\s*(.+)$/gm, '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--cream-dark);"><span style="background:var(--gold);color:white;font-weight:800;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;">$1</span><div><strong>$1</strong> — $2</div></div>')
+      .replace(/^\d+\.\s+(.+)$/gm, '<div style="padding:6px 0 6px 16px;border-left:2px solid var(--gold);margin:4px 0;font-size:13px;">$1</div>')
+      .replace(/^[-*]\s+(.+)$/gm, '<div style="padding:5px 0 5px 20px;font-size:13px;position:relative;">• $1</div>')
+      .replace(/\n\n/g, '<br>')
+      .replace(/\n/g, '');
+    respostaEl.style.whiteSpace = 'normal';
+    respostaEl.innerHTML = html;
   } catch(e) {
     respostaEl.textContent = '❌ Erro: ' + e.message;
   }

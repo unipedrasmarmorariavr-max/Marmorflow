@@ -2765,26 +2765,168 @@ function renderDashboard(abaAtiva) {
 
   // Header com abas
   el.innerHTML = `
-    <div style="display:flex;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--cream-dark);flex-wrap:wrap;">
-      ${[
-        ['comercial','💼 Comercial'],
-        ['producao','⚙️ Produção'],
-        ['financeiro','💰 Financeiro']
-      ].map(([id,label])=>`
-      <button onclick="renderDashboard('${id}')" 
-        style="padding:10px 20px;border:none;background:${abaDash===id?'var(--gold)':'var(--cream-dark)'};
-               color:${abaDash===id?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;
-               font-size:13px;font-weight:600;">
-        ${label}
-      </button>`).join('')}
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
+      <div style="display:flex;gap:8px;border-bottom:2px solid var(--cream-dark);flex-wrap:wrap;">
+        ${[
+          ['comercial','💼 Comercial'],
+          ['producao','⚙️ Produção'],
+          ['financeiro','💰 Financeiro']
+        ].map(([id,label])=>`
+        <button onclick="renderDashboard('${id}')" 
+          style="padding:10px 20px;border:none;background:${abaDash===id?'var(--gold)':'var(--cream-dark)'};
+                 color:${abaDash===id?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;
+                 font-size:13px;font-weight:600;">
+          ${label}
+        </button>`).join('')}
+      </div>
+      <button onclick="abrirBriefingIA()" 
+        style="background:linear-gradient(135deg,#1a1a2e,#16213e);color:white;border:none;padding:10px 20px;
+               border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;display:flex;align-items:center;
+               gap:8px;box-shadow:0 2px 12px rgba(0,0,0,0.3);">
+        🤖 Consultar IA
+      </button>
     </div>
-    <div id="dash-conteudo"></div>`;
+    <div id="dash-conteudo"></div>
+
+    <!-- Modal Briefing IA -->
+    <div id="modal-briefing-ia" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+      <div style="background:white;border-radius:16px;max-width:680px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+        <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:20px 24px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center;">
+          <div style="color:white;">
+            <div style="font-size:16px;font-weight:800;">🤖 Assistente MarmorFlow</div>
+            <div style="font-size:11px;opacity:0.7;margin-top:2px;">Análise inteligente do seu negócio</div>
+          </div>
+          <button onclick="fecharBriefingIA()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;">✕</button>
+        </div>
+        <div style="padding:24px;">
+          <div style="margin-bottom:16px;">
+            <textarea id="ia-pergunta" placeholder="O que quer saber? Ex: Como está a empresa hoje? O que o comercial deve priorizar?"
+              style="width:100%;border:1.5px solid var(--vein);border-radius:10px;padding:12px 14px;font-size:14px;resize:none;height:80px;font-family:inherit;box-sizing:border-box;"></textarea>
+            <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+              ${[
+                'Como está a empresa hoje?',
+                'O que o comercial deve priorizar?',
+                'Situação financeira do mês',
+                'Quais pedidos precisam de atenção?'
+              ].map(s => `<button onclick="document.getElementById('ia-pergunta').value='${s}'" 
+                style="background:var(--cream);border:1px solid var(--vein);color:var(--stone);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px;">${s}</button>`).join('')}
+            </div>
+          </div>
+          <button onclick="gerarBriefingIA()"
+            style="width:100%;background:linear-gradient(135deg,#1a1a2e,#16213e);color:white;border:none;padding:14px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;margin-bottom:16px;">
+            🚀 Gerar Análise
+          </button>
+          <div id="ia-resposta" style="display:none;background:#f8f8f8;border-radius:10px;padding:16px;font-size:14px;line-height:1.7;color:var(--stone);white-space:pre-wrap;"></div>
+        </div>
+      </div>
+    </div>`;
 
   localStorage.setItem('dash_aba', abaDash);
 
   if (abaDash === 'comercial') renderDashComercial();
   else if (abaDash === 'producao') renderDashProducao();
   else if (abaDash === 'financeiro') renderDashFinanceiro(localStorage.getItem('dash_fin_mes')||'todos');
+}
+
+function abrirBriefingIA() {
+  const modal = document.getElementById('modal-briefing-ia');
+  if (modal) modal.style.display = 'flex';
+}
+
+function fecharBriefingIA() {
+  const modal = document.getElementById('modal-briefing-ia');
+  if (modal) modal.style.display = 'none';
+}
+
+async function gerarBriefingIA() {
+  const pergunta = document.getElementById('ia-pergunta')?.value?.trim()
+    || 'Como está a empresa hoje? O que preciso priorizar?';
+  const respostaEl = document.getElementById('ia-resposta');
+  if (!respostaEl) return;
+
+  respostaEl.style.display = 'block';
+  respostaEl.textContent = '⏳ Analisando os dados do MarmorFlow...';
+
+  // Coleta dados do sistema
+  const hoje = new Date();
+  const mesAtual = hoje.toISOString().substring(0,7);
+  const hojeStr = hoje.toLocaleDateString('pt-BR');
+
+  const emNegociacao = orders.filter(o => o.stage === 'negociacao');
+  const aguardando   = orders.filter(o => o.stage === 'aguardando');
+  const emCorte      = orders.filter(o => o.stage === 'corte' && !o.ref_fechado);
+  const prontos      = orders.filter(o => o.stage === 'pronto' && !o.ref_fechado);
+  const fechadosMes  = orders.filter(o => ['fechado','corte','acabamento','pronto','entregue'].includes(o.stage) && (o.created_at||'').substring(0,7) === mesAtual);
+
+  const fmtV = v => 'R$ ' + (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+  const parseV = o => parseFloat((o.valor||'0').toString().replace(',','.').replace(/[^0-9.]/g,''))||0;
+
+  const totalNeg = emNegociacao.reduce((s,o) => s+parseV(o), 0);
+  const totalFechMes = fechadosMes.reduce((s,o) => s+parseV(o), 0);
+  const txConv = orders.length > 0 ? Math.round(fechadosMes.length/orders.length*100) : 0;
+
+  // Busca transações financeiras do mês
+  let entradas = 0, saidas = 0;
+  try {
+    const { data: txs } = await getSB().from('transacoes').select('tipo,valor').like('data', mesAtual+'%');
+    (txs||[]).forEach(t => {
+      if (t.tipo === 'entrada') entradas += parseFloat(t.valor)||0;
+      else saidas += parseFloat(t.valor)||0;
+    });
+  } catch(e) {}
+
+  // Pedidos parados em negociação há mais de 7 dias
+  const negParados = emNegociacao.filter(o => {
+    const criado = o.created_at?.substring(0,10) || '';
+    if (!criado) return false;
+    const diff = Math.floor((hoje - new Date(criado)) / (1000*60*60*24));
+    return diff >= 7;
+  });
+
+  const contexto = `
+Você é um assistente estratégico do sistema MarmorFlow da Unipedras, marmoraria em Volta Redonda/RJ.
+Hoje é ${hojeStr}. Responda sempre em português brasileiro, de forma direta e prática — como um sócio experiente falando com o dono.
+Use dados reais abaixo para dar conselhos concretos. Seja específico (cite nomes de clientes quando relevante).
+Formate a resposta com emojis e seções claras. Máximo 400 palavras.
+
+DADOS DO SISTEMA:
+📋 KANBAN:
+- Aguardando Orçamento: ${aguardando.length} pedidos
+- Em Negociação: ${emNegociacao.length} pedidos (total: ${fmtV(totalNeg)})
+- Em Corte: ${emCorte.length} pedidos
+- Prontos para entrega: ${prontos.length} pedidos
+- Fechados este mês: ${fechadosMes.length} pedidos (${fmtV(totalFechMes)})
+
+💰 FINANCEIRO (${mesAtual}):
+- Entradas: ${fmtV(entradas)}
+- Saídas: ${fmtV(saidas)}
+- Resultado: ${fmtV(entradas - saidas)} ${entradas >= saidas ? '✅' : '⚠️'}
+
+🎯 ALERTAS:
+- Pedidos em negociação há +7 dias: ${negParados.length} (${negParados.map(o=>o.cliente).join(', ')||'nenhum'})
+- Taxa de conversão: ${txConv}%
+
+PEDIDOS EM NEGOCIAÇÃO:
+${emNegociacao.slice(0,8).map(o => `- ${o.cliente}: ${fmtV(parseV(o))} (${o.peca||''})`).join('\n')||'Nenhum'}
+
+PERGUNTA DO USUÁRIO: ${pergunta}`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: contexto }]
+      })
+    });
+    const data = await response.json();
+    const texto = data.content?.[0]?.text || 'Não foi possível gerar a análise.';
+    respostaEl.textContent = texto;
+  } catch(e) {
+    respostaEl.textContent = '❌ Erro ao conectar com a IA. Verifique sua conexão.';
+  }
 }
 
 function renderDashComercial() {

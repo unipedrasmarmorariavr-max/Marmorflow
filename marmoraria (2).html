@@ -3193,32 +3193,6 @@ function renderDashComercial() {
       )}
     </div>
 
-    <!-- SEÇÃO: PIPELINE DO KANBAN -->
-    <div style="font-size:16px;font-weight:700;color:var(--stone);margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid var(--cream-dark);">
-      🔄 Pipeline Atual
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,45%),1fr));gap:12px;margin-bottom:24px;">
-      ${[
-        ['medicao','🔍','Medição','#7A7268'],
-        ['aguardando','📝','Ag. Orçamento','#5B7B9C'],
-        ['negociacao','💬','Negociação','#4A6C8C'],
-        ['fechado','✅','Fechado','#2E7D32'],
-        ['corte','⚙️','Em Corte','#5B4A8B'],
-        ['acabamento','✨','Acabamento','#B85A4A'],
-        ['pronto','📦','Pronto','#4A9B6B'],
-      ].map(([stage, emoji, label, cor]) => {
-        const lista = orders.filter(o => o.stage===stage && !o.ref_fechado);
-        const total = lista.reduce((s,o) => s+parseValor(o), 0);
-        return `
-        <div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:16px;border-top:3px solid ${cor};text-align:center;">
-          <div style="font-size:20px;margin-bottom:6px;">${emoji}</div>
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:${cor};margin-bottom:4px;">${label}</div>
-          <div style="font-size:20px;font-weight:800;color:var(--stone);">${lista.length}</div>
-          <div style="font-size:11px;color:var(--stone-light);margin-top:4px;">${total>0?fmt(total):''}</div>
-        </div>`;
-      }).join('')}
-    </div>
-
   </div>`;
 }
 function renderDashProducao() {

@@ -447,6 +447,7 @@
     <button class="tab-btn" onclick="showTab('produtos')" id="tab-produtos" style="display:none;">🪨 Produtos</button>
     <button class="tab-btn" onclick="showTab('financeiro')" id="tab-financeiro">💰 Financeiro</button>
     <button class="tab-btn" onclick="showTab('crm')" id="tab-crm">🤝 CRM</button>
+    <button class="tab-btn" onclick="showTab('ia')" id="tab-ia" style="display:none;">🤖 IA</button>
     <button class="tab-btn" onclick="showTab('dashboard')" id="tab-dashboard" style="display:none;">📊 Dashboard</button>
     <button class="tab-btn" onclick="showTab('portal')" id="tab-portal">🔗 Link Cliente</button>
     <button class="tab-btn" onclick="showTab('configuracoes')" id="tab-configuracoes" style="display:none;">⚙️ Configurações</button>
@@ -520,6 +521,7 @@
       <div id="agenda-content"></div>
     </div>
     <div class="panel" id="panel-crm"><div id="crm-content" style="padding:20px;max-width:960px;margin:0 auto;"></div></div>
+    <div class="panel" id="panel-ia"><div id="ia-content" style="padding:16px;max-width:680px;margin:0 auto;"></div></div>
     <div class="panel" id="panel-financeiro">
       <div id="financeiro-content"></div>
     </div>
@@ -1089,6 +1091,7 @@ function showTab(tab, addHistory = true) {
   if (tab==='produtos') renderProdutos();
   if (tab==='configuracoes') renderConfiguracoes();
   if (tab==='crm') renderCRM();
+  if (tab==='ia') renderIA();
   // Registra no histórico do navegador para o botão ← funcionar
   if (addHistory) {
     history.pushState({ tab }, '', window.location.pathname + window.location.search + '#' + tab);
@@ -2654,6 +2657,8 @@ function ativarSessao(perfil) {
   if (tabAgenda) tabAgenda.style.display = (isDono||isComercial||isProducao||isMedidor||isFinanceiro) ? 'block' : 'none';
   var tabCrm = document.getElementById('tab-crm');
   if (tabCrm) tabCrm.style.display = (isDono||isComercial) ? 'block' : 'none';
+  var tabIa = document.getElementById('tab-ia');
+  if (tabIa) tabIa.style.display = (isDono||isComercial) ? 'block' : 'none';
   // Sempre abre no Kanban ao fazer login — exceto Medidor que abre na Agenda
   loadOrders().then(function() {
     carregarClientes(); // carrega clientes em paralelo
@@ -2822,61 +2827,21 @@ function renderDashboard(abaAtiva) {
 
   // Header com abas
   el.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        ${[
-          ['comercial','💼 Comercial'],
-          ['producao','⚙️ Produção'],
-          ['financeiro','💰 Financeiro']
-        ].map(([id,label])=>`
-        <button onclick="renderDashboard('${id}')" 
-          style="padding:8px 14px;border:none;background:${abaDash===id?'var(--gold)':'var(--cream-dark)'};
-                 color:${abaDash===id?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;
-                 font-size:12px;font-weight:600;">
-          ${label}
-        </button>`).join('')}
-      </div>
-      <button onclick="abrirBriefingIA()" 
-        style="background:linear-gradient(135deg,#1a1a2e,#16213e);color:white;border:none;padding:9px 16px;
-               border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;display:flex;align-items:center;
-               gap:6px;box-shadow:0 2px 12px rgba(0,0,0,0.3);white-space:nowrap;">
-        🤖 Consultar IA
-      </button>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:20px;">
+      ${[
+        ['comercial','💼 Comercial'],
+        ['producao','⚙️ Produção'],
+        ['financeiro','💰 Financeiro']
+      ].map(([id,label])=>`
+      <button onclick="renderDashboard('${id}')" 
+        style="padding:8px 14px;border:none;background:${abaDash===id?'var(--gold)':'var(--cream-dark)'};
+               color:${abaDash===id?'white':'var(--stone)'};border-radius:8px;cursor:pointer;
+               font-size:12px;font-weight:600;">
+        ${label}
+      </button>`).join('')}
     </div>
     <div id="dash-conteudo"></div>
-
-    <!-- Modal Briefing IA -->
-    <div id="modal-briefing-ia" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:flex-start;justify-content:center;padding:12px;overflow-y:auto;">
-      <div style="background:white;border-radius:16px;width:100%;max-width:640px;box-shadow:0 20px 60px rgba(0,0,0,0.4);margin:auto;">
-        <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:16px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center;">
-          <div style="color:white;">
-            <div style="font-size:15px;font-weight:800;">🤖 Assistente MarmorFlow</div>
-            <div style="font-size:11px;opacity:0.7;margin-top:2px;">Análise inteligente do seu negócio</div>
-          </div>
-          <button onclick="fecharBriefingIA()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;flex-shrink:0;">✕</button>
-        </div>
-        <div style="padding:20px;">
-          <div style="margin-bottom:16px;">
-            <textarea id="ia-pergunta" placeholder="O que quer saber? Ex: Como está a empresa hoje?"
-              style="width:100%;border:1.5px solid var(--vein);border-radius:10px;padding:12px 14px;font-size:14px;resize:none;height:80px;font-family:inherit;box-sizing:border-box;"></textarea>
-            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
-              ${[
-                'Como está a empresa hoje?',
-                'O que o comercial deve priorizar?',
-                'Situação financeira do mês',
-                'Quais pedidos precisam de atenção?'
-              ].map(s => `<button onclick="document.getElementById('ia-pergunta').value='${s}'" 
-                style="background:var(--cream);border:1px solid var(--vein);color:var(--stone);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px;white-space:nowrap;">${s}</button>`).join('')}
-            </div>
-          </div>
-          <button onclick="gerarBriefingIA()"
-            style="width:100%;background:linear-gradient(135deg,#1a1a2e,#16213e);color:white;border:none;padding:14px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;margin-bottom:16px;">
-            🚀 Gerar Análise
-          </button>
-          <div id="ia-resposta" style="display:none;background:#f8f8f8;border-radius:10px;padding:16px;font-size:14px;line-height:1.7;color:var(--stone);"></div>
-        </div>
-      </div>
-    </div>`;
+  `;
 
   localStorage.setItem('dash_aba', abaDash);
 
@@ -2885,15 +2850,47 @@ function renderDashboard(abaAtiva) {
   else if (abaDash === 'financeiro') renderDashFinanceiro(localStorage.getItem('dash_fin_mes')||'todos');
 }
 
-function abrirBriefingIA() {
-  const modal = document.getElementById('modal-briefing-ia');
-  if (modal) modal.style.display = 'flex';
+function renderIA() {
+  const el = document.getElementById('ia-content');
+  if (!el) return;
+  el.innerHTML = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="font-size:32px;margin-bottom:8px;">🤖</div>
+      <div style="font-size:20px;font-weight:800;color:var(--stone);">Assistente MarmorFlow</div>
+      <div style="font-size:13px;color:#888;margin-top:4px;">Análise inteligente baseada nos dados reais da Unipedras</div>
+    </div>
+
+    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;margin-bottom:16px;">
+      <label style="font-size:12px;font-weight:600;color:var(--stone);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:8px;">Sua pergunta</label>
+      <textarea id="ia-pergunta" placeholder="Ex: Como está a empresa hoje? O que o comercial deve priorizar?"
+        style="width:100%;border:1.5px solid var(--vein);border-radius:10px;padding:12px 14px;font-size:14px;resize:none;height:90px;font-family:inherit;box-sizing:border-box;"></textarea>
+
+      <div style="margin:10px 0 16px;display:flex;flex-wrap:wrap;gap:6px;" id="ia-sugestoes"></div>
+
+      <button onclick="gerarBriefingIA()"
+        style="width:100%;background:linear-gradient(135deg,#1a1a2e,#16213e);color:white;border:none;padding:14px;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;">
+        🚀 Gerar Análise
+      </button>
+    </div>
+
+    <div id="ia-resposta" style="display:none;background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;font-size:14px;line-height:1.7;color:var(--stone);"></div>`;
+
+  // Popula sugestões via JS para evitar template literals aninhados
+  const sugestoes = ['Como está a empresa hoje?','O que o comercial deve priorizar?','Situação financeira do mês','Quais pedidos precisam de atenção?'];
+  const divSug = document.getElementById('ia-sugestoes');
+  if (divSug) {
+    sugestoes.forEach(s => {
+      const btn = document.createElement('button');
+      btn.textContent = s;
+      btn.style.cssText = 'background:var(--cream);border:1px solid var(--vein);color:var(--stone);padding:6px 12px;border-radius:20px;cursor:pointer;font-size:12px;';
+      btn.onclick = () => { const el = document.getElementById('ia-pergunta'); if (el) el.value = s; };
+      divSug.appendChild(btn);
+    });
+  }
 }
 
-function fecharBriefingIA() {
-  const modal = document.getElementById('modal-briefing-ia');
-  if (modal) modal.style.display = 'none';
-}
+function abrirBriefingIA() { showTab('ia'); }
+function fecharBriefingIA() { showTab('kanban'); }
 
 async function gerarBriefingIA() {
   const pergunta = document.getElementById('ia-pergunta')?.value?.trim()

@@ -469,6 +469,10 @@
             style="background:var(--cream-dark);border:1px solid var(--vein);color:var(--stone);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
             ⚙️ Filtros
           </button>
+          <button onclick="toggleMostrarEntregues()" id="btn-entregues"
+            style="background:var(--cream-dark);border:1px solid var(--vein);color:var(--stone);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
+            📦 Entregues
+          </button>
           <button class="btn-new" onclick="openNewOrder()" id="btn-new-order" style="display:flex!important;">＋ Novo Pedido</button>
         </div>
       </div>
@@ -1268,6 +1272,19 @@ function limparFiltros() {
   renderKanban();
 }
 
+let _mostrarTodosEntregues = false;
+
+function toggleMostrarEntregues() {
+  _mostrarTodosEntregues = !_mostrarTodosEntregues;
+  const btn = document.getElementById('btn-entregues');
+  if (btn) {
+    btn.style.background = _mostrarTodosEntregues ? 'var(--gold)' : 'var(--cream-dark)';
+    btn.style.color = _mostrarTodosEntregues ? 'white' : 'var(--stone)';
+    btn.textContent = _mostrarTodosEntregues ? '📦 Todos Entregues' : '📦 Entregues';
+  }
+  filterKanban();
+}
+
 function filterKanban() {
   renderKanban(document.getElementById('search-kanban')?.value || '');
 }
@@ -1276,15 +1293,28 @@ function renderKanban(filter='') {
   const board = document.getElementById('kanban-board');
   if (!board) return;
   board.innerHTML='';
+  const mesAtual = new Date().toISOString().substring(0,7);
+
   STAGES.forEach(stg=>{
-    let filtered = orders.filter(o =>
-      o.stage === stg.id &&
-      (!filter || o.cliente.toLowerCase().includes(filter.toLowerCase()) || o.id.toLowerCase().includes(filter.toLowerCase()))
-    );
+    let filtered = orders.filter(o => {
+      if (o.stage !== stg.id) return false;
+      if (filter && !o.cliente.toLowerCase().includes(filter.toLowerCase()) && !o.id.toLowerCase().includes(filter.toLowerCase())) return false;
+      if (stg.id === 'entregue' && !_mostrarTodosEntregues) {
+        const mesEntrega = (o.created_at||'').substring(0,7);
+        if (mesEntrega && mesEntrega < mesAtual) return false;
+      }
+      return true;
+    });
     if (stg.id==='corte'||stg.id==='acabamento') filtered=sortByEntrega(filtered);
+
+    const totalOcultos = stg.id === 'entregue' && !_mostrarTodosEntregues
+      ? orders.filter(o => o.stage==='entregue' && (o.created_at||'').substring(0,7) < mesAtual).length
+      : 0;
+
     const col=document.createElement('div');
     col.className='kanban-col';
-    col.innerHTML=`<div class="col-header"><div class="col-title"><span class="col-dot" style="background:${stg.color}"></span>${stg.label}</div><div class="col-count">${filtered.length}</div></div><div class="cards-area" id="col-${stg.id}" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event,'${stg.id}')">${filtered.length===0?'<div class="empty-state" style="padding:16px 0;font-size:11px;">Nenhum pedido</div>':''}</div>`;
+    const labelExtra = totalOcultos > 0 ? ' <span style="font-size:10px;color:#aaa;font-weight:400;">(+' + totalOcultos + ' ocultos)</span>' : '';
+    col.innerHTML='<div class="col-header"><div class="col-title"><span class="col-dot" style="background:'+stg.color+'"></span>'+stg.label+labelExtra+'</div><div class="col-count">'+filtered.length+'</div></div><div class="cards-area" id="col-'+stg.id+'" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event,\''+stg.id+'\')">'+(filtered.length===0?'<div class="empty-state" style="padding:16px 0;font-size:11px;">Nenhum pedido</div>':'')+'</div>';
     board.appendChild(col);
     filtered.forEach(o=>col.querySelector('.cards-area').appendChild(createCard(o)));
   });

@@ -6865,7 +6865,7 @@ async function renderFinanceiro() {
 
     <!-- TABS -->
     <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid var(--cream-dark);overflow-x:auto;-webkit-overflow-scrolling:touch;">
-      ${[['geral','📊 Lançamentos'],['receber','📋 A Receber'],['pagar','📤 Contas a Pagar'],['dividas','💳 Dívidas']].map(([aba,label]) => `
+      ${[['geral','📊 Lançamentos'],['receber','📋 A Receber'],['pagar','📤 Contas a Pagar'],['dividas','💳 Dívidas'],['comissoes','💼 Comissões']].map(([aba,label]) => `
       <button onclick="finSwitchAba('${aba}')" id="fin-aba-${aba}"
         style="padding:10px 20px;border:none;background:${abaFin===aba?'var(--gold)':'var(--cream-dark)'};color:${abaFin===aba?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
         ${label}
@@ -7110,7 +7110,9 @@ async function renderFinanceiro() {
       <div id="fin-dividas-content">Carregando...</div>
     </div>
 
-
+    <div id="fin-painel-comissoes" style="display:${abaFin==='comissoes'?'block':'none'}">
+      <div id="fin-comissoes-content">Carregando...</div>
+    </div>
 
   </div>`;
 
@@ -7118,7 +7120,7 @@ async function renderFinanceiro() {
   // Re-aplica a aba ativa após renderizar para evitar painéis sobrepostos
   setTimeout(function() {
     const abaAtiva = sessionStorage.getItem('fin_aba') || 'geral';
-    ['geral','receber','pagar','dividas','analise'].forEach(function(a) {
+    ['geral','receber','pagar','dividas','analise','comissoes'].forEach(function(a) {
       const panel = document.getElementById('fin-painel-'+a);
       const btn = document.getElementById('fin-aba-'+a);
       if (panel) panel.style.display = a===abaAtiva?'block':'none';
@@ -7282,9 +7284,139 @@ async function renderDividas() {
     </div>`;
 }
 
+function renderRelatorioComissoes() {
+  const el = document.getElementById('fin-comissoes-content');
+  if (!el) return;
+
+  const cfg = getComissaoConfig();
+  const parceiros = getParceiros();
+  const origensExcluidas = cfg.origensExcluidas || ['arquiteto','construtora'];
+
+  // Filtro de mês
+  const hoje = new Date();
+  const mesAtual = hoje.toISOString().substring(0,7);
+
+  const fmtV = v => 'R$ ' + (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+  const parseV = o => parseFloat((o.valor||'0').toString().replace(',','.').replace(/[^0-9.]/g,''))||0;
+
+  // Pedidos fechados (todos os tempos, agrupados por mês)
+  const pedidosFechados = orders.filter(o => o.stage === 'fechado' && !o.ref_fechado);
+
+  // Agrupa por mês (usando created_at como proxy da data de fechamento)
+  const meses = {};
+  pedidosFechados.forEach(o => {
+    const mes = (o.created_at||'').substring(0,7);
+    if (!mes) return;
+    if (!meses[mes]) meses[mes] = [];
+    meses[mes].push(o);
+  });
+
+  const mesesOrdenados = Object.keys(meses).sort().reverse().slice(0,6);
+
+  if (mesesOrdenados.length === 0) {
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:#888;">Nenhum pedido fechado encontrado.</div>';
+    return;
+  }
+
+  let html = '<div style="margin-bottom:16px;">';
+
+  mesesOrdenados.forEach(mes => {
+    const pedidosMes = meses[mes];
+    const labelMes = new Date(mes+'-15').toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+
+    // ── COMISSÃO INTERNA (vendedores) ──
+    const vendedoresMap = {};
+    pedidosMes.forEach(o => {
+      const origem = (o.origem||'').toLowerCase();
+      const excluir = origensExcluidas.some(ex => origem.includes(ex));
+      if (excluir) return;
+      const vendedor = o.vendedor || o.responsavel || 'Sem vendedor';
+      if (!vendedoresMap[vendedor]) vendedoresMap[vendedor] = 0;
+      vendedoresMap[vendedor] += parseV(o);
+    });
+
+    // ── COMISSÃO PARCEIROS ──
+    const parceirosMap = {};
+    pedidosMes.forEach(o => {
+      const origem = (o.origem||'').toLowerCase();
+      const origemNome = o.origemNome || '';
+      // Verifica se é de algum parceiro cadastrado
+      parceiros.forEach(p => {
+        if (origemNome && origemNome.toLowerCase().includes(p.nome.toLowerCase()) ||
+            origem.includes(p.tipo)) {
+          if (origemNome && p.nome && origemNome.toLowerCase().includes(p.nome.toLowerCase())) {
+            if (!parceirosMap[p.nome]) parceirosMap[p.nome] = {total:0, percentual:p.percentual, pix:p.pix};
+            parceirosMap[p.nome].total += parseV(o);
+          }
+        }
+      });
+    });
+
+    // Monta HTML do mês
+    html += '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:16px;">'
+      + '<div style="background:var(--stone);color:white;padding:14px 20px;font-size:14px;font-weight:700;">'
+      + '💼 Comissões — ' + labelMes
+      + '</div>';
+
+    // Vendedores internos
+    html += '<div style="padding:16px;border-bottom:1px solid var(--cream-dark);">'
+      + '<div style="font-size:12px;font-weight:700;color:var(--stone);text-transform:uppercase;margin-bottom:10px;">Vendedores Internos</div>';
+
+    const vendedoresList = Object.entries(vendedoresMap);
+    if (vendedoresList.length === 0) {
+      html += '<div style="font-size:13px;color:#888;">Nenhum pedido elegível para comissão neste mês.</div>';
+    } else {
+      vendedoresList.forEach(([nome, totalVendido]) => {
+        const cfgVendedor = (cfg.vendedores||[]).find(v => v.nome === nome);
+        const pct = cfgVendedor?.percentual || 1;
+        const comissao = totalVendido * pct / 100;
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--cream-dark);">'
+          + '<div>'
+          + '<div style="font-size:13px;font-weight:700;color:var(--stone);">' + nome + '</div>'
+          + '<div style="font-size:11px;color:#888;">' + fmtV(totalVendido) + ' vendido × ' + pct + '%</div>'
+          + '</div>'
+          + '<div style="text-align:right;">'
+          + '<div style="font-size:15px;font-weight:800;color:#2E7D32;">' + fmtV(comissao) + '</div>'
+          + '<div style="font-size:10px;color:#888;">a pagar</div>'
+          + '</div>'
+          + '</div>';
+      });
+    }
+    html += '</div>';
+
+    // Parceiros externos
+    const parceirosList = Object.entries(parceirosMap);
+    html += '<div style="padding:16px;">'
+      + '<div style="font-size:12px;font-weight:700;color:var(--stone);text-transform:uppercase;margin-bottom:10px;">Parceiros Externos</div>';
+
+    if (parceirosList.length === 0) {
+      html += '<div style="font-size:13px;color:#888;">Nenhuma venda via parceiro cadastrado neste mês.</div>';
+    } else {
+      parceirosList.forEach(([nome, info]) => {
+        const comissao = info.total * info.percentual / 100;
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--cream-dark);">'
+          + '<div>'
+          + '<div style="font-size:13px;font-weight:700;color:var(--stone);">' + nome + '</div>'
+          + '<div style="font-size:11px;color:#888;">' + fmtV(info.total) + ' × ' + info.percentual + '%'
+          + (info.pix ? ' · PIX: ' + info.pix : '') + '</div>'
+          + '</div>'
+          + '<div style="text-align:right;">'
+          + '<div style="font-size:15px;font-weight:800;color:#8B6914;">' + fmtV(comissao) + '</div>'
+          + '<div style="font-size:10px;color:#888;">após receber do cliente</div>'
+          + '</div>'
+          + '</div>';
+      });
+    }
+    html += '</div></div>';
+  });
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
 function finSwitchAba(aba) {
   sessionStorage.setItem('fin_aba', aba);
-  ['geral','receber','pagar','dividas','analise'].forEach(a => {
+  ['geral','receber','pagar','dividas','analise','comissoes'].forEach(a => {
     const btn = document.getElementById('fin-aba-'+a);
     const panel = document.getElementById('fin-painel-'+a);
     if (btn) { btn.style.background = a===aba?'var(--gold)':'var(--cream-dark)'; btn.style.color = a===aba?'white':'var(--stone)'; }
@@ -7292,6 +7424,7 @@ function finSwitchAba(aba) {
   });
   if (aba === 'receber') setTimeout(renderContasReceber, 200);
   if (aba === 'dividas') setTimeout(renderDividas, 200);
+  if (aba === 'comissoes') setTimeout(renderRelatorioComissoes, 200);
 }
 
 function abrirConfirmarRecebimento(pedidoId, cliente, valorEsperado) {
@@ -13235,16 +13368,26 @@ function renderConfiguracoes() {
         style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
         🏦 Bancos
       </button>
+      <button onclick="showSubConfig('comissoes')" id="subcfg-comissoes"
+        style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
+        💼 Comissões
+      </button>
+      <button onclick="showSubConfig('parceiros')" id="subcfg-parceiros"
+        style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
+        🤝 Parceiros
+      </button>
     </div>
     <div id="subcfg-panel-gastos"><div id="gastos-content"></div></div>
     <div id="subcfg-panel-tempos" style="display:none;"><div id="tempos-content"></div></div>
     <div id="subcfg-panel-bancos" style="display:none;"><div id="bancos-content"></div></div>
+    <div id="subcfg-panel-comissoes" style="display:none;"><div id="comissoes-content"></div></div>
+    <div id="subcfg-panel-parceiros" style="display:none;"><div id="parceiros-content"></div></div>
   </div>`;
   renderGastos();
 }
 
 function showSubConfig(aba) {
-  ['gastos','tempos','bancos','manutencao'].forEach(a => {
+  ['gastos','tempos','bancos','manutencao','comissoes','parceiros'].forEach(a => {
     const panel = document.getElementById('subcfg-panel-' + a);
     const btn = document.getElementById('subcfg-' + a);
     if (panel) panel.style.display = a === aba ? '' : 'none';
@@ -13256,6 +13399,8 @@ function showSubConfig(aba) {
   if (aba === 'gastos') renderGastos();
   if (aba === 'tempos') renderTempos();
   if (aba === 'bancos') renderBancos();
+  if (aba === 'comissoes') renderComissoes();
+  if (aba === 'parceiros') renderParceiros();
 }
 
 async function migrarFotosParaStorage() {
@@ -13333,6 +13478,150 @@ function getBancos() {
   } catch(e) { return []; }
 }
 function salvarBancos(bancos) { localStorage.setItem('mf_bancos', JSON.stringify(bancos)); syncConfigToSupabase('mf_bancos', bancos); }
+
+// ─── PARCEIROS (Arquitetos/Construtoras com comissão) ────────────────────────
+function getParceiros() {
+  try { return JSON.parse(localStorage.getItem('mf_parceiros') || '[]'); } catch(e) { return []; }
+}
+function salvarParceiros(p) { localStorage.setItem('mf_parceiros', JSON.stringify(p)); }
+
+function getComissaoConfig() {
+  try { return JSON.parse(localStorage.getItem('mf_comissao_cfg') || '{"vendedores":[],"origensExcluidas":["arquiteto","construtora"]}'); } catch(e) { return {vendedores:[],origensExcluidas:['arquiteto','construtora']}; }
+}
+function salvarComissaoConfig(cfg) { localStorage.setItem('mf_comissao_cfg', JSON.stringify(cfg)); }
+
+function renderComissoes() {
+  const el = document.getElementById('comissoes-content');
+  if (!el) return;
+  const cfg = getComissaoConfig();
+  const vendedores = cfg.vendedores || [];
+  const origensExcluidas = cfg.origensExcluidas || ['arquiteto','construtora'];
+
+  let html = '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;margin-bottom:16px;">'
+    + '<div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">💼 Comissão de Vendedores Internos</div>'
+    + '<div style="font-size:12px;color:#888;margin-bottom:16px;">Percentual sobre o valor líquido dos pedidos fechados. Origens excluídas não geram comissão para o vendedor.</div>'
+    + '<div id="lista-vendedores-comissao">';
+
+  vendedores.forEach((v, i) => {
+    html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">'
+      + '<input class="form-input" style="flex:1;" placeholder="Nome do vendedor" value="' + (v.nome||'') + '" oninput="atualizarVendedorComissao(' + i + ',\'nome\',this.value)">'
+      + '<input class="form-input" style="width:80px;" type="number" step="0.1" min="0" max="100" placeholder="%" value="' + (v.percentual||'') + '" oninput="atualizarVendedorComissao(' + i + ',\'percentual\',this.value)">'
+      + '<span style="font-size:12px;color:#888;">%</span>'
+      + '<button onclick="removerVendedorComissao(' + i + ')" style="background:#FDEAEA;color:#B85A4A;border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;">✕</button>'
+      + '</div>';
+  });
+
+  html += '</div>'
+    + '<button onclick="adicionarVendedorComissao()" style="background:var(--cream-dark);border:1px dashed var(--vein);color:var(--stone);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;width:100%;margin-top:4px;">+ Adicionar Vendedor</button>'
+    + '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--cream-dark);">'
+    + '<div style="font-size:13px;font-weight:600;color:var(--stone);margin-bottom:8px;">Origens que NÃO geram comissão interna:</div>'
+    + '<div style="display:flex;gap:12px;flex-wrap:wrap;">';
+
+  ['arquiteto','construtora','indicacao'].forEach(o => {
+    html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">'
+      + '<input type="checkbox" ' + (origensExcluidas.includes(o)?'checked':'') + ' onchange="toggleOrigemExcluida(\'' + o + '\',this.checked)">'
+      + o.charAt(0).toUpperCase() + o.slice(1) + '</label>';
+  });
+
+  html += '</div></div>'
+    + '<button onclick="salvarComissaoConfigUI()" style="background:var(--gold);color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;margin-top:16px;width:100%;">💾 Salvar Configurações</button>'
+    + '</div>';
+
+  el.innerHTML = html;
+}
+
+function adicionarVendedorComissao() {
+  const cfg = getComissaoConfig();
+  cfg.vendedores = cfg.vendedores || [];
+  cfg.vendedores.push({nome:'', percentual:1});
+  salvarComissaoConfig(cfg);
+  renderComissoes();
+}
+
+function removerVendedorComissao(idx) {
+  const cfg = getComissaoConfig();
+  cfg.vendedores.splice(idx, 1);
+  salvarComissaoConfig(cfg);
+  renderComissoes();
+}
+
+function atualizarVendedorComissao(idx, campo, valor) {
+  const cfg = getComissaoConfig();
+  if (!cfg.vendedores[idx]) return;
+  cfg.vendedores[idx][campo] = campo === 'percentual' ? parseFloat(valor)||0 : valor;
+  salvarComissaoConfig(cfg);
+}
+
+function toggleOrigemExcluida(origem, checked) {
+  const cfg = getComissaoConfig();
+  cfg.origensExcluidas = cfg.origensExcluidas || ['arquiteto','construtora'];
+  if (checked && !cfg.origensExcluidas.includes(origem)) cfg.origensExcluidas.push(origem);
+  if (!checked) cfg.origensExcluidas = cfg.origensExcluidas.filter(o => o !== origem);
+  salvarComissaoConfig(cfg);
+}
+
+function salvarComissaoConfigUI() { showNotif('Configurações de comissão salvas! ✓', 'success'); }
+
+function renderParceiros() {
+  const el = document.getElementById('parceiros-content');
+  if (!el) return;
+  const parceiros = getParceiros();
+
+  let html = '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;">'
+    + '<div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">🤝 Parceiros Externos</div>'
+    + '<div style="font-size:12px;color:#888;margin-bottom:16px;">Arquitetos e construtoras que indicam clientes e recebem comissão. Pago após receber do cliente.</div>';
+
+  if (parceiros.length === 0) html += '<div style="text-align:center;color:#888;padding:20px;font-size:13px;">Nenhum parceiro cadastrado ainda.</div>';
+
+  parceiros.forEach((p, i) => {
+    html += '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:14px;margin-bottom:10px;">'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'
+      + '<div><label style="font-size:11px;color:#888;font-weight:600;display:block;margin-bottom:3px;">NOME</label>'
+      + '<input class="form-input" value="' + (p.nome||'') + '" placeholder="Ex: Escritório XYZ" oninput="atualizarParceiro(' + i + ',\'nome\',this.value)"></div>'
+      + '<div><label style="font-size:11px;color:#888;font-weight:600;display:block;margin-bottom:3px;">TIPO</label>'
+      + '<select class="form-select" onchange="atualizarParceiro(' + i + ',\'tipo\',this.value)">'
+      + '<option value="arquiteto"' + (p.tipo==='arquiteto'?' selected':'') + '>Arquiteto</option>'
+      + '<option value="construtora"' + (p.tipo==='construtora'?' selected':'') + '>Construtora</option>'
+      + '</select></div></div>'
+      + '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;">'
+      + '<div><label style="font-size:11px;color:#888;font-weight:600;display:block;margin-bottom:3px;">PIX (CPF, CNPJ, email ou telefone)</label>'
+      + '<input class="form-input" value="' + (p.pix||'') + '" placeholder="Chave PIX do parceiro" oninput="atualizarParceiro(' + i + ',\'pix\',this.value)"></div>'
+      + '<div><label style="font-size:11px;color:#888;font-weight:600;display:block;margin-bottom:3px;">COMISSÃO (%)</label>'
+      + '<input class="form-input" type="number" step="0.5" min="0" max="100" value="' + (p.percentual||5) + '" style="width:80px;" oninput="atualizarParceiro(' + i + ',\'percentual\',this.value)"></div></div>'
+      + '<button onclick="removerParceiro(' + i + ')" style="background:#FDEAEA;color:#B85A4A;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;margin-top:8px;">🗑 Remover</button>'
+      + '</div>';
+  });
+
+  html += '<button onclick="adicionarParceiro()" style="background:var(--cream-dark);border:1px dashed var(--vein);color:var(--stone);padding:10px;border-radius:8px;cursor:pointer;font-size:13px;width:100%;margin-top:8px;">+ Cadastrar Parceiro</button>'
+    + '<button onclick="salvarParceirosUI()" style="background:var(--gold);color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;margin-top:10px;width:100%;">💾 Salvar Parceiros</button>'
+    + '</div>';
+
+  el.innerHTML = html;
+}
+
+function adicionarParceiro() {
+  const p = getParceiros();
+  p.push({nome:'', tipo:'arquiteto', pix:'', percentual:5});
+  salvarParceiros(p);
+  renderParceiros();
+}
+
+function removerParceiro(idx) {
+  if (!confirm('Remover este parceiro?')) return;
+  const p = getParceiros();
+  p.splice(idx, 1);
+  salvarParceiros(p);
+  renderParceiros();
+}
+
+function atualizarParceiro(idx, campo, valor) {
+  const p = getParceiros();
+  if (!p[idx]) return;
+  p[idx][campo] = campo === 'percentual' ? parseFloat(valor)||0 : valor;
+  salvarParceiros(p);
+}
+
+function salvarParceirosUI() { showNotif('Parceiros salvos! ✓', 'success'); }
 
 function renderBancos() {
   const el = document.getElementById('bancos-content');

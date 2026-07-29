@@ -1292,34 +1292,47 @@ function renderKanban(filter='') {
 
 function toggleCardMenu(id, e) {
   e.stopPropagation();
+  // Fecha todos os outros menus abertos
   document.querySelectorAll('.card-menu-dropdown.open').forEach(m => {
     if (m.id !== 'menu-' + id) m.classList.remove('open');
   });
   const menu = document.getElementById('menu-' + id);
   if (!menu) return;
 
+  const isOpen = menu.classList.contains('open');
+  if (isOpen) { menu.classList.remove('open'); return; }
+
   const btn = e.currentTarget;
   const rect = btn.getBoundingClientRect();
-  const menuH = 300; // altura estimada do menu
-  const spaceBelow = window.innerHeight - rect.bottom;
 
-  // Posiciona o menu em relação à tela (fixed)
-  menu.style.right = 'auto';
-  menu.style.top = 'auto';
-  menu.style.bottom = 'auto';
-
-  // Horizontal: alinha à direita do botão, mas não sai da tela
-  const left = Math.min(rect.right - 200, window.innerWidth - 208);
-  menu.style.left = Math.max(8, left) + 'px';
-
-  // Vertical: abre para baixo se tiver espaço, senão para cima
-  if (spaceBelow >= menuH || spaceBelow >= 200) {
-    menu.style.top = (rect.bottom + 4) + 'px';
-  } else {
-    menu.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+  // Move o menu para o body para garantir z-index correto
+  if (menu.parentElement !== document.body) {
+    document.body.appendChild(menu);
   }
 
-  menu.classList.toggle('open');
+  menu.style.position = 'fixed';
+  menu.style.zIndex = '99999';
+  menu.style.minWidth = '200px';
+
+  // Horizontal — alinha à direita do botão sem sair da tela
+  const menuW = 210;
+  let left = rect.right - menuW;
+  if (left < 8) left = 8;
+  if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
+  menu.style.left = left + 'px';
+  menu.style.right = 'auto';
+
+  // Vertical — abre para baixo se tiver espaço, senão para cima
+  const spaceBelow = window.innerHeight - rect.bottom;
+  if (spaceBelow >= 200) {
+    menu.style.top = (rect.bottom + 4) + 'px';
+    menu.style.bottom = 'auto';
+  } else {
+    menu.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+    menu.style.top = 'auto';
+  }
+
+  menu.classList.add('open');
 }
 
 document.addEventListener('click', () => {

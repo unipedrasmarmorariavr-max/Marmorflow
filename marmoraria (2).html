@@ -10352,7 +10352,7 @@ function calcularItem(item, pedra, cfg) {
   const tSerra            = areaBase   * (cfg.serra||0.8)               * dif;
   const tCorte45          = compSaia   * (cfg.corte45||0.2)             * dif;
   const tCorte45Interno   = (parseFloat(item.compCorte45Interno)||0) * (cfg.corte45||0.2) * dif;
-  const tMontagem45       = (compSaia + compMont45Sep) * (cfg.montagem45||1.2) * dif;
+  const tMontagem45       = compMont45Sep * (cfg.montagem45||1.2) * dif;
   const tBipolimento      = (parseFloat(item.areaBipolida)||0)         * (cfg.areaBipolada||2)           * dif;
   const tPolimentoManual  = (parseFloat(item.compPolimentoManual)||0)  * (cfg.polimentoManual||0.2)      * dif;
   const tPolimentoAuto    = (parseFloat(item.compPolimentoAuto)||0)    * (cfg.polimentoAutomatico||0.15) * dif;
@@ -10455,8 +10455,7 @@ function calcularItem(item, pedra, cfg) {
   // Insumos: só aplica o % automático se o usuário informou custo de insumo de instalação
   // Quando custoInsumoInstal = 0, comportamento igual ao MarmóPrice (não cobra automaticamente)
   const margemFrac   = (parseFloat(item.margemOverride??pedra.margem??30))/100;
-  const precoOps     = custosOp / (1 - margemFrac);
-  const custoInsumos = precoOps * ((cfg.custoInsumo||5) / 100);
+  const custoInsumos = custosOp * ((cfg.custoInsumo||5) / 100);
   const custoTotal   = custosOp + custoInsumos;
   const precoFinal   = custoTotal / (1 - margemFrac);
   const lucroLiquido = precoFinal - custoTotal;
@@ -11464,7 +11463,7 @@ function renderTelaOrcamentoPedido(order) {
                 this.style.border = this.value > 0 ? '2px solid #2E7D32' : '2px solid #dc3545';
                 this.style.background = this.value > 0 ? '' : '#fff5f5';
                 recalcularTelaOrc('${order.id}')">
-            ${!orc.distancia ? '<div style="font-size:10px;color:#dc3545;margin-top:3px;">⚠️ Preencha a distância!</div>' : ''}
+            ${(!orc.distancia || parseFloat(orc.distancia) <= 0) ? '<div style="font-size:10px;color:#dc3545;margin-top:3px;">⚠️ Preencha a distância!</div>' : ''}
           </div>
           <div>
             <label style="font-size:11px;font-weight:600;color:#555;letter-spacing:.3px;display:block;margin-bottom:4px;">IDAS ↺ <span style="font-size:9px;color:#999;font-weight:400;">(ida+volta)</span></label>
@@ -11655,8 +11654,8 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
         <tbody>
           ${[
             ['Custo Estrutura', calc.custoEstrutura, false, true],
-            ['Custo Hora Empresa', custoHoraEmpresa, false, true],
-            ['Custo Hora Homem', custoHoraHomem, false, true],
+            ['Custo Hora Empresa', custoHoraHomem, false, true],
+            ['Custo Hora Homem', custoHoraEmpresa, false, true],
             [null],
             ['Custo de Matéria Prima com Quebra', calc.custoMaterial],
             ['Custo de Descarga/Instalação', calc.custoInstalacao],
@@ -11703,7 +11702,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
             ['M² de compra de Chapa', 0],
             ['Preço Final do Produto', calc.precoFinal, true, false, '#006382'],
             ['Preço Final do Produto sem Matéria Prima', Math.max(0, calc.precoFinal - (calc.custoMaterial/(1-(calc.margem||30)/100)))],
-            ['Preço do Serviço (Mão de Obra)', calc.precoFinal * ((calc.custoTotal-(calc.custoMaterial||0))/(calc.custoTotal||1))],
+            ['Preço do Serviço (Mão de Obra)', (calc.custoTotal - (calc.custoMaterial||0)) / (1 - (calc.margem||30)/100)],
             ['VMMO/VMMV', calc.tempoProdInterno>0 ? calc.precoFinal/calc.tempoProdInterno : 0],
             ['LL/H', calc.tempoProdInterno>0 ? calc.lucroLiquido/calc.tempoProdInterno : 0, false, false, '#006382', true],
             ['Custo de Serviço por m²', calc.areaBase>0 ? (calc.custoTotal-(calc.custoMaterial||0))/calc.areaBase : 0],
@@ -12098,7 +12097,7 @@ function recalcularTelaOrc(orderId) {
                 ['M² de compra de Chapa', 0],
                 ['Preço Final do Produto', c.precoFinal, true, false, '#006382'],
                 ['Preço Final do Produto sem Matéria Prima', Math.max(0,c.precoFinal-(c.custoMaterial/(1-(c.margem||30)/100)))],
-                ['Preço do Serviço (Mão de Obra)', c.precoFinal*((c.custoTotal-(c.custoMaterial||0))/(c.custoTotal||1))],
+                ['Preço do Serviço (Mão de Obra)', (c.custoTotal-(c.custoMaterial||0))/(1-(c.margem||30)/100)],
                 ['VMMO/VMMV', c.tempoProdInterno>0?c.precoFinal/c.tempoProdInterno:0],
                 ['LL/H', c.tempoProdInterno>0?c.lucroLiquido/c.tempoProdInterno:0, false, false, '#006382', true],
                 ['Custo de Serviço por m²', c.areaBase>0?(c.custoTotal-(c.custoMaterial||0))/c.areaBase:0],

@@ -478,9 +478,9 @@
             style="background:var(--cream-dark);border:1px solid var(--vein);color:var(--stone);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
             ⚙️ Filtros
           </button>
-          <button onclick="toggleMostrarEntregues()" id="btn-entregues"
+          <button onclick="abrirHistorico()" id="btn-historico"
             style="background:var(--cream-dark);border:1px solid var(--vein);color:var(--stone);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
-            📦 Entregues
+            📁 Histórico
           </button>
           <button class="btn-new" onclick="openNewOrder()" id="btn-new-order" style="display:flex!important;">＋ Novo Pedido</button>
         </div>
@@ -530,6 +530,23 @@
       </div>
 
       <div class="kanban-board" id="kanban-board"></div>
+
+      <!-- Modal Histórico -->
+      <div id="modal-historico" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9998;align-items:flex-start;justify-content:center;padding:12px;overflow-y:auto;">
+        <div style="background:white;border-radius:16px;width:100%;max-width:720px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+          <div style="background:var(--stone);color:white;padding:16px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-size:16px;font-weight:800;">📁 Histórico</div>
+              <div style="font-size:11px;opacity:0.7;margin-top:2px;">Pedidos arquivados automaticamente</div>
+            </div>
+            <button onclick="fecharHistorico()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;">✕</button>
+          </div>
+          <div style="padding:16px;">
+            <input type="text" id="historico-busca" placeholder="🔍 Buscar por nome ou pedido..." class="form-input" oninput="renderHistoricoLista()" style="margin-bottom:12px;">
+            <div id="historico-lista"></div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="panel" id="panel-dashboard">
       <div id="dashboard-content"></div>
@@ -1286,10 +1303,131 @@ function limparFiltros() {
 }
 
 let _mostrarTodosEntregues = false;
-let _kanbanAba = 'comercial'; // 'comercial' ou 'producao'
+let _kanbanAba = 'comercial';
 
 const STAGES_COMERCIAL = ['aguardando','negociacao','fechado','entregue'];
 const STAGES_PRODUCAO  = ['corte','acabamento','pronto','entregue'];
+
+// ── Verifica se um pedido deve ir para o Histórico ────────────────────────
+function isArquivado(o) {
+  const hoje = new Date();
+  const mesAtual = hoje.toISOString().substring(0,7);
+
+  // Entregues de meses anteriores → arquivado
+  if (o.stage === 'entregue') {
+    const mes = (o.created_at||'').substring(0,7);
+    return mes && mes < mesAtual;
+  }
+
+  // Pedidos Fechados de meses anteriores → arquivado
+  if (o.stage === 'fechado' && !o.ref_fechado) {
+    const mes = (o.created_at||'').substring(0,7);
+    return mes && mes < mesAtual;
+  }
+
+  // Negociações paradas há mais de 1 mês (dias reais do mês)
+  if (o.stage === 'negociacao') {
+    const hist = o.history || [];
+    // Pega a data em que entrou em negociação (último histórico com stage negociacao)
+    const hNeg = [...hist].reverse().find(h => h.stage === 'negociacao');
+    let dataNeg = hNeg?.date || o.created_at?.substring(0,10) || '';
+
+    // Converte formato dd/mm/yyyy ou dd/mm para ISO
+    if (dataNeg.includes('/')) {
+      const p = dataNeg.split('/');
+      if (p.length === 3) dataNeg = p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0');
+      else if (p.length === 2) dataNeg = hoje.getFullYear()+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0');
+    }
+
+    if (!dataNeg) return false;
+    const dNeg = new Date(dataNeg + 'T12:00:00');
+    if (isNaN(dNeg)) return false;
+
+    // Calcula 1 mês depois respeitando dias reais do mês
+    const umMesDepois = new Date(dNeg);
+    umMesDepois.setMonth(umMesDepois.getMonth() + 1);
+
+    return hoje >= umMesDepois;
+  }
+
+  return false;
+}
+
+function abrirHistorico() {
+  const modal = document.getElementById('modal-historico');
+  if (modal) { modal.style.display = 'flex'; renderHistoricoLista(); }
+}
+
+function fecharHistorico() {
+  const modal = document.getElementById('modal-historico');
+  if (modal) modal.style.display = 'none';
+}
+
+function renderHistoricoLista() {
+  const el = document.getElementById('historico-lista');
+  if (!el) return;
+  const busca = (document.getElementById('historico-busca')?.value || '').toLowerCase();
+  const fmtV = v => 'R$ ' + (parseFloat(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+  const hoje = new Date();
+
+  const arquivados = orders.filter(o => isArquivado(o) && !o.ref_fechado)
+    .filter(o => !busca || o.cliente.toLowerCase().includes(busca) || o.id.toLowerCase().includes(busca))
+    .sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''));
+
+  if (arquivados.length === 0) {
+    el.innerHTML = '<div style="padding:32px;text-align:center;color:#888;font-size:13px;">Nenhum pedido arquivado</div>';
+    return;
+  }
+
+  const STAGE_LABEL = {negociacao:'💬 Negociação', fechado:'✅ Pedido Fechado', entregue:'📦 Entregue'};
+  const STAGE_COR   = {negociacao:'#8B6914', fechado:'#2E7D32', entregue:'#555'};
+
+  el.innerHTML = arquivados.map(o => {
+    const stageLabel = STAGE_LABEL[o.stage] || o.stage;
+    const stageCor = STAGE_COR[o.stage] || '#888';
+    const diasAtras = Math.floor((hoje - new Date(o.created_at||hoje)) / (1000*60*60*24));
+    const podReativar = o.stage === 'negociacao';
+
+    return '<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:0.5px solid var(--cream-dark);">'
+      + '<div style="flex:1;min-width:0;">'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">'
+      + '<span style="font-size:13px;font-weight:700;color:var(--stone);">' + o.cliente + '</span>'
+      + '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:' + stageCor + '20;color:' + stageCor + ';">' + stageLabel + '</span>'
+      + '</div>'
+      + '<div style="font-size:11px;color:#888;">' + o.id + (o.peca?' · '+o.peca:'') + (o.valor?' · '+fmtV(o.valor):'') + ' · há ' + diasAtras + ' dias</div>'
+      + '</div>'
+      + (podReativar ? '<button onclick="reativarPedido(\'' + o.id + '\')" style="background:var(--gold);color:white;border:none;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">↩ Reativar</button>' : '')
+      + '</div>';
+  }).join('');
+}
+
+async function reativarPedido(id) {
+  if (!confirm('Reativar este pedido para Negociação?')) return;
+  showLoading('Reativando...');
+  const o = orders.find(x => x.id === id);
+  if (!o) { hideLoading(); return; }
+
+  const hoje = new Date();
+  const hojeStr = hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
+  const hist = [...(o.history||[]), {stage:'negociacao', date:hojeStr}];
+
+  const { error } = await getSB().from('pedidos').update({
+    stage: 'negociacao',
+    history: hist,
+    created_at: new Date().toISOString() // atualiza data para contar no mês correto
+  }).eq('id', id);
+
+  hideLoading();
+  if (error) { showNotif('Erro: ' + error.message, 'error'); return; }
+
+  o.stage = 'negociacao';
+  o.history = hist;
+  o.created_at = new Date().toISOString();
+
+  fecharHistorico();
+  renderKanban();
+  showNotif('Pedido reativado! Aparece em Negociação ✓', 'success');
+}
 
 function switchKanbanAba(aba) {
   _kanbanAba = aba;
@@ -1327,25 +1465,17 @@ function renderKanban(filter='') {
     if (!stagesVisiveis.includes(stg.id)) return;
     let filtered = orders.filter(o => {
       if (o.stage !== stg.id) return false;
-      // Na aba produção, não mostrar cópias -P (pedidos fechados em produção)
       if (_kanbanAba === 'producao' && o.stage === 'fechado') return false;
       if (filter && !o.cliente.toLowerCase().includes(filter.toLowerCase()) && !o.id.toLowerCase().includes(filter.toLowerCase())) return false;
-      if (stg.id === 'entregue' && !_mostrarTodosEntregues) {
-        const mesEntrega = (o.created_at||'').substring(0,7);
-        if (mesEntrega && mesEntrega < mesAtual) return false;
-      }
+      // Oculta pedidos arquivados do kanban
+      if (isArquivado(o)) return false;
       return true;
     });
     if (stg.id==='corte'||stg.id==='acabamento') filtered=sortByEntrega(filtered);
 
-    const totalOcultos = stg.id === 'entregue' && !_mostrarTodosEntregues
-      ? orders.filter(o => o.stage==='entregue' && (o.created_at||'').substring(0,7) < mesAtual).length
-      : 0;
-
     const col=document.createElement('div');
     col.className='kanban-col';
-    const labelExtra = totalOcultos > 0 ? ' <span style="font-size:10px;color:#aaa;font-weight:400;">(+' + totalOcultos + ' ocultos)</span>' : '';
-    col.innerHTML='<div class="col-header"><div class="col-title"><span class="col-dot" style="background:'+stg.color+'"></span>'+stg.label+labelExtra+'</div><div class="col-count">'+filtered.length+'</div></div><div class="cards-area" id="col-'+stg.id+'" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event,\''+stg.id+'\')">'+(filtered.length===0?'<div class="empty-state" style="padding:16px 0;font-size:11px;">Nenhum pedido</div>':'')+'</div>';
+    col.innerHTML='<div class="col-header"><div class="col-title"><span class="col-dot" style="background:'+stg.color+'"></span>'+stg.label+'</div><div class="col-count">'+filtered.length+'</div></div><div class="cards-area" id="col-'+stg.id+'" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event,\''+stg.id+'\')">'+(filtered.length===0?'<div class="empty-state" style="padding:16px 0;font-size:11px;">Nenhum pedido</div>':'')+'</div>';
     board.appendChild(col);
     filtered.forEach(o=>col.querySelector('.cards-area').appendChild(createCard(o)));
   });

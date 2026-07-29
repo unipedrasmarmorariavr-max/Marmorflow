@@ -462,9 +462,18 @@
   <div class="content">
     <div class="panel active" id="panel-kanban">
       <div class="kanban-header">
-        <div class="kanban-title">Pedidos em Andamento</div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <input type="text" class="search-input" placeholder="🔍 Buscar..." id="search-kanban" oninput="filterKanban()" style="width:190px;">
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button onclick="switchKanbanAba('comercial')" id="kanban-aba-comercial"
+            style="padding:7px 16px;border:none;background:var(--gold);color:white;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">
+            💼 Comercial
+          </button>
+          <button onclick="switchKanbanAba('producao')" id="kanban-aba-producao"
+            style="padding:7px 16px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">
+            ⚙️ Produção
+          </button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="text" class="search-input" placeholder="🔍 Buscar..." id="search-kanban" oninput="filterKanban()" style="width:160px;">
           <button onclick="toggleFiltroAv()" id="btn-filtro-av"
             style="background:var(--cream-dark);border:1px solid var(--vein);color:var(--stone);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
             ⚙️ Filtros
@@ -1093,7 +1102,11 @@ function showTab(tab, addHistory = true) {
   document.getElementById('panel-'+tab)?.classList.add('active');
   document.getElementById('tab-'+tab)?.classList.add('active');
   localStorage.setItem('mf_aba', tab);
-  if (tab==='kanban') renderKanban();
+  if (tab==='kanban') {
+    renderKanban();
+    // Atualiza visual dos botões de aba do kanban
+    setTimeout(() => switchKanbanAba(_kanbanAba), 50);
+  }
   if (tab==='dashboard') renderDashboard();
   if (tab==='materiais') renderMateriais();
   if (tab==='financeiro') renderFinanceiro();
@@ -1273,6 +1286,20 @@ function limparFiltros() {
 }
 
 let _mostrarTodosEntregues = false;
+let _kanbanAba = 'comercial'; // 'comercial' ou 'producao'
+
+const STAGES_COMERCIAL = ['aguardando','negociacao','fechado','entregue'];
+const STAGES_PRODUCAO  = ['corte','acabamento','pronto','entregue'];
+
+function switchKanbanAba(aba) {
+  _kanbanAba = aba;
+  localStorage.setItem('mf_kanban_aba', aba);
+  const btnC = document.getElementById('kanban-aba-comercial');
+  const btnP = document.getElementById('kanban-aba-producao');
+  if (btnC) { btnC.style.background = aba==='comercial'?'var(--gold)':'var(--cream-dark)'; btnC.style.color = aba==='comercial'?'white':'var(--stone)'; }
+  if (btnP) { btnP.style.background = aba==='producao'?'var(--gold)':'var(--cream-dark)'; btnP.style.color = aba==='producao'?'white':'var(--stone)'; }
+  filterKanban();
+}
 
 function toggleMostrarEntregues() {
   _mostrarTodosEntregues = !_mostrarTodosEntregues;
@@ -1294,10 +1321,14 @@ function renderKanban(filter='') {
   if (!board) return;
   board.innerHTML='';
   const mesAtual = new Date().toISOString().substring(0,7);
+  const stagesVisiveis = _kanbanAba === 'producao' ? STAGES_PRODUCAO : STAGES_COMERCIAL;
 
   STAGES.forEach(stg=>{
+    if (!stagesVisiveis.includes(stg.id)) return;
     let filtered = orders.filter(o => {
       if (o.stage !== stg.id) return false;
+      // Na aba produção, não mostrar cópias -P (pedidos fechados em produção)
+      if (_kanbanAba === 'producao' && o.stage === 'fechado') return false;
       if (filter && !o.cliente.toLowerCase().includes(filter.toLowerCase()) && !o.id.toLowerCase().includes(filter.toLowerCase())) return false;
       if (stg.id === 'entregue' && !_mostrarTodosEntregues) {
         const mesEntrega = (o.created_at||'').substring(0,7);
@@ -2721,6 +2752,13 @@ function ativarSessao(perfil) {
       localStorage.setItem('agenda_aba','medicao');
       showTab('agenda');
     } else {
+      // Define aba do kanban por perfil
+      if (isProducao) {
+        _kanbanAba = 'producao';
+        localStorage.setItem('mf_kanban_aba', 'producao');
+      } else {
+        _kanbanAba = localStorage.getItem('mf_kanban_aba') || 'comercial';
+      }
       // Restaura a aba onde o usuário estava antes de recarregar
       const abaSalva = localStorage.getItem('mf_aba') || 'kanban';
       const abasValidas = ['kanban','agenda','materiais','financeiro','crm','ia','dashboard','configuracoes'];

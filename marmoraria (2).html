@@ -2813,13 +2813,19 @@ function entrar() {
   var pin = document.getElementById('pin-input').value.trim();
   if (!pin) { alert('Digite o PIN!'); return; }
 
-  // Mapa de PIN → perfil
-  var pinMap = { '1234':'dono', '2222':'medidor', '3333':'comercial', '4444':'producao', '5555':'financeiro' };
+  // Lê PINs configurados pelo Dono (fallback para padrão)
+  var pinsCustom = {};
+  try { pinsCustom = JSON.parse(localStorage.getItem('mf_pins') || '{}'); } catch(e) {}
+  var pinMap = {};
+  pinMap[pinsCustom.dono       || '1234'] = 'dono';
+  pinMap[pinsCustom.medidor    || '2222'] = 'medidor';
+  pinMap[pinsCustom.comercial  || '3333'] = 'comercial';
+  pinMap[pinsCustom.producao   || '4444'] = 'producao';
+  pinMap[pinsCustom.financeiro || '5555'] = 'financeiro';
   var perfilDoPin = pinMap[pin];
 
   if (!perfilDoPin) { alert('PIN incorreto!'); return; }
 
-  // Verificar se o perfil selecionado bate com o PIN
   if (perfilAtual && perfilAtual !== perfilDoPin) {
     alert('PIN incorreto para o perfil selecionado!');
     return;
@@ -13594,17 +13600,22 @@ function renderConfiguracoes() {
         style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
         💼 Comissões
       </button>
+      <button onclick="showSubConfig('senhas')" id="subcfg-senhas"
+        style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
+        🔐 Senhas
+      </button>
     </div>
     <div id="subcfg-panel-gastos"><div id="gastos-content"></div></div>
     <div id="subcfg-panel-tempos" style="display:none;"><div id="tempos-content"></div></div>
     <div id="subcfg-panel-bancos" style="display:none;"><div id="bancos-content"></div></div>
     <div id="subcfg-panel-comissoes" style="display:none;"><div id="comissoes-content"></div></div>
+    <div id="subcfg-panel-senhas" style="display:none;"><div id="senhas-content"></div></div>
   </div>`;
   renderGastos();
 }
 
 function showSubConfig(aba) {
-  ['gastos','tempos','bancos','manutencao','comissoes','parceiros'].forEach(a => {
+  ['gastos','tempos','bancos','manutencao','comissoes','parceiros','senhas'].forEach(a => {
     const panel = document.getElementById('subcfg-panel-' + a);
     const btn = document.getElementById('subcfg-' + a);
     if (panel) panel.style.display = a === aba ? '' : 'none';
@@ -13618,6 +13629,67 @@ function showSubConfig(aba) {
   if (aba === 'bancos') renderBancos();
   if (aba === 'comissoes') renderComissoes();
   if (aba === 'parceiros') renderParceiros();
+  if (aba === 'senhas') renderSenhas();
+}
+
+function renderSenhas() {
+  const el = document.getElementById('senhas-content');
+  if (!el) return;
+  // Só o dono pode ver essa tela
+  if (currentUser !== 'dono') {
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:#888;">Apenas o Dono pode alterar as senhas.</div>';
+    return;
+  }
+  let pins = {};
+  try { pins = JSON.parse(localStorage.getItem('mf_pins') || '{}'); } catch(e) {}
+
+  const perfis = [
+    { id:'dono',       label:'👑 Dono',       padrao:'1234' },
+    { id:'comercial',  label:'💼 Comercial',  padrao:'3333' },
+    { id:'producao',   label:'⚙️ Produção',   padrao:'4444' },
+    { id:'medidor',    label:'📐 Medidor',    padrao:'2222' },
+    { id:'financeiro', label:'💰 Financeiro', padrao:'5555' },
+  ];
+
+  el.innerHTML = '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;">'
+    + '<div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">🔐 Alterar PINs de Acesso</div>'
+    + '<div style="font-size:12px;color:#888;margin-bottom:20px;">Apenas o Dono pode alterar os PINs. Use números de 4 dígitos. Deixe em branco para manter o PIN atual.</div>'
+    + perfis.map(p => '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">'
+      + '<div style="width:120px;font-size:13px;font-weight:600;color:var(--stone);">' + p.label + '</div>'
+      + '<input class="form-input" type="password" inputmode="numeric" maxlength="6" id="pin-' + p.id + '" placeholder="PIN atual: ' + (pins[p.id] ? '••••' : p.padrao) + '" style="width:140px;">'
+      + '</div>').join('')
+    + '<div style="margin-top:8px;padding:12px;background:var(--cream);border-radius:8px;font-size:12px;color:#888;margin-bottom:16px;">'
+    + '⚠️ Anote os PINs em lugar seguro. Se esquecer o PIN do Dono, precisará editar o código.'
+    + '</div>'
+    + '<button onclick="salvarSenhas()" style="background:var(--gold);color:white;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;width:100%;">💾 Salvar PINs</button>'
+    + '</div>';
+}
+
+function salvarSenhas() {
+  let pins = {};
+  try { pins = JSON.parse(localStorage.getItem('mf_pins') || '{}'); } catch(e) {}
+
+  const perfis = ['dono','comercial','producao','medidor','financeiro'];
+  const padroes = {dono:'1234',medidor:'2222',comercial:'3333',producao:'4444',financeiro:'5555'};
+  let alterados = 0;
+
+  perfis.forEach(p => {
+    const input = document.getElementById('pin-' + p);
+    const val = input?.value?.trim();
+    if (val && val.length >= 4) {
+      pins[p] = val;
+      alterados++;
+    }
+  });
+
+  if (alterados === 0) {
+    showNotif('Nenhum PIN alterado — deixe em branco para manter o atual.', 'error');
+    return;
+  }
+
+  localStorage.setItem('mf_pins', JSON.stringify(pins));
+  showNotif(alterados + ' PIN(s) alterado(s) com sucesso! ✓', 'success');
+  renderSenhas();
 }
 
 async function migrarFotosParaStorage() {

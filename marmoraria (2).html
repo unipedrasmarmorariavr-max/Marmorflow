@@ -2678,10 +2678,15 @@ function ativarSessao(perfil) {
       localStorage.setItem('agenda_aba','medicao');
       showTab('agenda');
     } else {
-      showTab('kanban');
+      // Restaura a aba onde o usuário estava antes de recarregar
+      const abaSalva = localStorage.getItem('mf_aba') || 'kanban';
+      const abasValidas = ['kanban','agenda','materiais','financeiro','crm','ia','dashboard','configuracoes'];
+      const abaRestaurar = abasValidas.includes(abaSalva) ? abaSalva : 'kanban';
+      showTab(abaRestaurar);
     }
     // Estado inicial no histórico do navegador (para ← não sair imediatamente)
-    history.replaceState({ tab: isMedidor ? 'agenda' : 'kanban' }, '', window.location.pathname + window.location.search + '#' + (isMedidor ? 'agenda' : 'kanban'));
+    const abaAtual = localStorage.getItem('mf_aba') || (isMedidor ? 'agenda' : 'kanban');
+    history.replaceState({ tab: abaAtual }, '', window.location.pathname + window.location.search + '#' + abaAtual);
     // Restaura orçamento se estava aberto antes do reload
     const orcAberto = localStorage.getItem('mf_orc_aberto');
     if (orcAberto) {

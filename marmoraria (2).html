@@ -13372,16 +13372,11 @@ function renderConfiguracoes() {
         style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
         💼 Comissões
       </button>
-      <button onclick="showSubConfig('parceiros')" id="subcfg-parceiros"
-        style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
-        🤝 Parceiros
-      </button>
     </div>
     <div id="subcfg-panel-gastos"><div id="gastos-content"></div></div>
     <div id="subcfg-panel-tempos" style="display:none;"><div id="tempos-content"></div></div>
     <div id="subcfg-panel-bancos" style="display:none;"><div id="bancos-content"></div></div>
     <div id="subcfg-panel-comissoes" style="display:none;"><div id="comissoes-content"></div></div>
-    <div id="subcfg-panel-parceiros" style="display:none;"><div id="parceiros-content"></div></div>
   </div>`;
   renderGastos();
 }
@@ -13527,6 +13522,38 @@ function renderComissoes() {
     + '<button onclick="salvarComissaoConfigUI()" style="background:var(--gold);color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;margin-top:16px;width:100%;">💾 Salvar Configurações</button>'
     + '</div>';
 
+
+  // Seção parceiros externos dentro da mesma aba
+  const parceiros = getParceiros();
+  html += '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;margin-top:16px;">'
+    + '<div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">🤝 Parceiros Externos</div>'
+    + '<div style="font-size:12px;color:#888;margin-bottom:16px;">Arquitetos e construtoras que indicam clientes e recebem comissão. Pago após receber do cliente.</div>';
+
+  if (parceiros.length === 0) html += '<div style="text-align:center;color:#888;padding:16px;font-size:13px;">Nenhum parceiro cadastrado ainda.</div>';
+
+  parceiros.forEach((p, i) => {
+    html += '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:14px;margin-bottom:10px;">'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'
+      + '<div><label style="font-size:11px;color:#888;font-weight:600;display:block;margin-bottom:3px;">NOME</label>'
+      + '<input class="form-input" value="' + (p.nome||'') + '" placeholder="Ex: Escritório XYZ" oninput="atualizarParceiro(' + i + ',\'nome\',this.value)"></div>'
+      + '<div><label style="font-size:11px;color:#888;font-weight:600;display:block;margin-bottom:3px;">TIPO</label>'
+      + '<select class="form-select" onchange="atualizarParceiro(' + i + ',\'tipo\',this.value)">'
+      + '<option value="arquiteto"' + (p.tipo==='arquiteto'?' selected':'') + '>Arquiteto</option>'
+      + '<option value="construtora"' + (p.tipo==='construtora'?' selected':'') + '>Construtora</option>'
+      + '</select></div></div>'
+      + '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;">'
+      + '<div><label style="font-size:11px;color:#888;font-weight:600;display:block;margin-bottom:3px;">PIX</label>'
+      + '<input class="form-input" value="' + (p.pix||'') + '" placeholder="CPF, CNPJ, email..." oninput="atualizarParceiro(' + i + ',\'pix\',this.value)"></div>'
+      + '<div><label style="font-size:11px;color:#888;font-weight:600;display:block;margin-bottom:3px;">% COMISSÃO</label>'
+      + '<input class="form-input" type="number" step="0.5" min="0" max="100" value="' + (p.percentual||5) + '" style="width:80px;" oninput="atualizarParceiro(' + i + ',\'percentual\',this.value)"></div></div>'
+      + '<button onclick="removerParceiroERefresh(' + i + ')" style="background:#FDEAEA;color:#B85A4A;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;margin-top:8px;">🗑 Remover</button>'
+      + '</div>';
+  });
+
+  html += '<button onclick="adicionarParceiroERefresh()" style="background:var(--cream-dark);border:1px dashed var(--vein);color:var(--stone);padding:10px;border-radius:8px;cursor:pointer;font-size:13px;width:100%;margin-top:8px;">+ Cadastrar Parceiro</button>'
+    + '<button onclick="salvarParceirosUI()" style="background:var(--gold);color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;margin-top:10px;width:100%;">💾 Salvar Parceiros</button>'
+    + '</div>';
+
   el.innerHTML = html;
 }
 
@@ -13622,6 +13649,21 @@ function atualizarParceiro(idx, campo, valor) {
 }
 
 function salvarParceirosUI() { showNotif('Parceiros salvos! ✓', 'success'); }
+
+function adicionarParceiroERefresh() {
+  const p = getParceiros();
+  p.push({nome:'', tipo:'arquiteto', pix:'', percentual:5});
+  salvarParceiros(p);
+  renderComissoes();
+}
+
+function removerParceiroERefresh(idx) {
+  if (!confirm('Remover este parceiro?')) return;
+  const p = getParceiros();
+  p.splice(idx, 1);
+  salvarParceiros(p);
+  renderComissoes();
+}
 
 function renderBancos() {
   const el = document.getElementById('bancos-content');

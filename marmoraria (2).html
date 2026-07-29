@@ -328,6 +328,14 @@
     /* ══ CONFIGURAÇÕES ═══════════════════════════════════════════════════ */
     #panel-configuracoes { padding: 8px !important; }
     .config-grid { grid-template-columns: 1fr !important; }
+    /* Abas de config quebram em 2 linhas no mobile */
+    #panel-configuracoes > div > div:first-child { flex-wrap: wrap !important; gap: 4px !important; }
+    #panel-configuracoes > div > div:first-child button { font-size: 11px !important; padding: 8px 10px !important; border-radius: 6px !important; }
+    /* Grids 2 colunas viram 1 coluna no mobile */
+    #comissoes-content [style*="grid-template-columns:1fr 1fr"],
+    #comissoes-content [style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
+    #comissoes-content [style*="grid-template-columns:1fr auto"],
+    #comissoes-content [style*="grid-template-columns: 1fr auto"] { grid-template-columns: 1fr !important; }
 
     /* ══════════════════════════════════════════════════════════════════
        ORÇAMENTO — RESPONSIVO COMPLETO
@@ -449,7 +457,6 @@
     <button class="tab-btn" onclick="showTab('crm')" id="tab-crm">🤝 CRM</button>
     <button class="tab-btn" onclick="showTab('ia')" id="tab-ia" style="display:none;">🤖 IA</button>
     <button class="tab-btn" onclick="showTab('dashboard')" id="tab-dashboard" style="display:none;">📊 Dashboard</button>
-    <button class="tab-btn" onclick="showTab('portal')" id="tab-portal">🔗 Link Cliente</button>
     <button class="tab-btn" onclick="showTab('configuracoes')" id="tab-configuracoes" style="display:none;">⚙️ Configurações</button>
   </div>
   <div class="content">

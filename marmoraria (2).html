@@ -1095,10 +1095,10 @@ function doLogout() {
 }
 
 // ============ DB ============
-async function loadOrders() {
-  showLoading('Carregando pedidos...');
+async function loadOrders(silencioso = false) {
+  if (!silencioso) showLoading('Carregando pedidos...');
   const { data, error } = await getSB().from('pedidos').select('*').order('created_at',{ascending:false}).limit(1000);
-  hideLoading();
+  if (!silencioso) hideLoading();
   if (error) { showNotif('Erro ao carregar','error'); return; }
   orders = data||[];
   // Carrega cache de medições em paralelo
@@ -3023,7 +3023,7 @@ function iniciarAutoRefresh() {
     if (document.querySelector('.modal-overlay.active')) return;
     if (!currentUser) return;
     const antes = orders.map(o=>o.id+o.stage+o.valor).join();
-    await loadOrders();
+    await loadOrders(true); // silencioso — sem mostrar loading
     const depois = orders.map(o=>o.id+o.stage+o.valor).join();
     if (antes !== depois) {
       // Houve mudança — atualiza a tela

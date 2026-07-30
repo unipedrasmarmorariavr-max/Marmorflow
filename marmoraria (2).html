@@ -205,12 +205,12 @@
   .notif.show{transform:translateX(0);}
   .notif.success{background:var(--green);}
   .notif.error{background:var(--red);}
-  .loading-overlay{position:fixed;inset:0;background:rgba(44,42,38,0.5);z-index:2000;display:none;align-items:center;justify-content:center;}
-  .loading-overlay.show{display:flex;}
-  .loading-box{background:white;border-radius:16px;padding:32px 40px;text-align:center;box-shadow:var(--shadow-lg);}
-  .loading-spinner{font-size:32px;animation:spin 1s linear infinite;display:block;margin-bottom:12px;}
-  @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-  .loading-text{font-size:14px;color:var(--stone-light);}
+  .loading-overlay{position:fixed;top:0;left:0;right:0;height:3px;z-index:2000;display:none;overflow:hidden;}
+  .loading-overlay.show{display:block;}
+  .loading-box{height:3px;}
+  .loading-spinner{display:none;}
+  .loading-text{display:none;}
+  @keyframes loadbar{0%{transform:translateX(-200%)}100%{transform:translateX(200%)}}
 
   /* LIGHTBOX */
   .lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;align-items:center;justify-content:center;padding:16px;}
@@ -10532,7 +10532,10 @@ function calcularItem(item, pedra, cfg) {
   if (!pedra) return null;
   const grupo = GRUPOS_DIFICULDADE.find(g => g.id === (pedra.grupoId||1)) || GRUPOS_DIFICULDADE[0];
   const dif = grupo.dif || 1;
-  const { custoHoraEmpresa, custoHoraHomem } = calcularCustoHora();
+  const { custoHoraEmpresa: _custoHoraEmpresaDisplay, custoHoraHomem: _custoHoraHomemDisplay } = calcularCustoHora();
+  // No MarmóPrice, as operações usam o custo por hora que embute todos os funcionários
+  const custoHoraEmpresa = _custoHoraHomemDisplay;  // R$ 313 — usado nos cálculos de custo
+  const custoHoraHomem   = _custoHoraEmpresaDisplay; // R$ 62 — exibido como referência
 
   // ── ÁREA ─────────────────────────────────────────────────────────────────
   // Prioridade igual à de calcAreaTotalItem(): m² direto > peça a peça > campos legados
@@ -11288,9 +11291,18 @@ function renderItemOrcamento(item, idx, pedras, cfg) {
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:10px;">📏 Acabamentos (metros lineares)</div>
       <div class="form-grid">
         <div class="form-group"><label class="form-label">Corte 45° / Meia Esquadria (m)</label>
-          <input class="form-input" type="number" step="0.1" value="${item.compCorte45||0}" oninput="orcamentoAtual.itens[${idx}].compCorte45=parseFloat(this.value)||0;recalcularOrcamento()"></div>
-        <div class="form-group"><label class="form-label">Montagem em 45° (m)</label>
-          <input class="form-input" type="number" step="0.1" value="${item.compMontagem45||0}" oninput="orcamentoAtual.itens[${idx}].compMontagem45=parseFloat(this.value)||0;recalcularOrcamento()"></div>
+          <input class="form-input" type="number" step="0.1" value="${item.compCorte45||0}" oninput="
+            const v=parseFloat(this.value)||0;
+            orcamentoAtual.itens[${idx}].compCorte45=v;
+            // Se Montagem 45° estiver zerada, preenche automaticamente com o mesmo valor
+            if (!orcamentoAtual.itens[${idx}].compMontagem45 && v>0) {
+              orcamentoAtual.itens[${idx}].compMontagem45=v;
+              const elMont=document.getElementById('mont45-${idx}');
+              if(elMont) elMont.value=v;
+            }
+            recalcularOrcamento()"></div>
+        <div class="form-group"><label class="form-label">Montagem em 45° (m) <span style="font-size:10px;color:#888;">(auto = igual ao corte)</span></label>
+          <input class="form-input" type="number" step="0.1" id="mont45-${idx}" value="${item.compMontagem45||0}" oninput="orcamentoAtual.itens[${idx}].compMontagem45=parseFloat(this.value)||0;recalcularOrcamento()"></div>
         <div class="form-group"><label class="form-label">Comp. Polimento Reto 2cm Manual (m)</label>
           <input class="form-input" type="number" step="0.1" value="${item.compPolimentoManual||0}" oninput="orcamentoAtual.itens[${idx}].compPolimentoManual=parseFloat(this.value)||0;recalcularOrcamento()"></div>
         <div class="form-group"><label class="form-label">Comp. Polimento Automático (m)</label>
@@ -11873,8 +11885,8 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
         <tbody>
           ${[
             ['Custo Estrutura', calc.custoEstrutura, false, true],
-            ['Custo Hora Empresa', custoHoraHomem, false, true],
-            ['Custo Hora Homem', custoHoraEmpresa, false, true],
+            ['Custo Hora Empresa', _custoHoraHomemDisplay, false, true],
+            ['Custo Hora Homem', _custoHoraEmpresaDisplay, false, true],
             [null],
             ['Custo de Matéria Prima com Quebra', calc.custoMaterial],
             ['Custo de Descarga/Instalação', calc.custoInstalacao],
@@ -11921,7 +11933,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
             ['M² de compra de Chapa', 0],
             ['Preço Final do Produto', calc.precoFinal, true, false, '#006382'],
             ['Preço Final do Produto sem Matéria Prima', Math.max(0, calc.precoFinal - (calc.custoMaterial/(1-(calc.margem||30)/100)))],
-            ['Preço do Serviço (Mão de Obra)', (calc.custoTotal - (calc.custoMaterial||0)) / (1 - (calc.margem||30)/100)],
+            ['Preço do Serviço (Mão de Obra)', Math.max(0, (calc.custoTotal - (calc.custoMaterial||0) - (calc.custoInsumos||0)) / (1 - (calc.margem||30)/100))],
             ['VMMO/VMMV', calc.tempoProdInterno>0 ? calc.precoFinal/calc.tempoProdInterno : 0],
             ['LL/H', calc.tempoProdInterno>0 ? calc.lucroLiquido/calc.tempoProdInterno : 0, false, false, '#006382', true],
             ['Custo de Serviço por m²', calc.areaBase>0 ? (calc.custoTotal-(calc.custoMaterial||0))/calc.areaBase : 0],
@@ -12316,7 +12328,7 @@ function recalcularTelaOrc(orderId) {
                 ['M² de compra de Chapa', 0],
                 ['Preço Final do Produto', c.precoFinal, true, false, '#006382'],
                 ['Preço Final do Produto sem Matéria Prima', Math.max(0,c.precoFinal-(c.custoMaterial/(1-(c.margem||30)/100)))],
-                ['Preço do Serviço (Mão de Obra)', (c.custoTotal-(c.custoMaterial||0))/(1-(c.margem||30)/100)],
+                ['Preço do Serviço (Mão de Obra)', Math.max(0,(c.custoTotal-(c.custoMaterial||0)-(c.custoInsumos||0))/(1-(c.margem||30)/100))],
                 ['VMMO/VMMV', c.tempoProdInterno>0?c.precoFinal/c.tempoProdInterno:0],
                 ['LL/H', c.tempoProdInterno>0?c.lucroLiquido/c.tempoProdInterno:0, false, false, '#006382', true],
                 ['Custo de Serviço por m²', c.areaBase>0?(c.custoTotal-(c.custoMaterial||0))/c.areaBase:0],

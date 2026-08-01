@@ -4445,6 +4445,15 @@ function previewParcelasCP() {
   }
 }
 
+function abrirModalDivida() {
+  abrirModalContaPagar();
+  // Pré-seleciona categoria Dívida
+  setTimeout(() => {
+    const sel = document.querySelector('#modal-detail select[id*="cat"], #modal-detail select');
+    if (sel) { sel.value = 'Dívida'; }
+  }, 100);
+}
+
 function abrirModalContaPagar(id) {
   const contas = getContasPagar();
   const c = id ? contas.find(x => x.id === id) : null;
@@ -7592,7 +7601,11 @@ async function renderDividas() {
   const hoje = new Date().toISOString().substring(0,10);
 
   if (!dividas.length) {
-    el.innerHTML = '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:40px;text-align:center;"><div style="font-size:40px;margin-bottom:12px;">✅</div><div style="font-size:16px;font-weight:700;color:#2E7D32;">Nenhuma dívida cadastrada</div></div>';
+    el.innerHTML = '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:40px;text-align:center;">'
+      + '<div style="font-size:40px;margin-bottom:12px;">✅</div>'
+      + '<div style="font-size:16px;font-weight:700;color:#2E7D32;margin-bottom:16px;">Nenhuma dívida cadastrada</div>'
+      + '<button onclick="abrirModalDivida()" style="background:var(--gold);color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">+ Cadastrar Dívida</button>'
+      + '</div>';
     return;
   }
 

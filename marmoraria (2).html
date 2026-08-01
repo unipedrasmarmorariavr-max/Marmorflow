@@ -4819,6 +4819,46 @@ async function salvarTransacao(tipo) {
   showNotif(tipo==='entrada'?'Entrada registrada! ✓':'Saída registrada! ✓','success');
 }
 
+function selecionarTodosLancamentos() {
+  const chks = document.querySelectorAll('.chk-lancamento');
+  const todosChecked = [...chks].every(c => c.checked);
+  chks.forEach(c => c.checked = !todosChecked);
+}
+
+async function apagarSelecionadosLancamentos() {
+  const selecionados = [...document.querySelectorAll('.chk-lancamento:checked')].map(c => c.dataset.id);
+  if (selecionados.length === 0) { showNotif('Selecione pelo menos um lançamento', 'error'); return; }
+  if (!confirm(`Apagar ${selecionados.length} lançamento(s) selecionado(s)? Esta ação não pode ser desfeita.`)) return;
+  showLoading('Apagando...');
+  for (const id of selecionados) {
+    await getSB().from('transacoes').delete().eq('id', id);
+  }
+  hideLoading();
+  showNotif(`${selecionados.length} lançamento(s) apagado(s) ✓`, 'success');
+  renderFinanceiro();
+}
+
+function selecionarTodasContas() {
+  const chks = document.querySelectorAll('.chk-conta');
+  const todosChecked = [...chks].every(c => c.checked);
+  chks.forEach(c => c.checked = !todosChecked);
+}
+
+async function apagarSelecionadasContas() {
+  const selecionados = [...document.querySelectorAll('.chk-conta:checked')].map(c => c.dataset.id);
+  if (selecionados.length === 0) { showNotif('Selecione pelo menos uma conta', 'error'); return; }
+  if (!confirm(`Apagar ${selecionados.length} conta(s) selecionada(s)? Esta ação não pode ser desfeita.`)) return;
+  showLoading('Apagando...');
+  const contas = getContasPagar().filter(c => !selecionados.includes(c.id));
+  salvarContasPagar(contas);
+  for (const id of selecionados) {
+    await getSB().from('contas_pagar').delete().eq('id', id);
+  }
+  hideLoading();
+  showNotif(`${selecionados.length} conta(s) apagada(s) ✓`, 'success');
+  renderFinanceiro();
+}
+
 async function deletarTransacao(id) {
   if (!confirm('Excluir este lançamento?')) return;
   await getSB().from('transacoes').delete().eq('id', id);
@@ -7117,11 +7157,17 @@ async function renderFinanceiro() {
       <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
         <div style="background:var(--stone);color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
           <div style="font-size:14px;font-weight:700;">Lançamentos de ${filtroMes.substring(5,7)}/${filtroMes.substring(0,4)}</div>
-          <div style="display:flex;align-items:center;gap:12px;"><div style="font-size:12px;opacity:.7;">${txMes.length} registros</div><button onclick="abrirModalLancamento()" style="background:var(--gold);color:white;border:none;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">+ Lançamento</button></div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="font-size:12px;opacity:.7;">${txMes.length} registros</div>
+            <button onclick="selecionarTodosLancamentos()" style="background:var(--cream-dark);color:var(--stone);border:none;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">☑ Selecionar Tudo</button>
+            <button onclick="apagarSelecionadosLancamentos()" style="background:#FDEAEA;color:#B85A4A;border:1px solid #B85A4A;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">🗑 Apagar Selecionados</button>
+            <button onclick="abrirModalLancamento()" style="background:var(--gold);color:white;border:none;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">+ Lançamento</button>
+          </div>
         </div>
         ${txMes.length === 0 ? `<div style="padding:40px;text-align:center;color:#888;"><div style="font-size:32px;margin-bottom:12px;">📭</div><div>Nenhum lançamento neste mês</div></div>` :
         txMes.map(t => `
         <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--cream-dark);">
+          <input type="checkbox" class="chk-lancamento" data-id="${t.id}" style="width:18px;height:18px;cursor:pointer;accent-color:var(--gold);">
           <div style="width:36px;height:36px;border-radius:50%;background:${t.tipo==='entrada'?'#f0fff4':'#fff5f5'};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">
             ${t.tipo==='entrada'?'↑':'↓'}
           </div>
@@ -7280,9 +7326,13 @@ async function renderFinanceiro() {
       </div>`:''}
 
       <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
-        <div style="background:#5B4A8B;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="background:#5B4A8B;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
           <div style="font-size:14px;font-weight:700;">📤 Contas a Pagar</div>
-          <button onclick="abrirModalContaPagar()" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Nova</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button onclick="selecionarTodasContas()" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">☑ Selecionar</button>
+            <button onclick="apagarSelecionadasContas()" style="background:#FDEAEA;color:#B85A4A;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">🗑 Apagar</button>
+            <button onclick="abrirModalContaPagar()" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Nova</button>
+          </div>
         </div>
         ${contasPendentes.length===0?`<div style="padding:40px;text-align:center;color:#888;"><div style="font-size:32px;margin-bottom:12px;">✅</div><div>Nenhuma conta pendente!</div></div>`:
         contasPendentes.sort((a,b)=>a.vencimento.localeCompare(b.vencimento)).map(c => {
@@ -7294,6 +7344,7 @@ async function renderFinanceiro() {
           <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--cream-dark);
             background:${vencida?'#fff8f8':hojeVence?'#fffde7':'white'};
             border-left:${hojeVence?'4px solid #F59E0B':vencida?'4px solid #B85A4A':'4px solid transparent'};">
+            <input type="checkbox" class="chk-conta" data-id="${c.id}" style="width:18px;height:18px;cursor:pointer;accent-color:var(--gold);flex-shrink:0;">
             <div style="flex:1;">
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
                 <span style="font-size:14px;font-weight:700;color:var(--stone);">${c.descricao}</span>
@@ -13628,24 +13679,29 @@ function renderConfiguracoes() {
         style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
         🔐 Senhas
       </button>
+      <button onclick="showSubConfig('resetar')" id="subcfg-resetar"
+        style="padding:10px 20px;border:none;background:var(--cream-dark);color:#B85A4A;border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
+        🗑 Resetar
+      </button>
     </div>
     <div id="subcfg-panel-gastos"><div id="gastos-content"></div></div>
     <div id="subcfg-panel-tempos" style="display:none;"><div id="tempos-content"></div></div>
     <div id="subcfg-panel-bancos" style="display:none;"><div id="bancos-content"></div></div>
     <div id="subcfg-panel-comissoes" style="display:none;"><div id="comissoes-content"></div></div>
     <div id="subcfg-panel-senhas" style="display:none;"><div id="senhas-content"></div></div>
+    <div id="subcfg-panel-resetar" style="display:none;"><div id="resetar-content"></div></div>
   </div>`;
   renderGastos();
 }
 
 function showSubConfig(aba) {
-  ['gastos','tempos','bancos','manutencao','comissoes','parceiros','senhas'].forEach(a => {
+  ['gastos','tempos','bancos','manutencao','comissoes','parceiros','senhas','resetar'].forEach(a => {
     const panel = document.getElementById('subcfg-panel-' + a);
     const btn = document.getElementById('subcfg-' + a);
     if (panel) panel.style.display = a === aba ? '' : 'none';
     if (btn) {
-      btn.style.background = a === aba ? 'var(--gold)' : 'var(--cream-dark)';
-      btn.style.color = a === aba ? 'white' : 'var(--stone)';
+      btn.style.background = a === aba ? (a==='resetar'?'#B85A4A':'var(--gold)') : 'var(--cream-dark)';
+      btn.style.color = a === aba ? 'white' : (a==='resetar'?'#B85A4A':'var(--stone)');
     }
   });
   if (aba === 'gastos') renderGastos();
@@ -13654,6 +13710,99 @@ function showSubConfig(aba) {
   if (aba === 'comissoes') renderComissoes();
   if (aba === 'parceiros') renderParceiros();
   if (aba === 'senhas') renderSenhas();
+  if (aba === 'resetar') renderResetar();
+}
+
+function renderResetar() {
+  const el = document.getElementById('resetar-content');
+  if (!el) return;
+  if (currentUser !== 'dono') {
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:#888;">Apenas o Dono pode resetar os dados.</div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:24px;">
+      <div style="font-size:15px;font-weight:700;color:#B85A4A;margin-bottom:8px;">⚠️ Zona de Perigo</div>
+      <div style="font-size:13px;color:#888;margin-bottom:24px;line-height:1.6;">
+        Use estas opções para limpar dados do sistema. <strong>Esta ação não pode ser desfeita.</strong>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--stone);">💸 Lançamentos</div>
+            <div style="font-size:12px;color:#888;margin-top:2px;">Apaga todas as entradas e saídas registradas</div>
+          </div>
+          <button onclick="limparDados('transacoes')" style="background:#FDEAEA;color:#B85A4A;border:1px solid #B85A4A;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap;">
+            🗑 Limpar Lançamentos
+          </button>
+        </div>
+
+        <div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--stone);">📤 Contas a Pagar</div>
+            <div style="font-size:12px;color:#888;margin-top:2px;">Apaga todas as contas a pagar cadastradas</div>
+          </div>
+          <button onclick="limparDados('contas_pagar')" style="background:#FDEAEA;color:#B85A4A;border:1px solid #B85A4A;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap;">
+            🗑 Limpar Contas
+          </button>
+        </div>
+
+        <div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--stone);">📋 A Receber</div>
+            <div style="font-size:12px;color:#888;margin-top:2px;">Apaga todos os registros de parcelas a receber</div>
+          </div>
+          <button onclick="limparDados('parcelas_receber')" style="background:#FDEAEA;color:#B85A4A;border:1px solid #B85A4A;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap;">
+            🗑 Limpar A Receber
+          </button>
+        </div>
+
+        <div style="border:2px solid #B85A4A;border-radius:10px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:#fff8f8;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:#B85A4A;">🔴 Limpar Tudo</div>
+            <div style="font-size:12px;color:#888;margin-top:2px;">Apaga lançamentos, contas a pagar e a receber de uma vez</div>
+          </div>
+          <button onclick="limparDados('tudo')" style="background:#B85A4A;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;">
+            🗑 Limpar Tudo
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function limparDados(tipo) {
+  const labels = {
+    transacoes: 'todos os lançamentos financeiros',
+    contas_pagar: 'todas as contas a pagar',
+    parcelas_receber: 'todos os registros do A Receber',
+    tudo: 'TODOS os dados financeiros (lançamentos, contas a pagar e a receber)'
+  };
+
+  if (!confirm('Tem certeza que quer apagar ' + labels[tipo] + '?\n\nEsta ação NÃO pode ser desfeita!')) return;
+  if (!confirm('Segunda confirmação: apagar ' + labels[tipo] + ' definitivamente?')) return;
+
+  showLoading('Limpando dados...');
+
+  try {
+    if (tipo === 'transacoes' || tipo === 'tudo') {
+      await getSB().from('transacoes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    }
+    if (tipo === 'contas_pagar' || tipo === 'tudo') {
+      await getSB().from('contas_pagar').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      localStorage.removeItem('mf_contas_pagar');
+    }
+    if (tipo === 'parcelas_receber' || tipo === 'tudo') {
+      await getSB().from('pedidos').update({ condicao_pagamento: null, parcelas: null }).neq('id', 'xxx');
+      localStorage.removeItem('mf_parcelas');
+    }
+    hideLoading();
+    showNotif('Dados apagados com sucesso! ✓', 'success');
+  } catch(e) {
+    hideLoading();
+    showNotif('Erro ao apagar: ' + e.message, 'error');
+  }
 }
 
 function renderSenhas() {

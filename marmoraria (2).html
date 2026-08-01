@@ -7347,7 +7347,6 @@ async function renderFinanceiro() {
 
   </div>`;
 
-}
   // Re-aplica a aba ativa após renderizar para evitar painéis sobrepostos
   setTimeout(function() {
     const abaAtiva = sessionStorage.getItem('fin_aba') || 'geral';
@@ -7359,7 +7358,9 @@ async function renderFinanceiro() {
     });
     if (abaAtiva === 'receber') renderContasReceber();
     if (abaAtiva === 'dividas') renderDividas();
+    if (abaAtiva === 'comissoes') renderRelatorioComissoes();
   }, 150);
+}
 
 setTimeout(aplicarEstilosMobile,50);
 

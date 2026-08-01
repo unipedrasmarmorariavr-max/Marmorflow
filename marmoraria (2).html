@@ -1385,13 +1385,20 @@ function renderHistoricoLista() {
   const STAGE_LABEL = {negociacao:'💬 Negociação', fechado:'✅ Pedido Fechado', entregue:'📦 Entregue'};
   const STAGE_COR   = {negociacao:'#8B6914', fechado:'#2E7D32', entregue:'#555'};
 
-  el.innerHTML = arquivados.map(o => {
+  // Botões de ação em lote
+  const toolbar = '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">'
+    + '<button onclick="selecionarTodosHistorico()" style="background:var(--cream-dark);border:1px solid var(--vein);color:var(--stone);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">☑ Selecionar Tudo</button>'
+    + '<button onclick="excluirSelecionadosHistorico()" style="background:#FDEAEA;color:#B85A4A;border:1px solid #B85A4A;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">🗑 Excluir Selecionados</button>'
+    + '</div>';
+
+  el.innerHTML = toolbar + arquivados.map(o => {
     const stageLabel = STAGE_LABEL[o.stage] || o.stage;
     const stageCor = STAGE_COR[o.stage] || '#888';
     const diasAtras = Math.floor((hoje - new Date(o.created_at||hoje)) / (1000*60*60*24));
     const podReativar = o.stage === 'negociacao';
 
-    return '<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:0.5px solid var(--cream-dark);">'
+    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 0;border-bottom:0.5px solid var(--cream-dark);">'
+      + '<input type="checkbox" class="chk-historico" data-id="' + o.id + '" style="width:18px;height:18px;cursor:pointer;accent-color:var(--gold);flex-shrink:0;margin-top:2px;">'
       + '<div style="flex:1;min-width:0;">'
       + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">'
       + '<span style="font-size:13px;font-weight:700;color:var(--stone);">' + o.cliente + '</span>'
@@ -1400,8 +1407,39 @@ function renderHistoricoLista() {
       + '<div style="font-size:11px;color:#888;">' + o.id + (o.peca?' · '+o.peca:'') + (o.valor?' · '+fmtV(o.valor):'') + ' · há ' + diasAtras + ' dias</div>'
       + '</div>'
       + (podReativar ? '<button onclick="reativarPedido(\'' + o.id + '\')" style="background:var(--gold);color:white;border:none;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">↩ Reativar</button>' : '')
+      + '<button onclick="excluirPedidoHistorico(\'' + o.id + '\')" style="background:#FDEAEA;color:#B85A4A;border:none;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:12px;">🗑</button>'
       + '</div>';
   }).join('');
+}
+
+function selecionarTodosHistorico() {
+  const chks = document.querySelectorAll('.chk-historico');
+  const todosChecked = [...chks].every(c => c.checked);
+  chks.forEach(c => c.checked = !todosChecked);
+}
+
+async function excluirPedidoHistorico(id) {
+  if (!confirm('Excluir este pedido permanentemente? Esta ação não pode ser desfeita.')) return;
+  showLoading('Excluindo...');
+  await getSB().from('pedidos').delete().eq('id', id);
+  orders = orders.filter(o => o.id !== id);
+  hideLoading();
+  showNotif('Pedido excluído ✓', 'success');
+  renderHistoricoLista();
+}
+
+async function excluirSelecionadosHistorico() {
+  const selecionados = [...document.querySelectorAll('.chk-historico:checked')].map(c => c.dataset.id);
+  if (selecionados.length === 0) { showNotif('Selecione pelo menos um pedido', 'error'); return; }
+  if (!confirm('Excluir ' + selecionados.length + ' pedido(s) permanentemente? Esta ação não pode ser desfeita.')) return;
+  showLoading('Excluindo...');
+  for (const id of selecionados) {
+    await getSB().from('pedidos').delete().eq('id', id);
+  }
+  orders = orders.filter(o => !selecionados.includes(o.id));
+  hideLoading();
+  showNotif(selecionados.length + ' pedido(s) excluído(s) ✓', 'success');
+  renderHistoricoLista();
 }
 
 async function reativarPedido(id) {
@@ -4819,6 +4857,27 @@ async function salvarTransacao(tipo) {
   showNotif(tipo==='entrada'?'Entrada registrada! ✓':'Saída registrada! ✓','success');
 }
 
+function selecionarTodosReceber() {
+  const chks = document.querySelectorAll('.chk-receber');
+  const todosChecked = [...chks].every(c => c.checked);
+  chks.forEach(c => c.checked = !todosChecked);
+}
+
+async function removerSelecionadosReceber() {
+  const selecionados = [...document.querySelectorAll('.chk-receber:checked')].map(c => c.dataset.id);
+  if (selecionados.length === 0) { showNotif('Selecione pelo menos um pedido', 'error'); return; }
+  if (!confirm(`Remover ${selecionados.length} pedido(s) do A Receber?\n\nO pedido volta para "Negociação" no kanban.`)) return;
+  showLoading('Removendo...');
+  for (const id of selecionados) {
+    await getSB().from('pedidos').update({ stage: 'negociacao' }).eq('id', id);
+    const o = orders.find(x => x.id === id);
+    if (o) o.stage = 'negociacao';
+  }
+  hideLoading();
+  showNotif(`${selecionados.length} pedido(s) movido(s) para Negociação ✓`, 'success');
+  renderFinanceiro();
+}
+
 function selecionarTodosLancamentos() {
   const chks = document.querySelectorAll('.chk-lancamento');
   const todosChecked = [...chks].every(c => c.checked);
@@ -7186,9 +7245,13 @@ async function renderFinanceiro() {
     <!-- PAINEL A RECEBER -->
     <div id="fin-painel-receber" style="display:${abaFin==='receber'?'block':'none'}">
       <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
-        <div style="background:#8B6914;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="background:#8B6914;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
           <div style="font-size:14px;font-weight:700;">📋 A Receber — Pedidos Fechados</div>
-          <div style="font-size:12px;opacity:.8;">${aReceber.length} pedido(s) · ${fmtV(totalAReceber)}</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div style="font-size:12px;opacity:.8;">${aReceber.length} pedido(s) · ${fmtV(totalAReceber)}</div>
+            <button onclick="selecionarTodosReceber()" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">☑ Selecionar</button>
+            <button onclick="removerSelecionadosReceber()" style="background:#FDEAEA;color:#B85A4A;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">🗑 Remover</button>
+          </div>
         </div>
         ${aReceber.length === 0 ? `<div style="padding:30px;text-align:center;color:#888;">Nenhum pedido aguardando recebimento</div>` :
         aReceber.map(o => {
@@ -7205,6 +7268,7 @@ async function renderFinanceiro() {
           <div style="padding:16px 20px;border-bottom:1px solid var(--cream-dark);">
             <!-- Linha 1: Cliente + valor + status -->
             <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+              <input type="checkbox" class="chk-receber" data-id="${o.id}" style="width:18px;height:18px;cursor:pointer;accent-color:var(--gold);flex-shrink:0;margin-top:3px;">
               <div style="flex:1;min-width:180px;">
                 <div style="font-size:15px;font-weight:700;color:var(--stone);">${o.cliente||'—'}</div>
                 <div style="font-size:12px;color:#888;margin-top:2px;">${o.id} · ${o.peca||''}</div>

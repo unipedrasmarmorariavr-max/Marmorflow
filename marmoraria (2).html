@@ -13832,8 +13832,60 @@ function renderResetar() {
             🗑 Limpar Tudo
           </button>
         </div>
+
+        <div style="border:3px solid #7B0000;border-radius:10px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:#fff0f0;margin-top:8px;">
+          <div>
+            <div style="font-size:14px;font-weight:800;color:#7B0000;">💣 Resetar Sistema Completo</div>
+            <div style="font-size:12px;color:#888;margin-top:2px;">Zera pedidos, orçamentos, medições, financeiro e clientes. Mantém configurações, materiais e PINs.</div>
+          </div>
+          <button onclick="resetarSistemaCompleto()" style="background:#7B0000;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;">
+            💣 Resetar Tudo
+          </button>
+        </div>
       </div>
     </div>`;
+}
+
+async function resetarSistemaCompleto() {
+  if (!confirm('⚠️ ATENÇÃO!\n\nIsso vai apagar PERMANENTEMENTE:\n- Todos os pedidos do kanban\n- Todos os orçamentos\n- Todas as medições agendadas\n- Todo o histórico financeiro\n- Todos os clientes cadastrados\n\nAs configurações, materiais e PINs serão mantidos.\n\nTem certeza que quer continuar?')) return;
+
+  const confirmacao = prompt('Para confirmar, digite: RESETAR');
+  if (confirmacao !== 'RESETAR') { showNotif('Operação cancelada.', 'error'); return; }
+
+  showLoading('Resetando sistema... aguarde...');
+
+  try {
+    // Apaga pedidos
+    await getSB().from('pedidos').delete().neq('id', 'xxx');
+    // Apaga medições
+    await getSB().from('medicoes').delete().neq('id', 'xxx');
+    // Apaga transações financeiras
+    await getSB().from('transacoes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    // Apaga contas a pagar
+    await getSB().from('contas_pagar').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    // Apaga clientes
+    await getSB().from('clientes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+    // Limpa localStorage financeiro
+    localStorage.removeItem('mf_contas_pagar');
+    localStorage.removeItem('mf_parcelas');
+    localStorage.removeItem('mf_orc_aberto');
+
+    // Zera arrays em memória
+    orders = [];
+    _medicoes = [];
+    _clientes = [];
+
+    hideLoading();
+    showNotif('Sistema resetado com sucesso! Começando do zero. ✓', 'success');
+
+    // Volta para o kanban
+    setTimeout(() => showTab('kanban'), 1000);
+
+  } catch(e) {
+    hideLoading();
+    showNotif('Erro ao resetar: ' + e.message, 'error');
+  }
 }
 
 async function limparDados(tipo) {

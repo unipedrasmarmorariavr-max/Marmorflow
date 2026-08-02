@@ -4349,47 +4349,35 @@ function sincronizarContasPagarSupabase(contas) {
   clearTimeout(_syncContasPagarTimeout);
   _syncContasPagarTimeout = setTimeout(async () => {
     try {
+      const mapRow = c => ({
+        id: c.id || undefined,
+        descricao: c.descricao || '',
+        valor: parseFloat(c.valor) || 0,
+        vencimento: c.vencimento || null,
+        status: c.status || 'pendente',
+        categoria: c.categoria || null,
+        recorrencia: c.recorrencia || null,
+        banco: c.banco || null,
+        obs: c.obs || null,
+        data_pagamento: c.dataPagamento || null
+      });
       const comId = contas.filter(c => c.id);
       const semId = contas.filter(c => !c.id);
-
       if (comId.length) {
-        const rowsComId = comId.map(c => ({
-          id: c.id,
-          descricao: c.descricao || '',
-          valor: parseFloat(c.valor) || 0,
-          vencimento: c.vencimento || null,
-          status: c.status || 'pendente',
-          categoria: c.categoria || null,
-          recorrencia: c.recorrencia || null,
-          data_pagamento: c.dataPagamento || null
-        }));
-        await getSB().from('contas_pagar').upsert(rowsComId, { onConflict: 'id' });
+        await getSB().from('contas_pagar').upsert(comId.map(mapRow), { onConflict: 'id' });
       }
-
-      // Remove no Supabase as contas que não existem mais localmente
       const idsAtuais = comId.map(c => c.id);
       const { data: existentes } = await getSB().from('contas_pagar').select('id');
       const idsParaExcluir = (existentes || []).map(r => r.id).filter(id => !idsAtuais.includes(id));
       if (idsParaExcluir.length) {
         await getSB().from('contas_pagar').delete().in('id', idsParaExcluir);
       }
-
-      // Contas novas sem id local ainda: insere e atualiza o localStorage com os IDs gerados
       if (semId.length) {
-        const rowsSemId = semId.map(c => ({
-          descricao: c.descricao || '',
-          valor: parseFloat(c.valor) || 0,
-          vencimento: c.vencimento || null,
-          status: c.status || 'pendente',
-          categoria: c.categoria || null,
-          recorrencia: c.recorrencia || null,
-          data_pagamento: c.dataPagamento || null
-        }));
-        const { data: inseridas } = await getSB().from('contas_pagar').insert(rowsSemId).select('id');
+        const { data: inseridas } = await getSB().from('contas_pagar').insert(semId.map(mapRow)).select('id');
         if (inseridas && inseridas.length === semId.length) {
           const todasContas = getContasPagar();
           semId.forEach((c, i) => {
-            const idx = todasContas.findIndex(t => t === c || (t.descricao === c.descricao && t.vencimento === c.vencimento && !t.id));
+            const idx = todasContas.findIndex(t => t.descricao === c.descricao && t.vencimento === c.vencimento && !t.id);
             if (idx >= 0) todasContas[idx].id = inseridas[i].id;
           });
           localStorage.setItem('mf_contas_pagar', JSON.stringify(todasContas));
@@ -4404,15 +4392,17 @@ async function carregarContasPagarDoSupabase() {
   try {
     const { data, error } = await getSB().from('contas_pagar').select('*').order('vencimento', { ascending: true });
     if (error) { console.error('Erro ao carregar contas a pagar:', error); return; }
-    if (data) {
+    if (data && data.length > 0) {
       const contas = data.map(c => ({
         id: c.id,
         descricao: c.descricao,
         valor: c.valor,
         vencimento: c.vencimento,
-        status: c.status,
+        status: c.status || 'pendente',
         categoria: c.categoria,
         recorrencia: c.recorrencia,
+        banco: c.banco,
+        obs: c.obs,
         dataPagamento: c.data_pagamento
       }));
       localStorage.setItem('mf_contas_pagar', JSON.stringify(contas));
@@ -12054,8 +12044,8 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
         <tbody>
           ${[
             ['Custo Estrutura', calc.custoEstrutura, false, true],
-            ['Custo Hora Empresa', _custoHoraHomemDisplay, false, true],
-            ['Custo Hora Homem', _custoHoraEmpresaDisplay, false, true],
+            ['Custo Hora Empresa', custoHoraHomem, false, true],
+            ['Custo Hora Homem', custoHoraEmpresa, false, true],
             [null],
             ['Custo de Matéria Prima com Quebra', calc.custoMaterial],
             ['Custo de Descarga/Instalação', calc.custoInstalacao],
@@ -13891,26 +13881,39 @@ function renderResetar() {
 }
 
 async function forceSyncContasPagar() {
-  showLoading('Sincronizando contas com Supabase...');
+  showLoading('Sincronizando...');
   try {
     const contas = getContasPagar();
-    // Apaga tudo no Supabase e reinserere do localStorage
-    await getSB().from('contas_pagar').delete().neq('id','00000000-0000-0000-0000-000000000000');
-    if (contas.length > 0) {
-      const rows = contas.map(c => ({
-        id: c.id || undefined,
-        descricao: c.descricao || '',
-        valor: parseFloat(c.valor) || 0,
-        vencimento: c.vencimento || null,
-        status: c.status || 'pendente',
-        categoria: c.categoria || null,
-        recorrencia: c.recorrencia || null,
-        banco: c.banco || null,
-        obs: c.obs || null,
-        data_pagamento: c.dataPagamento || null
-      }));
-      await getSB().from('contas_pagar').upsert(rows, { onConflict: 'id' });
+    
+    if (contas.length === 0) {
+      // localStorage vazio — carrega do Supabase para este dispositivo
+      await carregarContasPagarDoSupabase();
+      hideLoading();
+      const contasCarregadas = getContasPagar();
+      if (contasCarregadas.length > 0) {
+        showNotif('✓ ' + contasCarregadas.length + ' conta(s) carregada(s) do Supabase!', 'success');
+      } else {
+        showNotif('Nenhuma conta encontrada no Supabase.', 'error');
+      }
+      renderFinanceiro();
+      return;
     }
+
+    // Tem contas no localStorage — envia para o Supabase
+    await getSB().from('contas_pagar').delete().neq('id','00000000-0000-0000-0000-000000000000');
+    const rows = contas.map(c => ({
+      id: c.id || undefined,
+      descricao: c.descricao || '',
+      valor: parseFloat(c.valor) || 0,
+      vencimento: c.vencimento || null,
+      status: c.status || 'pendente',
+      categoria: c.categoria || null,
+      recorrencia: c.recorrencia || null,
+      banco: c.banco || null,
+      obs: c.obs || null,
+      data_pagamento: c.dataPagamento || null
+    }));
+    await getSB().from('contas_pagar').upsert(rows);
     hideLoading();
     showNotif('✓ ' + contas.length + ' conta(s) sincronizada(s) com sucesso!', 'success');
   } catch(e) {

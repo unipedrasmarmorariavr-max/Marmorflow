@@ -7632,7 +7632,10 @@ async function renderDividas() {
     el.innerHTML = '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:40px;text-align:center;">'
       + '<div style="font-size:40px;margin-bottom:12px;">✅</div>'
       + '<div style="font-size:16px;font-weight:700;color:#2E7D32;margin-bottom:16px;">Nenhuma dívida cadastrada</div>'
+      + '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">'
       + '<button onclick="abrirModalDivida()" style="background:var(--gold);color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">+ Cadastrar Dívida</button>'
+      + '<button onclick="forceSyncContasPagar()" style="background:var(--cream-dark);color:var(--stone);border:1px solid var(--vein);padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">🔄 Sincronizar</button>'
+      + '</div>'
       + '</div>';
     return;
   }
@@ -13885,6 +13888,35 @@ function renderResetar() {
         </div>
       </div>
     </div>`;
+}
+
+async function forceSyncContasPagar() {
+  showLoading('Sincronizando contas com Supabase...');
+  try {
+    const contas = getContasPagar();
+    // Apaga tudo no Supabase e reinserere do localStorage
+    await getSB().from('contas_pagar').delete().neq('id','00000000-0000-0000-0000-000000000000');
+    if (contas.length > 0) {
+      const rows = contas.map(c => ({
+        id: c.id || undefined,
+        descricao: c.descricao || '',
+        valor: parseFloat(c.valor) || 0,
+        vencimento: c.vencimento || null,
+        status: c.status || 'pendente',
+        categoria: c.categoria || null,
+        recorrencia: c.recorrencia || null,
+        banco: c.banco || null,
+        obs: c.obs || null,
+        data_pagamento: c.dataPagamento || null
+      }));
+      await getSB().from('contas_pagar').upsert(rows, { onConflict: 'id' });
+    }
+    hideLoading();
+    showNotif('✓ ' + contas.length + ' conta(s) sincronizada(s) com sucesso!', 'success');
+  } catch(e) {
+    hideLoading();
+    showNotif('Erro: ' + e.message, 'error');
+  }
 }
 
 async function resetarSistemaCompleto() {

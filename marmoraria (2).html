@@ -10700,10 +10700,9 @@ function calcularItem(item, pedra, cfg) {
   if (!pedra) return null;
   const grupo = GRUPOS_DIFICULDADE.find(g => g.id === (pedra.grupoId||1)) || GRUPOS_DIFICULDADE[0];
   const dif = grupo.dif || 1;
-  const { custoHoraEmpresa: _custoHoraEmpresaDisplay, custoHoraHomem: _custoHoraHomemDisplay } = calcularCustoHora();
-  // No MarmóPrice, as operações usam o custo por hora que embute todos os funcionários
-  const custoHoraEmpresa = _custoHoraHomemDisplay;  // R$ 313 — usado nos cálculos de custo
-  const custoHoraHomem   = _custoHoraEmpresaDisplay; // R$ 62 — exibido como referência
+  const { custoHoraEmpresa, custoHoraHomem } = calcularCustoHora();
+  // custoHoraEmpresa = R$ 62,66 — usado nas operações de produção
+  // custoHoraHomem = R$ 313,28 — custo total da empresa por hora
 
   // ── ÁREA ─────────────────────────────────────────────────────────────────
   // Prioridade igual à de calcAreaTotalItem(): m² direto > peça a peça > campos legados
@@ -10736,7 +10735,8 @@ function calcularItem(item, pedra, cfg) {
   // ── COMPRIMENTOS ─────────────────────────────────────────────────────────
   // "Comprimento de Acabamento 45° Saia" → CORTE e MONTAGEM (compSaia)
   const compSaia      = parseFloat(item.compCorte45)||0;
-  const compMont45Sep = parseFloat(item.compMontagem45)||0;
+  // Se compMontagem45 não foi preenchido, usa o mesmo valor do Corte 45° (padrão MarmóPrice)
+  const compMont45Sep = parseFloat(item.compMontagem45) || parseFloat(item.compCorte45) || 0;
 
   // ── TEMPOS DE PRODUÇÃO INTERNA (hr) ──────────────────────────────────────
   const tSerra            = areaBase   * (cfg.serra||0.8)               * dif;
@@ -10836,16 +10836,18 @@ function calcularItem(item, pedra, cfg) {
   const custoInsumoInstal = parseFloat(item.custoInsumoInstal)||0;
 
   // ── TOTAL ─────────────────────────────────────────────────────────────────
-  const custosOp = custoMaterial+custoInstalacao+custoDeslocamento+custoCombustivel+
-    custoSerra+custoCorte45+custoCorte45Interno+custoMontagem45+
+  // Custos de produção (base para insumos)
+  const custosProducao = custoSerra+custoCorte45+custoCorte45Interno+custoMontagem45+
     custoPolimento+custoBipolimento+custoAcabamentos+custoEspeciais+
     custoFuros+custoWaterJet+custoHorasAdic+
     custoAcessorios+custoArgamassa+custoAdicionais+custoCantoneira+custoInsumoInstal;
 
-  // Insumos: só aplica o % automático se o usuário informou custo de insumo de instalação
-  // Quando custoInsumoInstal = 0, comportamento igual ao MarmóPrice (não cobra automaticamente)
+  // Custos totais incluindo material e instalação
+  const custosOp = custoMaterial+custoInstalacao+custoDeslocamento+custoCombustivel+custosProducao;
+
   const margemFrac   = (parseFloat(item.margemOverride??pedra.margem??30))/100;
-  const custoInsumos = custosOp * ((cfg.custoInsumo||5) / 100);
+  // Insumos calculados só sobre custos de produção (igual MarmóPrice)
+  const custoInsumos = cfg.custoInsumo > 0 ? custosProducao * ((cfg.custoInsumo||5) / 100) : 0;
   const custoTotal   = custosOp + custoInsumos;
   const precoFinal   = custoTotal / (1 - margemFrac);
   const lucroLiquido = precoFinal - custoTotal;
@@ -12053,8 +12055,8 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
         <tbody>
           ${[
             ['Custo Estrutura', calc.custoEstrutura, false, true],
-            ['Custo Hora Empresa', custoHoraHomem, false, true],
-            ['Custo Hora Homem', custoHoraEmpresa, false, true],
+            ['Custo Hora Empresa', custoHoraEmpresa, false, true],
+            ['Custo Hora Homem', custoHoraHomem, false, true],
             [null],
             ['Custo de Matéria Prima com Quebra', calc.custoMaterial],
             ['Custo de Descarga/Instalação', calc.custoInstalacao],

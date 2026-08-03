@@ -4591,7 +4591,8 @@ async function salvarContaPagar() {
       salvarContasPagar(local);
     } else {
       // Insere no Supabase
-      const { data: inserted } = await getSB().from('contas_pagar').insert({ ...dados }).select().single();
+      const { data: inserted, error: insertError } = await getSB().from('contas_pagar').insert({ ...dados }).select().single();
+      if (insertError) throw new Error(insertError.message);
       const local = getContasPagar();
       local.push({ id: inserted?.id || 'CP-'+Date.now(), ...dados });
       salvarContasPagar(local);

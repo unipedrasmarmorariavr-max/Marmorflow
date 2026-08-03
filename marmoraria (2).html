@@ -10736,13 +10736,14 @@ function calcularItem(item, pedra, cfg) {
   // "Comprimento de Acabamento 45° Saia" → CORTE e MONTAGEM (compSaia)
   const compSaia      = parseFloat(item.compCorte45)||0;
   // Se compMontagem45 não foi preenchido, usa o mesmo valor do Corte 45° (padrão MarmóPrice)
+  // No MarmóPrice, montagem 45° usa a mesma taxa do corte 45°
   const compMont45Sep = parseFloat(item.compMontagem45) || parseFloat(item.compCorte45) || 0;
 
   // ── TEMPOS DE PRODUÇÃO INTERNA (hr) ──────────────────────────────────────
   const tSerra            = areaBase   * (cfg.serra||0.8)               * dif;
   const tCorte45          = compSaia   * (cfg.corte45||0.2)             * dif;
   const tCorte45Interno   = (parseFloat(item.compCorte45Interno)||0) * (cfg.corte45||0.2) * dif;
-  const tMontagem45       = compMont45Sep * (cfg.montagem45||1.2) * dif;
+  const tMontagem45       = compMont45Sep * (cfg.corte45||0.2) * dif;
   const tBipolimento      = (parseFloat(item.areaBipolida)||0)         * (cfg.areaBipolada||2)           * dif;
   const tPolimentoManual  = (parseFloat(item.compPolimentoManual)||0)  * (cfg.polimentoManual||0.2)      * dif;
   const tPolimentoAuto    = (parseFloat(item.compPolimentoAuto)||0)    * (cfg.polimentoAutomatico||0.15) * dif;
@@ -10836,17 +10837,17 @@ function calcularItem(item, pedra, cfg) {
   const custoInsumoInstal = parseFloat(item.custoInsumoInstal)||0;
 
   // ── TOTAL ─────────────────────────────────────────────────────────────────
-  // Custos de produção (base para insumos)
-  const custosProducao = custoSerra+custoCorte45+custoCorte45Interno+custoMontagem45+
+  // Custos de produção (base para insumos) — igual MarmóPrice: tudo exceto material
+  const custosProducao = custoInstalacao+custoDeslocamento+custoCombustivel+
+    custoSerra+custoCorte45+custoCorte45Interno+custoMontagem45+
     custoPolimento+custoBipolimento+custoAcabamentos+custoEspeciais+
     custoFuros+custoWaterJet+custoHorasAdic+
     custoAcessorios+custoArgamassa+custoAdicionais+custoCantoneira+custoInsumoInstal;
 
-  // Custos totais incluindo material e instalação
-  const custosOp = custoMaterial+custoInstalacao+custoDeslocamento+custoCombustivel+custosProducao;
+  const custosOp = custoMaterial + custosProducao;
 
   const margemFrac   = (parseFloat(item.margemOverride??pedra.margem??30))/100;
-  // Insumos calculados só sobre custos de produção (igual MarmóPrice)
+  // Insumos calculados sobre custos de produção (excluindo material) — igual MarmóPrice
   const custoInsumos = cfg.custoInsumo > 0 ? custosProducao * ((cfg.custoInsumo||5) / 100) : 0;
   const custoTotal   = custosOp + custoInsumos;
   const precoFinal   = custoTotal / (1 - margemFrac);

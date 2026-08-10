@@ -11626,6 +11626,14 @@ function abrirTelaOrcamentoPedido(id) {
   // Busca o orçamento SEMPRE pelo pedidoId — chave estável e confiável
   let orc = orcs.find(o => o.pedidoId === id) || null;
 
+  // Se encontrou mas não tem dados significativos, começa do zero
+  if (orc) {
+    const temDados = orc.itens?.some(it =>
+      it.pedraId || (it.pecas?.some(p => p.medidas && p.medidas.trim())) || it.calc?.precoFinal > 0
+    );
+    if (!temDados) orc = null;
+  }
+
   if (!orc) {
     // Sempre começa do zero — sem herdar nada
     orc = {

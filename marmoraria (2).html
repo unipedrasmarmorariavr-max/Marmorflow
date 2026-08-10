@@ -10707,8 +10707,8 @@ function calcularItem(item, pedra, cfg) {
   const grupo = GRUPOS_DIFICULDADE.find(g => g.id === (pedra.grupoId||1)) || GRUPOS_DIFICULDADE[0];
   const dif = grupo.dif || 1;
   const { custoHoraEmpresa, custoHoraHomem } = calcularCustoHora();
-  // custoHoraEmpresa = R$ 62,66 — usado nas operações de produção
-  // custoHoraHomem = R$ 313,28 — custo total da empresa por hora
+  // MarmóPrice usa custoHoraHomem (R$ 313) nas operações de produção
+  const custoHoraEmpresa_op = custoHoraHomem;
 
   // ── ÁREA ─────────────────────────────────────────────────────────────────
   // Prioridade igual à de calcAreaTotalItem(): m² direto > peça a peça > campos legados
@@ -10749,7 +10749,7 @@ function calcularItem(item, pedra, cfg) {
   const tSerra            = areaBase   * (cfg.serra||0.8)               * dif;
   const tCorte45          = compSaia   * (cfg.corte45||0.2)             * dif;
   const tCorte45Interno   = (parseFloat(item.compCorte45Interno)||0) * (cfg.corte45||0.2) * dif;
-  const tMontagem45       = compMont45Sep * (cfg.corte45||0.2) * dif;
+  const tMontagem45       = compMont45Sep * (cfg.montagem45||1.2) * dif;
   const tBipolimento      = (parseFloat(item.areaBipolida)||0)         * (cfg.areaBipolada||2)           * dif;
   const tPolimentoManual  = (parseFloat(item.compPolimentoManual)||0)  * (cfg.polimentoManual||0.2)      * dif;
   const tPolimentoAuto    = (parseFloat(item.compPolimentoAuto)||0)    * (cfg.polimentoAutomatico||0.15) * dif;
@@ -10815,25 +10815,25 @@ function calcularItem(item, pedra, cfg) {
   const tempoDescargaInstalTotal = tempoDeslocamento + tempoInstalEntrega;
 
   // ── CUSTOS ───────────────────────────────────────────────────────────────
-  const custoSerra           = tSerra           * custoHoraEmpresa;
-  const custoCorte45         = tCorte45         * custoHoraEmpresa;
-  const custoCorte45Interno  = tCorte45Interno  * custoHoraEmpresa;
-  const custoMontagem45      = tMontagem45      * custoHoraEmpresa;
-  const custoBipolimento     = tBipolimento     * custoHoraEmpresa;
-  const custoPolimentoManual = tPolimentoManual * custoHoraEmpresa;
-  const custoPolimentoAuto   = tPolimentoAuto   * custoHoraEmpresa;
+  const custoSerra           = tSerra           * custoHoraEmpresa_op;
+  const custoCorte45         = tCorte45         * custoHoraEmpresa_op;
+  const custoCorte45Interno  = tCorte45Interno  * custoHoraEmpresa_op;
+  const custoMontagem45      = tMontagem45      * custoHoraEmpresa_op;
+  const custoBipolimento     = tBipolimento     * custoHoraEmpresa_op;
+  const custoPolimentoManual = tPolimentoManual * custoHoraEmpresa_op;
+  const custoPolimentoAuto   = tPolimentoAuto   * custoHoraEmpresa_op;
   const custoPolimento       = custoPolimentoManual + custoPolimentoAuto;
   const custoAcabamentos     = (tCubEsculpida+tMeioBoelado+tMeioBoeladoDuplo+tChanfrado45+
-    tMeiaCana+tMeiaCanaD+tBoeladoDuplo+tChanfradoDuplo+tChanfroAlongado+tColagemTopo)*custoHoraEmpresa;
-  const custoEspeciais       = (tRebaixoItaliano+tRebaixoAmericano)*custoHoraEmpresa;
-  const custoFuros           = (tFlush+tFlath+tRecortes+tCubas)*custoHoraEmpresa;
+    tMeiaCana+tMeiaCanaD+tBoeladoDuplo+tChanfradoDuplo+tChanfroAlongado+tColagemTopo)*custoHoraEmpresa_op;
+  const custoEspeciais       = (tRebaixoItaliano+tRebaixoAmericano)*custoHoraEmpresa_op;
+  const custoFuros           = (tFlush+tFlath+tRecortes+tCubas)*custoHoraEmpresa_op;
   const custoWaterJet        = (parseFloat(item.compWaterJet)||0)*(cfg.waterJet||20);
-  const custoHorasAdic       = tHorasAdicionais*custoHoraEmpresa;
+  const custoHorasAdic       = tHorasAdicionais*custoHoraEmpresa_op;
 
   // IGUAL MARMOPRICE: instalação e deslocamento = tempo * custoHoraEmpresa (SEM multiplicar por nPessoas)
   // nPessoas afeta apenas o tempo exibido, não multiplica o custo
-  const custoInstalacao   = tempoInstalEntrega * nPessoas * custoHoraEmpresa;
-  const custoDeslocamento = tempoDeslocamento  * nPessoas * custoHoraEmpresa;
+  const custoInstalacao   = tempoInstalEntrega * nPessoas * custoHoraEmpresa_op;
+  const custoDeslocamento = tempoDeslocamento  * nPessoas * custoHoraEmpresa_op;
   const custoCombustivel  = (distancia*2*idas/(cfg.consumoCombustivel||8))*(cfg.custoCombustivel||7);
 
   const custoAcessorios   = parseFloat(item.custoAcessorios)||0;
@@ -10854,7 +10854,8 @@ function calcularItem(item, pedra, cfg) {
 
   const margemFrac   = (parseFloat(item.margemOverride??pedra.margem??30))/100;
   // Insumos calculados sobre custos de produção (excluindo material) — igual MarmóPrice
-  const custoInsumos = cfg.custoInsumo > 0 ? custosProducao * ((cfg.custoInsumo||5) / 100) : 0;
+  // Insumos = % sobre custos sem material (produção + instalação) — igual MarmóPrice
+  const custoInsumos = cfg.custoInsumo > 0 ? (custosOp - custoMaterial) * ((cfg.custoInsumo||5) / 100) : 0;
   const custoTotal   = custosOp + custoInsumos;
   const precoFinal   = custoTotal / (1 - margemFrac);
   const lucroLiquido = precoFinal - custoTotal;
@@ -12061,7 +12062,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
         <tbody>
           ${[
             ['Custo Estrutura', calc.custoEstrutura, false, true],
-            ['Custo Hora Empresa', custoHoraEmpresa, false, true],
+            ['Custo Hora Empresa', custoHoraHomem, false, true],
             ['Custo Hora Homem', custoHoraHomem, false, true],
             [null],
             ['Custo de Matéria Prima com Quebra', calc.custoMaterial],

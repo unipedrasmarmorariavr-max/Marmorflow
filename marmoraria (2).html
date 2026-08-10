@@ -10589,7 +10589,13 @@ let orcamentoAtual = null;
 function getOrcamentos() {
   try {
     const s = localStorage.getItem('orcamentos_marmorflow');
-    return s ? JSON.parse(s) : [];
+    const orcs = s ? JSON.parse(s) : [];
+    // Filtra orçamentos órfãos — só mantém se o pedido ainda existe
+    if (orders && orders.length > 0) {
+      const idsValidos = new Set(orders.map(o => o.id));
+      return orcs.filter(o => !o.pedidoId || idsValidos.has(o.pedidoId));
+    }
+    return orcs;
   } catch(e) { return []; }
 }
 function salvarOrcamentos(orcs) {
@@ -11623,19 +11629,11 @@ function abrirTelaOrcamentoPedido(id) {
 
   let orcs = getOrcamentos();
 
-  // Busca o orçamento SEMPRE pelo pedidoId — chave estável e confiável
+  // Busca orçamento salvo para este pedido (se existir)
   let orc = orcs.find(o => o.pedidoId === id) || null;
 
-  // Se encontrou mas não tem dados significativos, começa do zero
-  if (orc) {
-    const temDados = orc.itens?.some(it =>
-      it.pedraId || (it.pecas?.some(p => p.medidas && p.medidas.trim())) || it.calc?.precoFinal > 0
-    );
-    if (!temDados) orc = null;
-  }
-
   if (!orc) {
-    // Sempre começa do zero — sem herdar nada
+    // Novo orçamento — começa do zero
     orc = {
       id: 'ORC-' + Date.now(),
       pedidoId: id,
@@ -11669,7 +11667,6 @@ function abrirTelaOrcamentoPedido(id) {
         apoioMovel: false, calc: null
       }]
     };
-    // Salva já para ter a chave registrada
     orcs.push(orc);
     salvarOrcamentos(orcs);
   }

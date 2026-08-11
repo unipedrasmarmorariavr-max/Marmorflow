@@ -12695,6 +12695,8 @@ function inicializarAutocompletes() {
         orcamentoAtual.itens[idx].custoM2Override=p.custoM2;
         orcamentoAtual.itens[idx].margemOverride=p.margem;
         orcamentoAtual.itens[idx].quebraOverride=p.quebra;
+        // Reset difOverride quando muda o material — usa dif do novo grupo
+        orcamentoAtual.itens[idx].difOverride=0;
         var ec=document.getElementById('mat-custo-'+idx);if(ec)ec.value=p.custoM2;
         var ed=document.getElementById('mat-dif-'+idx);var g=GRUPOS_DIFICULDADE.find(x=>x.id===p.grupoId);if(ed&&g)ed.value=g.dif.toFixed(1);
         var em=document.getElementById('mat-margem-'+idx);if(em)em.value=p.margem;

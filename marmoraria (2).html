@@ -12338,22 +12338,22 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
 
       <!-- MATERIAIS -->
       <div style="border-top:2px solid #e0e0e0;padding-top:16px;">
-        <div style="font-size:13px;font-weight:700;color:#333;margin-bottom:10px;">Materiais</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-size:13px;font-weight:700;color:#1e5f74;text-transform:uppercase;letter-spacing:.5px;">Materiais</div><button onclick="removerItemOrcamento('${idx}','${orderId}')" style="background:white;color:#B85A4A;border:1.5px solid #B85A4A;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">🗑 Remover Item</button></div>
         <!-- Header colunas -->
         <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;margin-bottom:4px;">
-          ${['Nome *','Custo do Material (m²) *','Dif. de Trabalho *','Margem Lucro (%) *','Comissão Vendedor (%)','Comissão Terceiros (%)','Comissão Interna (%)','Valor de Venda (R$)','LL/H'].map(h=>`<div style="font-size:10px;color:#666;font-weight:600;">${h}</div>`).join('')}
+          ${['Nome *','Custo do Material (m²) *','Dif. de Trabalho *','Margem Lucro (%) *','Comissão Vendedor (%)','Comissão Terceiros (%)','Comissão Interna (%)','Valor de Venda (R$)','LL/H'].map(h=>`<div style="font-size:10px;color:#1e5f74;font-weight:600;text-transform:uppercase;letter-spacing:.3px;">${h}</div>`).join('')}
         </div>
         <!-- Linha de dados -->
         <div class="materiais-linha" style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;align-items:center;">
           <!-- Autocomplete pedra -->
           <div>
             <div id="ac-mat-${idx}" data-pedraid="${item.pedraId||''}" data-idx="${idx}" data-orderid="${orderId}" class="ac-mat-container"></div>
-            ${pedra?`<div style="font-size:10px;color:#888;margin-top:2px;">${GRUPOS_DIFICULDADE.find(g=>g.id===pedra.grupoId)?.nome||''}</div>`:''}
+            ${pedra?`<div style="font-size:9px;color:#1e5f74;font-weight:600;margin-top:2px;">${GRUPOS_DIFICULDADE.find(g=>g.id===pedra.grupoId)?.nome||''}</div>`:''}
           </div>
           </div>
           <!-- Custo m² editável -->
           <input id="mat-custo-${idx}" class="form-input" type="number" step="0.01"
-            style="padding:6px 8px;font-size:13px;font-weight:700;color:#006382;border:2px solid #006382;"
+            style="padding:6px 8px;font-size:13px;font-weight:600;"
             value="${item.custoM2Override||pedra?.custoM2||0}"
             onblur="orcamentoAtual.itens[${idx}].custoM2Override=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')">
           <!-- Dif trabalho -->
@@ -12363,15 +12363,16 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
             oninput="orcamentoAtual.itens[${idx}].difOverride=parseFloat(this.value)||1;recalcularTelaOrc('${orderId}')">
           <!-- Margem -->
           <input id="mat-margem-${idx}" class="form-input" type="number" step="0.1"
-            style="padding:6px 8px;font-size:13px;background:#f5f5f5;" readonly
-            value="${item.margemOverride||pedra?.margem||30}">
+            style="padding:6px 8px;font-size:13px;"
+            value="${item.margemOverride||pedra?.margem||30}"
+            onblur="orcamentoAtual.itens[${idx}].margemOverride=parseFloat(this.value)||30;recalcularTelaOrc('${orderId}')">
           <!-- Comissões (sempre 0 por ora) -->
-          <input class="form-input" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
-          <input class="form-input" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
-          <input class="form-input" style="padding:6px 8px;font-size:13px;background:#f5f5f5;" value="0" readonly>
+          <input class="form-input" style="padding:6px 8px;font-size:13px;background:#f8f8f8;color:#aaa;" value="0" readonly>
+          <input class="form-input" style="padding:6px 8px;font-size:13px;background:#f8f8f8;color:#aaa;" value="0" readonly>
+          <input class="form-input" style="padding:6px 8px;font-size:13px;background:#f8f8f8;color:#aaa;" value="0" readonly>
           <!-- Valor de Venda (editável — digite e a margem recalcula sozinha) -->
           <input id="mat-valor-${idx}" class="form-input" type="text"
-            style="padding:6px 8px;font-size:13px;font-weight:700;color:#006382;border:2px solid #006382;"
+            style="padding:6px 8px;font-size:13px;font-weight:700;color:#1e5f74;"
             value="${calc?fmt(calc.precoFinal):'—'}"
             onfocus="this.select()"
             onblur="ajustarValorVendaManual(${idx},'${orderId}',this.value)"

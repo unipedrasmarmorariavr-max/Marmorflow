@@ -12343,14 +12343,10 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
         <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;margin-bottom:4px;">
           ${['Nome *','Custo do Material (m²) *','Dif. de Trabalho *','Margem Lucro (%) *','Comissão Vendedor (%)','Comissão Terceiros (%)','Comissão Interna (%)','Valor de Venda (R$)','LL/H'].map(h=>`<div style="font-size:10px;color:#1e5f74;font-weight:600;text-transform:uppercase;letter-spacing:.3px;">${h}</div>`).join('')}
         </div>
-        <!-- Linha de dados -->
+        <!-- Linha de dados — mesmo grid-template-columns do header -->
         <div class="materiais-linha" style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;align-items:center;">
           <!-- Autocomplete pedra -->
-          <div>
-            <div id="ac-mat-${idx}" data-pedraid="${item.pedraId||''}" data-idx="${idx}" data-orderid="${orderId}" class="ac-mat-container"></div>
-            ${pedra?`<div style="font-size:9px;color:#1e5f74;font-weight:600;margin-top:2px;">${GRUPOS_DIFICULDADE.find(g=>g.id===pedra.grupoId)?.nome||''}</div>`:''}
-          </div>
-          </div>
+          <div id="ac-mat-${idx}" data-pedraid="${item.pedraId||''}" data-idx="${idx}" data-orderid="${orderId}" class="ac-mat-container"></div>
           <!-- Custo m² editável -->
           <input id="mat-custo-${idx}" class="form-input" type="number" step="0.01"
             style="padding:6px 8px;font-size:13px;font-weight:600;"

@@ -239,8 +239,8 @@
   #fin-cards-resumo { grid-template-columns: repeat(5,1fr); }
   .item-orcamento-grid { grid-template-columns: 1.5fr 1.5fr 1fr 2fr; }
   .peca-row { grid-template-columns: 2fr 1.2fr 0.6fr auto; }
-  .acabamentos-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; }
-  .custos-adicionais-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; }
+  .acabamentos-grid { display:grid; grid-template-columns: repeat(4,1fr); gap:8px; }
+  .custos-adicionais-grid { display:grid; grid-template-columns: repeat(4,1fr); gap:8px; }
 
   /* Botão mover escondido no desktop */
   .btn-mover-mobile { display: none; }
@@ -12296,7 +12296,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
             currentVal = (item.nPessoasInstal !== null && item.nPessoasInstal !== undefined && item.nPessoasInstal !== '') ? parseInt(item.nPessoasInstal) : defaultPessoas;
           }
           return `<div>
-            <label style="font-size:10px;color:#666;display:block;margin-bottom:3px;">${label}${autoLabel}</label>
+            <label style="font-size:10px;color:#1e5f74;font-weight:600;display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.3px;">${label}${autoLabel}</label>
             <input id="${isAutoInstal?'campo-tempo-instal-'+idx:isAutoPessoas?'campo-pessoas-'+idx:''}"
               class="form-input orc-tab-input" type="${type}" step="0.1"
               style="padding:6px 8px;font-size:13px;${autoStyle}" value="${currentVal}"

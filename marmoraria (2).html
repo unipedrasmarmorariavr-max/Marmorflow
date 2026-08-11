@@ -343,6 +343,18 @@
        ORÇAMENTO — RESPONSIVO COMPLETO
     ══════════════════════════════════════════════════════════════════ */
     #panel-orcamento-pedido, #orcamento-pedido-content { overflow-x: hidden !important; max-width: 100vw !important; }
+  /* Orçamento — visual refinado */
+  #orcamento-pedido-content label, #orcamento-pedido-content .form-label { color: #1e5f74 !important; }
+  #orcamento-pedido-content .form-input, #orcamento-pedido-content .form-select {
+    border-radius: 7px !important;
+    border: 1.5px solid #d0dde3 !important;
+    background: white !important;
+    padding: 8px 10px !important;
+  }
+  #orcamento-pedido-content .form-input:focus, #orcamento-pedido-content .form-select:focus {
+    border-color: #1e5f74 !important;
+    box-shadow: 0 0 0 3px rgba(30,95,116,0.1) !important;
+  }
     #panel-orcamento-pedido { padding-bottom: 140px !important; }
 
     /* Header fixo */
@@ -2091,7 +2103,7 @@ async function abrirVerProjeto(id) {
       
       ${podeCroqui ? `
       <div style="border:2px dashed #006382;border-radius:8px;padding:10px;background:#f0f8ff;">
-        <div style="font-size:12px;color:#006382;font-weight:600;margin-bottom:8px;">📸 Adicionar fotos ao croqui</div>
+        <div style="font-size:12px;color:#1e5f74;font-weight:600;margin-bottom:8px;">📸 Adicionar fotos ao croqui</div>
         <div style="display:flex;gap:8px;margin-bottom:8px;">
           <button type="button" onclick="document.getElementById('novo-croqui-camera').click()"
             style="flex:1;background:#006382;color:white;border:none;padding:10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">
@@ -4075,7 +4087,7 @@ function renderMateriais() {
                   <div style="font-weight:700;color:#333;min-width:80px;">${ch.codigo||'Sem código'}</div>
                   <div style="font-size:13px;color:#555;">${ch.largura.toFixed(2).replace('.',',')} × ${ch.comprimento.toFixed(2).replace('.',',')} m</div>
                   <div style="font-size:12px;color:#888;">${(ch.largura*ch.comprimento).toFixed(2).replace('.',',')} m²</div>
-                  ${pecasNessa > 0 ? `<div style="font-size:12px;color:#006382;font-weight:600;">${pecasNessa} peça(s) encaixada(s)</div>` : ''}
+                  ${pecasNessa > 0 ? `<div style="font-size:12px;color:#1e5f74;font-weight:600;">${pecasNessa} peça(s) encaixada(s)</div>` : ''}
                   <div style="flex:1;min-width:100px;">
                     <div style="height:6px;background:#e0e0e0;border-radius:3px;overflow:hidden;">
                       <div style="height:100%;width:${Math.min(pctUsado,100)}%;background:${pctUsado>80?'#dc3545':pctUsado>50?'#F59E0B':'#2E7D32'};border-radius:3px;"></div>
@@ -4511,7 +4523,7 @@ function abrirModalContaPagar(id) {
               oninput="previewParcelasCP()">
           </div>
         </div>
-        <div id="cp-parcelas-preview" style="font-size:13px;color:#006382;font-weight:600;padding:8px;background:white;border-radius:6px;min-height:24px;"></div>
+        <div id="cp-parcelas-preview" style="font-size:13px;color:#1e5f74;font-weight:600;padding:8px;background:white;border-radius:6px;min-height:24px;"></div>
         <div style="font-size:11px;color:#888;margin-top:6px;">💡 O sistema vai gerar as parcelas automaticamente mês a mês a partir da data de vencimento acima</div>
       </div>
 
@@ -8119,7 +8131,7 @@ function montarParcelas(saldo) {
         <div><label class="form-label">DATA 1ª PARCELA <span style="color:#888;font-weight:400;">(opcional)</span></label>
         <input class="form-input" type="date" id="cond-data-entrada" value="${fmtData(hoje)}"></div>
       </div>
-      <div id="cond-preview-sp" style="margin-top:8px;padding:8px 10px;background:#f0f8ff;border-radius:8px;font-size:13px;color:#006382;font-weight:600;"></div>
+      <div id="cond-preview-sp" style="margin-top:8px;padding:8px 10px;background:#f0f8ff;border-radius:8px;font-size:13px;color:#1e5f74;font-weight:600;"></div>
       <button onclick="gerarLinhasSoParcelado(window._condSaldo)"
         style="background:#006382;color:white;border:none;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;margin-top:10px;">
         ✅ Gerar parcelas
@@ -8180,7 +8192,7 @@ function montarParcelas(saldo) {
         <div><label class="form-label">DATA 1º BOLETO <span style="color:#888;font-weight:400;">(opcional)</span></label>
         <input class="form-input" type="date" id="cond-data-entrada" value="${fmtData(hoje)}"></div>
       </div>
-      <div id="cond-preview-sp" style="margin-top:8px;padding:8px 10px;background:#f0f8ff;border-radius:8px;font-size:13px;color:#006382;font-weight:600;"></div>
+      <div id="cond-preview-sp" style="margin-top:8px;padding:8px 10px;background:#f0f8ff;border-radius:8px;font-size:13px;color:#1e5f74;font-weight:600;"></div>
       <button onclick="gerarLinhasSoParcelado(window._condSaldo)"
         style="background:#006382;color:white;border:none;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;margin-top:10px;">
         ✅ Gerar boletos
@@ -8772,7 +8784,7 @@ function cardMedicao(m, isHoje, passada) {
     </div>
     <div style="font-size:18px;font-weight:800;color:var(--stone);margin-bottom:6px;">${m.Cliente||'—'}</div>
     <div style="font-size:14px;color:#555;margin-bottom:4px;">📍 ${enderecoCompleto||'Endereço não informado'}${m.Bairro?' · '+m.Bairro:''}</div>
-    ${m.Telefone?`<a href="tel:${m.Telefone}" style="display:inline-flex;align-items:center;gap:6px;font-size:14px;color:#006382;font-weight:600;margin-bottom:4px;text-decoration:none;">📞 ${m.Telefone}</a>`:''}
+    ${m.Telefone?`<a href="tel:${m.Telefone}" style="display:inline-flex;align-items:center;gap:6px;font-size:14px;color:#1e5f74;font-weight:600;margin-bottom:4px;text-decoration:none;">📞 ${m.Telefone}</a>`:''}
     ${m.Obs?`<div style="font-size:13px;color:#888;margin-bottom:12px;">💬 ${m.Obs}</div>`:'<div style="margin-bottom:12px;"></div>'}
     <div style="display:grid;grid-template-columns:${m.Telefone?'1fr 1fr':'1fr'};gap:8px;margin-bottom:10px;">
       <a href="${mapsUrl}" target="_blank"
@@ -9632,7 +9644,7 @@ function renderAgendaInstalacao() {
           + '<div style="font-size:13px;font-weight:700;color:var(--stone);">'+(o.cliente||o.descricao||'—')+(o.id?' · '+o.id:'')+'</div>'
           + '<div style="font-size:11px;color:#888;">'+(o.peca||o.tipo_servico||'')+(o.horario?' · '+o.horario:'')+'</div>'
           + (o.endereco?'<div style="font-size:11px;color:#888;">📍 '+o.endereco+'</div>':'')
-          + (o.responsavel?'<div style="font-size:12px;color:#006382;font-weight:600;margin-top:4px;">👷 '+o.responsavel+'</div>':'')
+          + (o.responsavel?'<div style="font-size:12px;color:#1e5f74;font-weight:600;margin-top:4px;">👷 '+o.responsavel+'</div>':'')
           + '</div>'
           + '<div style="text-align:right;flex-shrink:0;">'
           + '<div style="font-size:14px;font-weight:700;color:'+corDia+';">'+dias[dd.getDay()]+', '+dd.getDate()+'/'+(dd.getMonth()+1)+'</div>'
@@ -12210,8 +12222,8 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
               oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].qtd=this.value;orcamentoAtual.itens[${idx}].m2Override=0;recalcularTelaOrc('${orderId}')"
               onkeydown="pKD(event,this,${idx},'${orderId}')">
             <div style="display:flex;gap:4px;">
-              <button onclick="adicionarPecaItem(${idx},'${orderId}')" style="background:#006382;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:14px;" title="+">+</button>
-              <button onclick="removerPecaItem(this,${idx},'${orderId}')" style="background:#dc3545;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;" title="Apagar">🗑</button>
+              <button onclick="adicionarPecaItem(${idx},'${orderId}')" style="background:white;color:#1e5f74;border:1.5px solid #1e5f74;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700;" title="+">+</button>
+              <button onclick="removerPecaItem(this,${idx},'${orderId}')" style="background:white;color:#B85A4A;border:1.5px solid #B85A4A;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:13px;" title="Apagar">✕</button>
               <button onclick="duplicarPecaItem(${idx},${pi},'${orderId}')" style="background:#6c757d;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;" title="Duplicar">⧉</button>
             </div>
           </div>`).join('')}
@@ -12263,7 +12275,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
           const isAutoPessoas = field === 'nPessoasInstal';
           const isHoras = field === 'horasAdicionais';
           const type = (isAutoInstal || isHoras) ? 'text' : 'number';
-          const autoStyle = (isAutoInstal || isAutoPessoas) ? 'background:#e8f4f7;color:#006382;font-weight:600;' : '';
+          const autoStyle = (isAutoInstal || isAutoPessoas) ? 'background:#e8f4f7;color:#1e5f74;font-weight:600;' : '';
           const autoLabel = (isAutoInstal || isAutoPessoas) ? ' <span style="font-size:9px;color:#006382;">✏️ auto</span>' : '';
           let currentVal = item[field] || 0;
           if (isAutoInstal) {
@@ -12297,8 +12309,8 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
       </div>
 
       <!-- CUSTOS ADICIONAIS -->
-      <div style="margin-bottom:16px;padding:12px;background:#fffbf0;border-radius:6px;border:1px solid #f0e0a0;">
-        <div style="font-size:11px;font-weight:700;color:#8B6914;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">💰 Custos Adicionais (R$)</div>
+      <div style="margin-bottom:16px;padding:12px;background:white;border-radius:6px;border:1px solid var(--cream-dark);">
+        <div style="font-size:11px;font-weight:700;color:#1e5f74;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">💰 Custos Adicionais (R$)</div>
         <div class="custos-adicionais-grid" style="display:grid;gap:8px;">
           ${[
             ['Custos de Acessórios (R$)', 'custoAcessorios'],

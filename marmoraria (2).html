@@ -10866,10 +10866,13 @@ function calcularItem(item, pedra, cfg) {
   const custosOp = custoMaterial + custosProducao;
 
   const margemFrac   = (parseFloat(item.margemOverride??pedra.margem??30))/100;
+  // Comissões do item (% sobre o preço final)
+  const pctComissoes = ((parseFloat(item.comissaoVendedor)||0) + (parseFloat(item.comissaoTerceiros)||0) + (parseFloat(item.comissaoInterna)||0)) / 100;
   // Insumos sobre base de produção direta apenas
   const custoInsumos = cfg.custoInsumo > 0 ? custosProducaoBase * ((cfg.custoInsumo||5) / 100) : 0;
   const custoTotal   = custosOp + custoInsumos;
-  const precoFinal   = custoTotal / (1 - margemFrac);
+  // Preço final considerando margem + comissões
+  const precoFinal   = custoTotal / (1 - margemFrac - pctComissoes);
   const lucroLiquido = precoFinal - custoTotal;
 
   return {
@@ -12369,9 +12372,15 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
               value="${item.margemOverride||pedra?.margem||30}"
               onblur="orcamentoAtual.itens[${idx}].margemOverride=parseFloat(this.value)||30;recalcularTelaOrc('${orderId}')">
             <!-- Comissões -->
-            <input class="form-input" style="padding:5px 6px;font-size:12px;background:#f8f8f8;color:#aaa;min-width:0;" value="0" readonly>
-            <input class="form-input" style="padding:5px 6px;font-size:12px;background:#f8f8f8;color:#aaa;min-width:0;" value="0" readonly>
-            <input class="form-input" style="padding:5px 6px;font-size:12px;background:#f8f8f8;color:#aaa;min-width:0;" value="0" readonly>
+            <input class="form-input" style="padding:5px 6px;font-size:12px;min-width:0;" type="number" step="0.1" min="0"
+              value="${item.comissaoVendedor||0}"
+              onblur="orcamentoAtual.itens[${idx}].comissaoVendedor=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')">
+            <input class="form-input" style="padding:5px 6px;font-size:12px;min-width:0;" type="number" step="0.1" min="0"
+              value="${item.comissaoTerceiros||0}"
+              onblur="orcamentoAtual.itens[${idx}].comissaoTerceiros=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')">
+            <input class="form-input" style="padding:5px 6px;font-size:12px;min-width:0;" type="number" step="0.1" min="0"
+              value="${item.comissaoInterna||0}"
+              onblur="orcamentoAtual.itens[${idx}].comissaoInterna=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')">
             <!-- Valor de Venda -->
             <input id="mat-valor-${idx}" class="form-input" type="text"
               style="padding:5px 6px;font-size:12px;font-weight:700;color:#1e5f74;min-width:0;"

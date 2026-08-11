@@ -12182,27 +12182,27 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
   return `
   <div style="background:white;border-radius:8px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
     <!-- Cabeçalho do item -->
-    <div style="background:#f8f8f8;border-bottom:1px solid #e0e0e0;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <div style="font-size:13px;font-weight:700;color:#333;min-width:60px;">ITEM ${idx+1}</div>
-      <div class="item-orcamento-grid" style="flex:1;display:grid;gap:8px;align-items:center;">
-        <div><label style="font-size:10px;color:#666;">Nome do Item *</label>
-          <input class="form-input" style="padding:6px 10px;" value="${item.nome||''}" placeholder="bancada, pia..."
+    <div style="background:#f8f8f8;border-bottom:1px solid #e0e0e0;padding:12px 16px;display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+      <div style="font-size:13px;font-weight:700;color:#1e5f74;min-width:60px;padding-top:18px;">ITEM ${idx+1}</div>
+      <div class="item-orcamento-grid" style="flex:1;display:grid;gap:8px;align-items:end;">
+        <div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:#1e5f74;font-weight:600;text-transform:uppercase;letter-spacing:.3px;">Nome do Item *</label>
+          <input class="form-input" style="padding:7px 10px;" value="${item.nome||''}" placeholder="bancada, pia..."
             oninput="orcamentoAtual.itens[${idx}].nome=this.value"></div>
-        <div><label style="font-size:10px;color:#666;">Ambiente *</label>
-          <input class="form-input" style="padding:6px 10px;" value="${item.ambiente||''}" placeholder="cozinha, banheiro..."
+        <div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:#1e5f74;font-weight:600;text-transform:uppercase;letter-spacing:.3px;">Ambiente *</label>
+          <input class="form-input" style="padding:7px 10px;" value="${item.ambiente||''}" placeholder="cozinha, banheiro..."
             oninput="orcamentoAtual.itens[${idx}].ambiente=this.value"></div>
-        <div><label style="font-size:10px;color:#666;">Tipo de entrega</label>
-          <select class="form-select" style="padding:6px 10px;"
+        <div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:#1e5f74;font-weight:600;text-transform:uppercase;letter-spacing:.3px;">Tipo de entrega</label>
+          <select class="form-select" style="padding:7px 10px;"
             onchange="orcamentoAtual.itens[${idx}].tipoEntrega=this.value;orcamentoAtual.itens[${idx}].nPessoasInstal=null;recalcularTelaOrc('${orderId}')">
             <option value="instalacao" ${item.tipoEntrega==='instalacao'?'selected':''}>Com instalação</option>
             <option value="entrega" ${item.tipoEntrega==='entrega'?'selected':''}>Somente entrega</option>
             <option value="retirada" ${item.tipoEntrega==='retirada'?'selected':''}>Retirada</option>
           </select></div>
-        <div><label style="font-size:10px;color:#666;">Observações</label>
-          <input class="form-input" style="padding:6px 10px;" value="${item.obsItem||''}"
+        <div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:#1e5f74;font-weight:600;text-transform:uppercase;letter-spacing:.3px;">Observações</label>
+          <input class="form-input" style="padding:7px 10px;" value="${item.obsItem||''}"
             oninput="orcamentoAtual.itens[${idx}].obsItem=this.value"></div>
       </div>
-      ${calc ? `<div style="background:#006382;color:white;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:700;">${fmt(calc.precoFinal)}</div>` : ''}
+      ${calc ? `<div style="background:#1e5f74;color:white;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:700;margin-top:16px;">${fmt(calc.precoFinal)}</div>` : ''}
       ${idx>0?`<button onclick="removerItemTelaOrc(${idx},'${orderId}')" style="background:#dc3545;border:none;color:white;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;">🗑 ITEM</button>`:''}
     </div>
 

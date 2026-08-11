@@ -355,6 +355,8 @@
     border-color: #1e5f74 !important;
     box-shadow: 0 0 0 3px rgba(30,95,116,0.1) !important;
   }
+    /* Peças — volta para 1 coluna no mobile */
+    [id^="pecas-lista-"] { grid-template-columns: 1fr !important; }
     #panel-orcamento-pedido { padding-bottom: 140px !important; }
 
     /* Header fixo */
@@ -12208,23 +12210,25 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
 
       <!-- PEÇA A PEÇA -->
       <div style="margin-bottom:16px;">
-        <div style="font-size:12px;font-weight:700;color:#333;margin-bottom:8px;">Peça a Peça ✏️ «</div>
-        <div id="pecas-lista-${idx}">
+        <div style="font-size:12px;font-weight:700;color:#1e5f74;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">✏️ Peça a Peça</div>
+        <div id="pecas-lista-${idx}" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           ${(item.pecas||[{nome:'',medidas:'',qtd:'1'}]).map((peca,pi) => `
-          <div class="peca-row" style="display:grid;gap:6px;margin-bottom:6px;align-items:center;">
-            <input class="form-input" style="padding:6px 10px;" placeholder="Nome da peça" value="${peca.nome||''}"
+          <div class="peca-row" style="display:grid;gap:4px;padding:10px;background:#f8fafc;border:1.5px solid #d0dde3;border-radius:8px;align-items:center;">
+            <input class="form-input" style="padding:6px 10px;font-weight:600;" placeholder="Nome da peça" value="${peca.nome||''}"
               oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].nome=this.value"
               onkeydown="pKD(event,this,${idx},'${orderId}')">
             <input class="form-input" style="padding:6px 10px;font-family:monospace;" placeholder="1,20x0,60" value="${peca.medidas||''}"
               oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].medidas=this.value;orcamentoAtual.itens[${idx}].m2Override=0;recalcularTelaOrc('${orderId}')"
               onkeydown="pKD(event,this,${idx},'${orderId}')">
-            <input class="form-input" style="padding:6px 10px;text-align:center;" type="number" min="1" value="${peca.qtd||1}"
-              oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].qtd=this.value;orcamentoAtual.itens[${idx}].m2Override=0;recalcularTelaOrc('${orderId}')"
-              onkeydown="pKD(event,this,${idx},'${orderId}')">
-            <div style="display:flex;gap:4px;">
-              <button onclick="adicionarPecaItem(${idx},'${orderId}')" style="background:white;color:#1e5f74;border:1.5px solid #1e5f74;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700;" title="+">+</button>
-              <button onclick="removerPecaItem(this,${idx},'${orderId}')" style="background:white;color:#B85A4A;border:1.5px solid #B85A4A;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:13px;" title="Apagar">✕</button>
-              <button onclick="duplicarPecaItem(${idx},${pi},'${orderId}')" style="background:#6c757d;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;" title="Duplicar">⧉</button>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <input class="form-input" style="padding:6px 10px;text-align:center;width:70px;" type="number" min="1" value="${peca.qtd||1}"
+                oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].qtd=this.value;orcamentoAtual.itens[${idx}].m2Override=0;recalcularTelaOrc('${orderId}')"
+                onkeydown="pKD(event,this,${idx},'${orderId}')">
+              <div style="display:flex;gap:4px;margin-left:auto;">
+                <button onclick="adicionarPecaItem(${idx},'${orderId}')" style="background:white;color:#1e5f74;border:1.5px solid #1e5f74;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700;" title="+">+</button>
+                <button onclick="removerPecaItem(this,${idx},'${orderId}')" style="background:white;color:#B85A4A;border:1.5px solid #B85A4A;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:13px;" title="Remover">✕</button>
+                <button onclick="duplicarPecaItem(${idx},${pi},'${orderId}')" style="background:white;color:#555;border:1.5px solid #ccc;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:13px;" title="Duplicar">⧉</button>
+              </div>
             </div>
           </div>`).join('')}
         </div>
@@ -12781,7 +12785,7 @@ function adicionarPecaItem(idx, orderId) {
   if (!lista) return;
 
   var row = document.createElement('div');
-  row.className = 'peca-row'; row.style.cssText = 'display:grid;gap:6px;margin-bottom:6px;align-items:center;';
+  row.className = 'peca-row'; row.style.cssText = 'display:grid;gap:4px;padding:10px;background:#f8fafc;border:1.5px solid #d0dde3;border-radius:8px;align-items:center;';
 
   function inp(style, type, placeholder, val) {
     var el = document.createElement('input');
@@ -12859,7 +12863,7 @@ function duplicarPecaItem(idx, pi, orderId) {
   if (!lista) { recalcularTelaOrc(orderId); return; }
 
   var row = document.createElement('div');
-  row.className = 'peca-row'; row.style.cssText = 'display:grid;gap:6px;margin-bottom:6px;align-items:center;';
+  row.className = 'peca-row'; row.style.cssText = 'display:grid;gap:4px;padding:10px;background:#f8fafc;border:1.5px solid #d0dde3;border-radius:8px;align-items:center;';
 
   function inp(style, type, placeholder, val) {
     var el = document.createElement('input');

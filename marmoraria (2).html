@@ -12337,51 +12337,56 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
       </div>
 
       <!-- MATERIAIS -->
-      <div style="border-top:2px solid #e0e0e0;padding-top:16px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-size:13px;font-weight:700;color:#1e5f74;text-transform:uppercase;letter-spacing:.5px;">Materiais</div><button onclick="removerItemOrcamento('${idx}','${orderId}')" style="background:white;color:#B85A4A;border:1.5px solid #B85A4A;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">🗑 Remover Item</button></div>
-        <!-- Header colunas -->
-        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;margin-bottom:4px;">
-          ${['Nome *','Custo do Material (m²) *','Dif. de Trabalho *','Margem Lucro (%) *','Comissão Vendedor (%)','Comissão Terceiros (%)','Comissão Interna (%)','Valor de Venda (R$)','LL/H'].map(h=>`<div style="font-size:10px;color:#1e5f74;font-weight:600;text-transform:uppercase;letter-spacing:.3px;">${h}</div>`).join('')}
+      <div style="border-top:2px solid #e0e0e0;padding-top:16px;overflow-x:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-size:13px;font-weight:700;color:#1e5f74;text-transform:uppercase;letter-spacing:.5px;">Materiais</div>
+          <button onclick="removerItemOrcamento('${idx}','${orderId}')" style="background:white;color:#B85A4A;border:1.5px solid #B85A4A;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">🗑 Remover Item</button>
         </div>
-        <!-- Linha de dados — mesmo grid-template-columns do header -->
-        <div class="materiais-linha" style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;align-items:center;">
-          <!-- Nome do material (autocomplete) -->
-          <div style="min-width:0;">
-            <div id="ac-mat-${idx}" data-pedraid="${item.pedraId||''}" data-idx="${idx}" data-orderid="${orderId}" class="ac-mat-container" style="width:100%;"></div>
+        <div style="min-width:700px;">
+          <!-- Header colunas — mesmo grid que a linha de dados -->
+          <div style="display:grid;grid-template-columns:2.5fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr 0.8fr;gap:4px;margin-bottom:3px;padding:0 2px;">
+            ${['Nome','Custo (m²)','Dif.','Margem %','Com. Vend.','Com. Terc.','Com. Int.','Valor Venda','LL/H'].map(h=>`<div style="font-size:9px;color:#1e5f74;font-weight:700;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${h}</div>`).join('')}
           </div>
-          <!-- Custo m² editável -->
-          <input id="mat-custo-${idx}" class="form-input" type="number" step="0.01"
-            style="padding:6px 8px;font-size:13px;font-weight:600;"
-            value="${item.custoM2Override||pedra?.custoM2||0}"
-            onblur="orcamentoAtual.itens[${idx}].custoM2Override=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')">
-          <!-- Dif trabalho -->
-          <input id="mat-dif-${idx}" class="form-input" type="number" step="0.1" min="0.1" max="5"
-            style="padding:6px 8px;font-size:13px;"
-            value="${(item.difOverride || GRUPOS_DIFICULDADE.find(g=>g.id===pedra?.grupoId)?.dif||1).toFixed(1)}"
-            oninput="orcamentoAtual.itens[${idx}].difOverride=parseFloat(this.value)||1;recalcularTelaOrc('${orderId}')">
-          <!-- Margem -->
-          <input id="mat-margem-${idx}" class="form-input" type="number" step="0.1"
-            style="padding:6px 8px;font-size:13px;"
-            value="${item.margemOverride||pedra?.margem||30}"
-            onblur="orcamentoAtual.itens[${idx}].margemOverride=parseFloat(this.value)||30;recalcularTelaOrc('${orderId}')">
-          <!-- Comissões (sempre 0 por ora) -->
-          <input class="form-input" style="padding:6px 8px;font-size:13px;background:#f8f8f8;color:#aaa;" value="0" readonly>
-          <input class="form-input" style="padding:6px 8px;font-size:13px;background:#f8f8f8;color:#aaa;" value="0" readonly>
-          <input class="form-input" style="padding:6px 8px;font-size:13px;background:#f8f8f8;color:#aaa;" value="0" readonly>
-          <!-- Valor de Venda (editável — digite e a margem recalcula sozinha) -->
-          <input id="mat-valor-${idx}" class="form-input" type="text"
-            style="padding:6px 8px;font-size:13px;font-weight:700;color:#1e5f74;"
-            value="${calc?fmt(calc.precoFinal):'—'}"
-            onfocus="this.select()"
-            onblur="ajustarValorVendaManual(${idx},'${orderId}',this.value)"
-            title="Digite um valor de venda negociado — a margem de lucro é recalculada automaticamente">
-          <!-- LL/H -->
-          <input id="mat-llh-${idx}" class="form-input"
-            style="padding:6px 8px;font-size:13px;background:#f5f5f5;" readonly
-            value="${calc&&calc.tempoProdInterno>0?fmt(calc.lucroLiquido/calc.tempoProdInterno):'—'}">
+          <!-- Linha de dados -->
+          <div class="materiais-linha" style="display:grid;grid-template-columns:2.5fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr 0.8fr;gap:4px;align-items:center;">
+            <!-- Nome do material (autocomplete) -->
+            <div style="min-width:0;overflow:hidden;">
+              <div id="ac-mat-${idx}" data-pedraid="${item.pedraId||''}" data-idx="${idx}" data-orderid="${orderId}" class="ac-mat-container" style="width:100%;"></div>
+            </div>
+            <!-- Custo m² -->
+            <input id="mat-custo-${idx}" class="form-input" type="number" step="0.01"
+              style="padding:5px 6px;font-size:12px;font-weight:600;min-width:0;"
+              value="${item.custoM2Override||pedra?.custoM2||0}"
+              onblur="orcamentoAtual.itens[${idx}].custoM2Override=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')">
+            <!-- Dif trabalho -->
+            <input id="mat-dif-${idx}" class="form-input" type="number" step="0.1" min="0.1" max="5"
+              style="padding:5px 6px;font-size:12px;min-width:0;"
+              value="${(item.difOverride || GRUPOS_DIFICULDADE.find(g=>g.id===pedra?.grupoId)?.dif||1).toFixed(1)}"
+              oninput="orcamentoAtual.itens[${idx}].difOverride=parseFloat(this.value)||1;recalcularTelaOrc('${orderId}')">
+            <!-- Margem -->
+            <input id="mat-margem-${idx}" class="form-input" type="number" step="0.1"
+              style="padding:5px 6px;font-size:12px;min-width:0;"
+              value="${item.margemOverride||pedra?.margem||30}"
+              onblur="orcamentoAtual.itens[${idx}].margemOverride=parseFloat(this.value)||30;recalcularTelaOrc('${orderId}')">
+            <!-- Comissões -->
+            <input class="form-input" style="padding:5px 6px;font-size:12px;background:#f8f8f8;color:#aaa;min-width:0;" value="0" readonly>
+            <input class="form-input" style="padding:5px 6px;font-size:12px;background:#f8f8f8;color:#aaa;min-width:0;" value="0" readonly>
+            <input class="form-input" style="padding:5px 6px;font-size:12px;background:#f8f8f8;color:#aaa;min-width:0;" value="0" readonly>
+            <!-- Valor de Venda -->
+            <input id="mat-valor-${idx}" class="form-input" type="text"
+              style="padding:5px 6px;font-size:12px;font-weight:700;color:#1e5f74;min-width:0;"
+              value="${calc?fmt(calc.precoFinal):'—'}"
+              onfocus="this.select()"
+              onblur="ajustarValorVendaManual(${idx},'${orderId}',this.value)"
+              title="Digite um valor negociado — a margem recalcula automaticamente">
+            <!-- LL/H -->
+            <input id="mat-llh-${idx}" class="form-input"
+              style="padding:5px 6px;font-size:12px;background:#f5f5f5;min-width:0;" readonly
+              value="${calc&&calc.tempoProdInterno>0?fmt(calc.lucroLiquido/calc.tempoProdInterno):'—'}">
+          </div>
         </div>
 
-        <!-- CUSTOS E TEMPOS (acordeão, idêntico ao Marmoprice) -->
+        <!-- CUSTOS E TEMPOS (acordeão) -->
         <details style="margin-top:12px;">
           <summary style="cursor:pointer;padding:10px 14px;background:#f0f0f0;border-radius:6px;font-size:13px;font-weight:600;color:#333;list-style:none;display:flex;justify-content:space-between;align-items:center;">
             <span>Custos e tempos</span><span id="ct-chevron-${idx}">${calc?'▲':'▼'}</span>

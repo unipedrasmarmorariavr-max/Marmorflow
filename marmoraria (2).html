@@ -10803,7 +10803,10 @@ function calcularItem(item, pedra, cfg) {
   const minKm = cfg.transito==='lento'?(cfg.minKmLento||3):cfg.transito==='intermediario'?(cfg.minKmIntermediario||2):(cfg.minKmRapido||1);
   // Padrão de pessoas: cfg.pessoasInstalacao para instalação, cfg.pessoasEntrega para só entrega
   const temInstal = item.tipoEntrega === 'instalacao' || item.tipoEntrega === 'entrega_instalacao' || item.tipoEntrega === 'so_instalacao';
-  const nPessoasDefault = temInstal ? (cfg.pessoasInstalacao||2) : (cfg.pessoasEntrega||1);
+  let nPessoasDefault;
+  if (item.tipoEntrega === 'retirada') nPessoasDefault = 0;
+  else if (item.tipoEntrega === 'entrega') nPessoasDefault = cfg.pessoasEntrega||1;
+  else nPessoasDefault = cfg.pessoasInstalacao||2;
   // null/undefined/'' = automático; valor numérico = manual
   const nPessoas = (item.nPessoasInstal !== null && item.nPessoasInstal !== undefined && item.nPessoasInstal !== '') ? parseInt(item.nPessoasInstal) : nPessoasDefault;
 
@@ -11474,7 +11477,7 @@ function renderItemOrcamento(item, idx, pedras, cfg) {
       </div>
       `}
       <div class="form-group"><label class="form-label">Tipo de Entrega</label>
-        <select class="form-select" onchange="orcamentoAtual.itens[${idx}].tipoEntrega=this.value;recalcularOrcamento()">
+        <select class="form-select" onchange="orcamentoAtual.itens[${idx}].tipoEntrega=this.value;orcamentoAtual.itens[${idx}].nPessoasInstal=null;recalcularOrcamento()">
           <option value="instalacao" ${item.tipoEntrega==='instalacao'?'selected':''}>Com Instalação</option>
           <option value="entrega" ${item.tipoEntrega==='entrega'?'selected':''}>Só Entrega</option>
           <option value="retirada" ${item.tipoEntrega==='retirada'?'selected':''}>Retirada</option>
@@ -12301,8 +12304,11 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
             } else { currentVal = '00:00'; }
           }
           if (isAutoPessoas) {
-            const temInstalItem = item.tipoEntrega === 'instalacao' || item.tipoEntrega === 'entrega_instalacao' || item.tipoEntrega === 'so_instalacao';
-            const defaultPessoas = temInstalItem ? (cfg.pessoasInstalacao||2) : (cfg.pessoasEntrega||1);
+            const tipoEnt = item.tipoEntrega || 'instalacao';
+            let defaultPessoas;
+            if (tipoEnt === 'retirada') defaultPessoas = 0;
+            else if (tipoEnt === 'entrega') defaultPessoas = cfg.pessoasEntrega||1;
+            else defaultPessoas = cfg.pessoasInstalacao||2; // instalacao
             currentVal = (item.nPessoasInstal !== null && item.nPessoasInstal !== undefined && item.nPessoasInstal !== '') ? parseInt(item.nPessoasInstal) : defaultPessoas;
           }
           return `<div>

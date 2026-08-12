@@ -12855,7 +12855,12 @@ function adicionarPecaItem(idx, orderId) {
 function removerLinhaItem(btn, idx, orderId) {
   var lista = document.getElementById('pecas-lista-' + idx);
   if (!lista || lista.children.length <= 1) return;
-  var row = btn.parentNode.parentNode; // btn → div-btns → div-row
+  // Sobe na árvore DOM até encontrar filho direto do pecas-lista
+  var row = btn;
+  while (row && row.parentNode !== lista) {
+    row = row.parentNode;
+  }
+  if (!row) return;
   var rows = Array.from(lista.children);
   var pi = rows.indexOf(row);
   if (pi < 0) return;

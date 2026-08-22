@@ -1844,12 +1844,12 @@ function renderCRM() {
           + '</div>'
           + (prox ? '<div style="margin-top:8px;padding:6px 10px;background:'+prox.bg+';border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;">'
             + '<span style="font-size:12px;color:'+prox.cor+';font-weight:700;">'+prox.emoji+' '+prox.label+' sugerido</span>'
-            + '<button onclick="registrarFollowup(\"'+o.id+'\",\"'+prox.tipo+'\")" style="background:'+prox.cor+';color:white;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;">✓ Registrar</button>'
+            + '<button onclick="registrarFollowup(\''+o.id+'\',\''+prox.tipo+'\')" style="background:'+prox.cor+';color:white;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;">✓ Registrar</button>'
             + '</div>' : '')
           + '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">'
           + (tel ? '<a href="https://wa.me/55'+tel+'" target="_blank" style="background:#25D366;color:white;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">📱 WhatsApp</a>' : '')
-          + '<button onclick="openDetail(\"'+o.id+'\")" style="background:var(--cream-dark);border:none;color:var(--stone);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">👁 Ver</button>'
-          + '<button onclick="abrirRegistrarFollowup(\"'+o.id+'\")" style="background:var(--cream-dark);border:none;color:var(--stone);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">+ Registrar</button>'
+          + '<button onclick="openDetail(\''+o.id+'\')" style="background:var(--cream-dark);border:none;color:var(--stone);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">👁 Ver</button>'
+          + '<button onclick="abrirRegistrarFollowup(\''+o.id+'\')" style="background:var(--cream-dark);border:none;color:var(--stone);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">+ Registrar</button>'
           + '</div>'
           + '</div>';
       }).join('');
@@ -1869,7 +1869,7 @@ function renderCRM() {
           + '</div>'
           + '<div style="display:flex;gap:6px;">'
           + (tel ? '<a href="https://wa.me/55'+tel+'" target="_blank" style="background:#25D366;color:white;padding:6px 10px;border-radius:8px;font-size:12px;text-decoration:none;">📱</a>' : '')
-          + '<button onclick="registrarFollowup(\"'+o.id+'\",\"'+prox.tipo+'\")" style="background:'+prox.cor+';color:white;border:none;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">✓ Feito</button>'
+          + '<button onclick="registrarFollowup(\''+o.id+'\',\''+prox.tipo+'\')" style="background:'+prox.cor+';color:white;border:none;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">✓ Feito</button>'
           + '</div>'
           + '</div>';
       }).join('');
@@ -1937,7 +1937,7 @@ function abrirRegistrarFollowup(orderId) {
     + '<div style="font-size:13px;font-weight:600;color:var(--stone);margin-bottom:12px;">O que foi feito?</div>'
     + '<div style="display:flex;flex-direction:column;gap:8px;">'
     + FOLLOWUP_TIPOS.map(t =>
-        '<button onclick="registrarFollowup(\"'+orderId+'\",\"'+t.tipo+'\")" '
+        '<button onclick="registrarFollowup(\''+orderId+'\',\''+t.tipo+'\')" '
         + 'style="background:var(--cream);border:1.5px solid var(--cream-dark);color:var(--stone);padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;text-align:left;display:flex;align-items:center;gap:10px;">'
         + '<span style="font-size:18px;">'+t.emoji+'</span>'+t.label+'</button>').join('')
     + '</div>'

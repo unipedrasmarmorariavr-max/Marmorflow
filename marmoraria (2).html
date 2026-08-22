@@ -1874,7 +1874,7 @@ function renderCRM() {
       }).join('');
 
   // ── CLIENTES ──
-  const htmlClientes = '<div id="crm-clientes-lista"><div style="padding:20px;text-align:center;color:#888;">Carregando...</div></div>';
+  const htmlClientes = '<div id="crm-_clientes-lista"><div style="padding:20px;text-align:center;color:#888;">Carregando...</div></div>';
 
   // ── RENDER ──
   el.innerHTML = '<div style="max-width:960px;margin:0 auto;">'
@@ -1886,7 +1886,7 @@ function renderCRM() {
       + '</div>' : '')
     // Abas
     + '<div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:2px solid var(--cream-dark);">'
-    + [['negociacoes','📋 Negociações ('+negociacoes.length+')'],['acoes','📅 Ações do Dia'+(acoesDoDia.length>0?' ('+acoesDoDia.length+')':'')],['clientes','👥 Clientes ('+clientes.length+')']].map(([id,label])=>
+    + [['negociacoes','📋 Negociações ('+negociacoes.length+')'],['acoes','📅 Ações do Dia'+(acoesDoDia.length>0?' ('+acoesDoDia.length+')':'')],['clientes','👥 Clientes ('+(clientes||_clientes||[]).length+')']].map(([id,label])=>
         '<button onclick="localStorage.setItem(\'crm_aba\',\''+id+'\');renderCRM()" '
         + 'style="padding:8px 16px;border:none;border-bottom:3px solid '+(abaAtiva===id?'var(--gold)':'transparent')+';background:transparent;color:'+(abaAtiva===id?'var(--gold)':'#888')+';font-size:13px;font-weight:700;cursor:pointer;">'
         + label+'</button>').join('')
@@ -1896,7 +1896,7 @@ function renderCRM() {
     + (abaAtiva==='negociacoes' ? htmlNeg : abaAtiva==='acoes' ? htmlAcoes : htmlClientes)
     + '</div></div>';
 
-  // Carrega clientes se aba ativa
+  // Carrega _clientes se aba ativa
   if (abaAtiva === 'clientes') renderCRMClientes();
 }
 

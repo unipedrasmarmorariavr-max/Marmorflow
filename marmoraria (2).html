@@ -1759,228 +1759,219 @@ function renderCRM() {
   if (!el) return;
 
   const hoje = new Date();
-  const hojeStr = hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
-  const fmt = v => 'R$ ' + (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+  const hojeStr = hoje.toISOString().substring(0,10);
+  const fmtV = v => 'R$ ' + (parseFloat(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+  const abaAtiva = localStorage.getItem('crm_aba') || 'negociacoes';
 
-  // Dias parado = diferença entre hoje e último histórico do pedido
-  const diasParado = (o) => {
-    try {
-      const hist = o.history || [];
-      let ultimaData = '';
-      if (hist.length) {
-        const ultimo = hist[hist.length-1];
-        ultimaData = ultimo.date || ultimo.data || '';
-      }
-      if (!ultimaData) ultimaData = (o.created_at||'').substring(0,10);
-      if (!ultimaData) return 0;
+  // ── PRAZOS DE FOLLOW-UP (dias) ──
+  const FOLLOWUP_PRAZOS = {
+    whatsapp: 3,   // dia 3 — mandar mensagem
+    ligacao: 7,    // dia 7 — ligar
+    ultima: 14,    // dia 14 — última tentativa
+  };
 
-      // Converte formatos possíveis para yyyy-mm-dd
-      let dataISO = ultimaData;
-      if (/^\d{2}\/\d{2}$/.test(ultimaData)) {
-        // Formato dd/mm (sem ano) — usa ano atual
-        const [dd, mm] = ultimaData.split('/');
-        dataISO = `${hoje.getFullYear()}-${mm}-${dd}`;
-      } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(ultimaData)) {
-        // Formato dd/mm/yyyy
-        const [dd, mm, yyyy] = ultimaData.split('/');
-        dataISO = `${yyyy}-${mm}-${dd}`;
-      }
+  // ── HELPERS ──
+  const diasEntre = (dataStr) => {
+    if (!dataStr) return 0;
+    let iso = dataStr;
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dataStr)) {
+      const [d,m,y] = dataStr.split('/'); iso = y+'-'+m+'-'+d;
+    } else if (/^\d{2}\/\d{2}$/.test(dataStr)) {
+      const [d,m] = dataStr.split('/'); iso = hoje.getFullYear()+'-'+m+'-'+d;
+    }
+    const d1 = new Date(hojeStr+'T12:00:00');
+    const d2 = new Date(iso+'T12:00:00');
+    if (isNaN(d1)||isNaN(d2)) return 0;
+    return Math.max(0, Math.floor((d1-d2)/(1000*60*60*24)));
+  };
 
-      const d1 = new Date(hojeStr + 'T12:00:00');
-      const d2 = new Date(dataISO + 'T12:00:00');
-      if (isNaN(d1) || isNaN(d2)) return 0;
-      return Math.max(0, Math.floor((d1-d2)/(1000*60*60*24)));
-    } catch(e) { return 0; }
+  // Retorna última ação de follow-up registrada no pedido
+  const ultimaAcao = (o) => {
+    const followups = (o.followups||[]);
+    if (followups.length === 0) return null;
+    return followups[followups.length-1];
+  };
+
+  // Dias desde última ação (ou desde criação se não houver)
+  const diasDesdeAcao = (o) => {
+    const acao = ultimaAcao(o);
+    if (acao) return diasEntre(acao.data);
+    const hist = o.history || [];
+    let data = '';
+    if (hist.length) data = hist[hist.length-1].date || hist[hist.length-1].data || '';
+    if (!data) data = (o.created_at||'').substring(0,10);
+    return diasEntre(data);
+  };
+
+  // Próxima ação sugerida
+  const proximaAcao = (o) => {
+    const dias = diasDesdeAcao(o);
+    const acao = ultimaAcao(o);
+    const tipoUltima = acao?.tipo || '';
+    if (dias >= FOLLOWUP_PRAZOS.ultima && tipoUltima !== 'ultima') return { tipo:'ultima', emoji:'🚨', label:'Última tentativa', cor:'#B85A4A', bg:'#FDEAEA' };
+    if (dias >= FOLLOWUP_PRAZOS.ligacao && tipoUltima !== 'ligacao' && tipoUltima !== 'ultima') return { tipo:'ligacao', emoji:'📞', label:'Ligar', cor:'#8B6914', bg:'#FFF8E7' };
+    if (dias >= FOLLOWUP_PRAZOS.whatsapp && tipoUltima !== 'whatsapp' && tipoUltima !== 'ligacao' && tipoUltima !== 'ultima') return { tipo:'whatsapp', emoji:'💬', label:'WhatsApp', cor:'#2E7D32', bg:'#EAF3DE' };
+    return null;
   };
 
   const badgeDias = (dias) => {
-    const cor = dias >= 10 ? '#B85A4A' : dias >= 5 ? '#8B6914' : '#2E7D32';
-    const bg  = dias >= 10 ? '#FDEAEA' : dias >= 5 ? '#FFF8E7' : '#EAF3DE';
-    return `<span style="background:${bg};color:${cor};font-size:11px;font-weight:700;padding:3px 8px;border-radius:12px;">⏰ ${dias}d parado</span>`;
+    const cor = dias >= 14 ? '#B85A4A' : dias >= 7 ? '#8B6914' : dias >= 3 ? '#006382' : '#2E7D32';
+    const bg  = dias >= 14 ? '#FDEAEA' : dias >= 7 ? '#FFF8E7' : dias >= 3 ? '#E8F4F7' : '#EAF3DE';
+    return '<span style="background:'+bg+';color:'+cor+';font-size:11px;font-weight:700;padding:3px 8px;border-radius:12px;">⏰ '+dias+'d</span>';
   };
 
-  // ── ABA STATE ──
-  const abaAtiva = localStorage.getItem('crm_aba') || 'negociacoes';
-
-  // ── SEÇÃO 1: NEGOCIAÇÕES ──
+  // ── NEGOCIAÇÕES ──
   const negociacoes = orders
     .filter(o => o.stage === 'negociacao')
-    .map(o => ({ ...o, dias: diasParado(o) }))
-    .sort((a,b) => b.dias - a.dias);
+    .map(o => ({ ...o, diasAcao: diasDesdeAcao(o), proxAcao: proximaAcao(o) }))
+    .sort((a,b) => b.diasAcao - a.diasAcao);
 
   const htmlNeg = negociacoes.length === 0
     ? '<div style="padding:40px;text-align:center;color:#888;">Nenhuma negociação em aberto 🎉</div>'
     : negociacoes.map(o => {
         const tel = (o.telefone||'').replace(/\D/g,'');
-        return '<div style="padding:12px 16px;border-bottom:0.5px solid var(--cream-dark);">'
+        const prox = o.proxAcao;
+        const ult = ultimaAcao(o);
+        return '<div style="padding:14px 16px;border-bottom:0.5px solid var(--cream-dark);">'
           + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
           + '<div style="flex:1;min-width:0;">'
-          + '<div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:2px;">' + o.cliente + '</div>'
-          + '<div style="font-size:11px;color:#888;">' + o.id + (o.peca?' · '+o.peca:'') + (o.valor?' · '+fmt(parseFloat((o.valor||'0').replace(',','.'))):'') + '</div>'
+          + '<div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:2px;">'+o.cliente+'</div>'
+          + '<div style="font-size:11px;color:#888;">'+o.id+(o.peca?' · '+o.peca:'')+(o.valor?' · '+fmtV(parseFloat((o.valor||'0').replace(',','.'))):'')+'</div>'
+          + (ult ? '<div style="font-size:11px;color:#888;margin-top:2px;">Última ação: '+ult.emoji+' '+ult.label+' ('+ult.data+')</div>' : '')
           + '</div>'
-          + badgeDias(o.dias)
+          + badgeDias(o.diasAcao)
           + '</div>'
+          + (prox ? '<div style="margin-top:8px;padding:6px 10px;background:'+prox.bg+';border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;">'
+            + '<span style="font-size:12px;color:'+prox.cor+';font-weight:700;">'+prox.emoji+' '+prox.label+' sugerido</span>'
+            + '<button onclick="registrarFollowup(\"'+o.id+'\",\"'+prox.tipo+'\")" style="background:'+prox.cor+';color:white;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;">✓ Registrar</button>'
+            + '</div>' : '')
           + '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">'
-          + (tel ? '<a href="https://wa.me/55'+tel+'" target="_blank" style="background:#25D366;color:white;border:none;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;text-decoration:none;">📱 WhatsApp</a>' : '')
-          + '<button onclick="openDetail(\''+o.id+'\')" style="background:var(--cream-dark);border:none;color:var(--stone);padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">👁 Ver</button>'
+          + (tel ? '<a href="https://wa.me/55'+tel+'" target="_blank" style="background:#25D366;color:white;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">📱 WhatsApp</a>' : '')
+          + '<button onclick="openDetail(\"'+o.id+'\")" style="background:var(--cream-dark);border:none;color:var(--stone);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">👁 Ver</button>'
+          + '<button onclick="abrirRegistrarFollowup(\"'+o.id+'\")" style="background:var(--cream-dark);border:none;color:var(--stone);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">+ Registrar</button>'
           + '</div>'
           + '</div>';
       }).join('');
 
-  // ── SEÇÃO 2: CLIENTES ──
-  const clienteMap = {};
-  orders.forEach(o => {
-    if (!o.cliente) return;
-    const nome = o.cliente.trim().toUpperCase();
-    if (!clienteMap[nome]) clienteMap[nome] = { nome: o.cliente, pedidos: [], totalGasto: 0, ultimoPedido: '' };
-    clienteMap[nome].pedidos.push(o);
-    if (['fechado','corte','acabamento','pronto','entregue'].includes(o.stage)) {
-      clienteMap[nome].totalGasto += parseFloat((o.valor||'0').toString().replace(',','.')) || 0;
-    }
-    if (!clienteMap[nome].ultimoPedido || o.created_at > clienteMap[nome].ultimoPedido) {
-      clienteMap[nome].ultimoPedido = o.created_at?.substring(0,10) || '';
-    }
-  });
-
-  const clientes = Object.values(clienteMap).sort((a,b) => b.totalGasto - a.totalGasto);
-
-  const htmlClientes = clientes.length === 0
-    ? '<div style="padding:40px;text-align:center;color:#888;">Nenhum cliente encontrado</div>'
-    : clientes.map(c => {
-        const isVip = c.totalGasto >= 5000 || c.pedidos.filter(p => ['fechado','corte','acabamento','pronto','entregue'].includes(p.stage)).length >= 2;
-        const pedFechados = c.pedidos.filter(p => ['fechado','corte','acabamento','pronto','entregue'].includes(p.stage)).length;
+  // ── AÇÕES DO DIA ──
+  const acoesDoDia = negociacoes.filter(o => o.proxAcao);
+  const htmlAcoes = acoesDoDia.length === 0
+    ? '<div style="padding:40px;text-align:center;color:#888;"><div style="font-size:32px;margin-bottom:8px;">✅</div>Nenhuma ação pendente hoje!</div>'
+    : acoesDoDia.map(o => {
+        const tel = (o.telefone||'').replace(/\D/g,'');
+        const prox = o.proxAcao;
         return '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:0.5px solid var(--cream-dark);">'
+          + '<div style="width:40px;height:40px;border-radius:50%;background:'+prox.bg+';display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">'+prox.emoji+'</div>'
           + '<div style="flex:1;min-width:0;">'
-          + '<div style="font-size:14px;font-weight:700;color:var(--stone);">'
-          + (isVip ? '<span style="background:#FFD700;color:#5C3D00;font-size:10px;font-weight:800;padding:2px 6px;border-radius:4px;margin-right:6px;">⭐ VIP</span>' : '')
-          + c.nome + '</div>'
-          + '<div style="font-size:11px;color:#888;">'+ c.pedidos.length +' pedido(s) · '+ pedFechados +' fechado(s) · Último: '+(c.ultimoPedido ? new Date(c.ultimoPedido+'T12:00:00').toLocaleDateString('pt-BR') : '—')+'</div>'
+          + '<div style="font-size:13px;font-weight:700;color:var(--stone);">'+prox.label+': '+o.cliente+'</div>'
+          + '<div style="font-size:11px;color:#888;">'+o.id+' · há '+o.diasAcao+' dias sem contato</div>'
           + '</div>'
-          + (c.totalGasto > 0 ? '<div style="font-size:13px;font-weight:700;color:#2E7D32;white-space:nowrap;">'+ fmt(c.totalGasto) +'</div>' : '')
+          + '<div style="display:flex;gap:6px;">'
+          + (tel ? '<a href="https://wa.me/55'+tel+'" target="_blank" style="background:#25D366;color:white;padding:6px 10px;border-radius:8px;font-size:12px;text-decoration:none;">📱</a>' : '')
+          + '<button onclick="registrarFollowup(\"'+o.id+'\",\"'+prox.tipo+'\")" style="background:'+prox.cor+';color:white;border:none;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">✓ Feito</button>'
+          + '</div>'
           + '</div>';
       }).join('');
 
-  // ── SEÇÃO 3: FUNIL DE VENDAS REAL ──
-  const mesAtual = new Date().toISOString().substring(0,7); // 2026-07
-
-  // Orçamentos criados este mês (pedidos que entraram no sistema)
-  const orcMes = orders.filter(o => (o.created_at||'').substring(0,7) === mesAtual);
-
-  // Em negociação agora
-  const emNeg = orders.filter(o => o.stage === 'negociacao');
-
-  // Fechados este mês
-  const fechadosMes = orders.filter(o => {
-    if (!['fechado','corte','acabamento','pronto','entregue'].includes(o.stage)) return false;
-    // Pega data de fechamento do histórico
-    const hist = o.history || [];
-    const hFechado = hist.find(h => h.stage === 'fechado');
-    const dataFech = hFechado?.date || o.created_at?.substring(0,7) || '';
-    // Tenta extrair ano-mês
-    if (dataFech.includes('/')) {
-      const partes = dataFech.split('/');
-      if (partes.length >= 2) {
-        const mm = partes[1]?.padStart(2,'0');
-        const yyyy = partes[2] || new Date().getFullYear();
-        return `${yyyy}-${mm}` === mesAtual;
-      }
-    }
-    return dataFech.substring(0,7) === mesAtual;
-  });
-
-  // Ticket médio dos fechados este mês
-  const totalFechMes = fechadosMes.reduce((s,o) => s + (parseFloat((o.valor||'0').toString().replace(',','.')) || 0), 0);
-  const ticketMedio = fechadosMes.length > 0 ? totalFechMes / fechadosMes.length : 0;
-
-  // Taxa de conversão do mês
-  const txConvMes = orcMes.length > 0 ? Math.round(fechadosMes.length / orcMes.length * 100) : 0;
-
-  // Tempo médio para fechar (dias entre criação e fechamento)
-  let tempoMedioFech = 0;
-  const tempos = fechadosMes.map(o => {
-    const criado = o.created_at?.substring(0,10);
-    const hist = o.history || [];
-    const hFech = hist.find(h => h.stage === 'fechado');
-    let dataFech = hFech?.date || '';
-    if (dataFech.includes('/')) {
-      const p = dataFech.split('/');
-      dataFech = p.length === 3 ? `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}` : '';
-    }
-    if (!criado || !dataFech) return null;
-    const diff = Math.floor((new Date(dataFech) - new Date(criado)) / (1000*60*60*24));
-    return diff >= 0 ? diff : null;
-  }).filter(v => v !== null);
-  if (tempos.length > 0) tempoMedioFech = Math.round(tempos.reduce((a,b)=>a+b,0) / tempos.length);
-
-  const fmtV = v => 'R$ ' + v.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0});
-
-  const etapas = [
-    { label: '📋 Orçamentos feitos', n: orcMes.length, cor: '#006382', bg: '#E6F1FB', desc: 'este mês' },
-    { label: '💬 Em negociação', n: emNeg.length, cor: '#8B6914', bg: '#FFF8E7', desc: 'aguardando decisão' },
-    { label: '✅ Fechados', n: fechadosMes.length, cor: '#2E7D32', bg: '#EAF3DE', desc: 'este mês' },
-  ];
-  const maxN = Math.max(...etapas.map(e => e.n), 1);
-
-  const htmlFunilNovo = '<div style="padding:24px;">'
-    + '<div style="font-size:13px;font-weight:700;color:var(--stone);margin-bottom:20px;">Funil de Vendas — ' + new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'}) + '</div>'
-
-    // Funil visual
-    + '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:28px;">'
-    + etapas.map((e, i) => {
-        const largura = Math.max(40, Math.round(e.n / maxN * 100));
-        const pct = etapas[0].n > 0 ? Math.round(e.n / etapas[0].n * 100) : 0;
-        return '<div>'
-          + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
-          + '<span style="font-size:13px;font-weight:600;color:var(--stone);">' + e.label + '</span>'
-          + '<span style="font-size:13px;font-weight:700;color:' + e.cor + ';">' + e.n + ' <span style="font-size:11px;color:#888;font-weight:400;">' + e.desc + '</span></span>'
-          + '</div>'
-          + '<div style="background:#f0f0f0;border-radius:6px;height:28px;overflow:hidden;">'
-          + '<div style="width:' + largura + '%;height:100%;background:' + e.cor + ';border-radius:6px;display:flex;align-items:center;padding-left:10px;transition:width .4s;">'
-          + (e.n > 0 ? '<span style="font-size:11px;color:white;font-weight:600;">' + (i > 0 ? pct + '% do topo' : '100%') + '</span>' : '')
-          + '</div></div>'
-          + '</div>';
-      }).join('')
-    + '</div>'
-
-    // Cards de métricas
-    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">'
-    + [
-        ['Taxa de conversão', txConvMes + '%', '#2E7D32', 'orçamentos → fechados'],
-        ['Ticket médio', fmtV(ticketMedio), '#8B6914', 'dos fechados este mês'],
-        ['Tempo médio', tempoMedioFech + ' dias', '#006382', 'para fechar um pedido'],
-        ['Total fechado', fmtV(totalFechMes), '#2E7D32', 'faturado este mês'],
-      ].map(([label, valor, cor, sub]) =>
-        '<div style="background:var(--cream);border-radius:10px;padding:14px;">'
-        + '<div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;margin-bottom:4px;">' + label + '</div>'
-        + '<div style="font-size:22px;font-weight:900;color:' + cor + ';">' + valor + '</div>'
-        + '<div style="font-size:11px;color:#888;">' + sub + '</div>'
-        + '</div>'
-      ).join('')
-    + '</div>'
-    + '</div>';
+  // ── CLIENTES ──
+  const htmlClientes = '<div id="crm-clientes-lista"><div style="padding:20px;text-align:center;color:#888;">Carregando...</div></div>';
 
   // ── RENDER ──
-  el.innerHTML = `
-    <div style="max-width:900px;margin:0 auto;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-        <div style="font-size:22px;font-weight:800;color:var(--stone);">🤝 CRM</div>
-        <div style="font-size:12px;color:#888;">${orders.length} pedidos · ${clientes.length} clientes · ${fechadosMes.length} fechados este mês</div>
-      </div>
+  el.innerHTML = '<div style="max-width:960px;margin:0 auto;">'
+    // Badge de ações pendentes
+    + (acoesDoDia.length > 0 ? '<div style="background:#FDEAEA;border:1px solid #B85A4A;border-radius:10px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">'
+      + '<span style="font-size:20px;">🔔</span>'
+      + '<div><div style="font-size:13px;font-weight:700;color:#B85A4A;">'+acoesDoDia.length+' ação(ões) pendente(s) hoje</div>'
+      + '<div style="font-size:11px;color:#888;">Veja a aba Ações do Dia</div></div>'
+      + '</div>' : '')
+    // Abas
+    + '<div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:2px solid var(--cream-dark);">'
+    + [['negociacoes','📋 Negociações ('+negociacoes.length+')'],['acoes','📅 Ações do Dia'+(acoesDoDia.length>0?' ('+acoesDoDia.length+')':'')],['clientes','👥 Clientes ('+clientes.length+')']].map(([id,label])=>
+        '<button onclick="localStorage.setItem(\'crm_aba\',\''+id+'\');renderCRM()" '
+        + 'style="padding:8px 16px;border:none;border-bottom:3px solid '+(abaAtiva===id?'var(--gold)':'transparent')+';background:transparent;color:'+(abaAtiva===id?'var(--gold)':'#888')+';font-size:13px;font-weight:700;cursor:pointer;">'
+        + label+'</button>').join('')
+    + '</div>'
+    // Conteúdo
+    + '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">'
+    + (abaAtiva==='negociacoes' ? htmlNeg : abaAtiva==='acoes' ? htmlAcoes : htmlClientes)
+    + '</div></div>';
 
-      <!-- Abas -->
-      <div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:2px solid var(--cream-dark);padding-bottom:0;">
-        ${[['negociacoes','📋 Negociações ('+negociacoes.length+')'],['clientes','👥 Clientes ('+clientes.length+')'],['funil','📊 Funil']].map(([id,label])=>`
-        <button onclick="localStorage.setItem('crm_aba','${id}');renderCRM()" 
-          style="padding:8px 16px;border:none;border-bottom:3px solid ${abaAtiva===id?'var(--gold)':'transparent'};background:transparent;color:${abaAtiva===id?'var(--gold)':'#888'};font-size:13px;font-weight:700;cursor:pointer;">
-          ${label}
-        </button>`).join('')}
-      </div>
+  // Carrega clientes se aba ativa
+  if (abaAtiva === 'clientes') renderCRMClientes();
+}
 
-      <!-- Conteúdo das abas -->
-      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
-        ${abaAtiva==='negociacoes' ? htmlNeg : abaAtiva==='clientes' ? htmlClientes : htmlFunilNovo}
-      </div>
-    </div>`;
+// ── FOLLOW-UP ──────────────────────────────────────────────────────────────
+const FOLLOWUP_TIPOS = [
+  { tipo:'orcamento',  emoji:'📋', label:'Orçamento enviado' },
+  { tipo:'whatsapp',   emoji:'💬', label:'WhatsApp enviado' },
+  { tipo:'ligacao',    emoji:'📞', label:'Ligação realizada' },
+  { tipo:'proposta',   emoji:'🔄', label:'Nova proposta enviada' },
+  { tipo:'reuniao',    emoji:'🤝', label:'Reunião/visita' },
+  { tipo:'ultima',     emoji:'🚨', label:'Última tentativa' },
+];
+
+function abrirRegistrarFollowup(orderId) {
+  const o = orders.find(x => x.id === orderId);
+  if (!o) return;
+
+  let modal = document.getElementById('modal-followup');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modal-followup';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    document.body.appendChild(modal);
+  }
+
+  const hoje = new Date().toISOString().substring(0,10);
+
+  modal.innerHTML = '<div style="background:white;border-radius:16px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">'
+    + '<div style="background:var(--stone);color:white;padding:16px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center;">'
+    + '<div style="font-size:15px;font-weight:700;">+ Registrar Ação — '+o.cliente+'</div>'
+    + '<button onclick="fecharModalFollowup()" style="background:none;border:none;color:white;font-size:20px;cursor:pointer;">✕</button>'
+    + '</div>'
+    + '<div style="padding:20px;">'
+    + '<div style="font-size:13px;font-weight:600;color:var(--stone);margin-bottom:12px;">O que foi feito?</div>'
+    + '<div style="display:flex;flex-direction:column;gap:8px;">'
+    + FOLLOWUP_TIPOS.map(t =>
+        '<button onclick="registrarFollowup(\"'+orderId+'\",\"'+t.tipo+'\")" '
+        + 'style="background:var(--cream);border:1.5px solid var(--cream-dark);color:var(--stone);padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;text-align:left;display:flex;align-items:center;gap:10px;">'
+        + '<span style="font-size:18px;">'+t.emoji+'</span>'+t.label+'</button>').join('')
+    + '</div>'
+    + '<div style="margin-top:16px;">'
+    + '<label style="font-size:12px;color:#888;font-weight:600;display:block;margin-bottom:4px;">Observação (opcional)</label>'
+    + '<textarea id="followup-obs" style="width:100%;border:1.5px solid var(--vein);border-radius:8px;padding:10px;font-size:13px;resize:none;height:70px;font-family:inherit;box-sizing:border-box;" placeholder="Ex: Cliente pediu desconto, vai retornar amanhã..."></textarea>'
+    + '</div>'
+    + '</div></div>';
+
+  modal.style.display = 'flex';
+}
+
+function fecharModalFollowup(){var m=document.getElementById('modal-followup');if(m)m.remove();}
+
+async function registrarFollowup(orderId, tipo) {
+  const o = orders.find(x => x.id === orderId);
+  if (!o) return;
+
+  const tipoInfo = FOLLOWUP_TIPOS.find(t => t.tipo === tipo) || { tipo, emoji:'📌', label:tipo };
+  const obs = document.getElementById('followup-obs')?.value?.trim() || '';
+  const hoje = new Date();
+  const hojeStr = hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
+
+  const novaAcao = { tipo, emoji:tipoInfo.emoji, label:tipoInfo.label, data:hojeStr, obs };
+
+  o.followups = [...(o.followups||[]), novaAcao];
+
+  // Salva no Supabase
+  try {
+    await getSB().from('pedidos').update({ followups: o.followups }).eq('id', orderId);
+  } catch(e) { console.error('Erro ao salvar followup:', e); }
+
+  // Fecha modal se aberto
+  const modal = document.getElementById('modal-followup');
+  if (modal) modal.remove();
+
+  showNotif(tipoInfo.emoji+' '+tipoInfo.label+' registrado! ✓', 'success');
+  renderCRM();
 }
 
 function toggleFiltroAv() {

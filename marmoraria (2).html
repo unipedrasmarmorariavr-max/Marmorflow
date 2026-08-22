@@ -1757,6 +1757,7 @@ async function renderCRMClientes() {
 function renderCRM() {
   const el = document.getElementById('crm-content');
   if (!el) return;
+  try {
 
   const hoje = new Date();
   const hojeStr = hoje.toISOString().substring(0,10);
@@ -1898,6 +1899,9 @@ function renderCRM() {
 
   // Carrega _clientes se aba ativa
   if (abaAtiva === 'clientes') renderCRMClientes();
+  } catch(e) {
+    el.innerHTML = '<div style="padding:20px;color:red;font-size:13px;">Erro no CRM: ' + e.message + '<br><pre>' + e.stack + '</pre></div>';
+  }
 }
 
 // ── FOLLOW-UP ──────────────────────────────────────────────────────────────

@@ -396,9 +396,54 @@
     /* Simulador */
     #sim-resultado > div[style*="grid"] { grid-template-columns: 1fr 1fr !important; }
 
-    /* Modal medição */
-    #modal-medicao-ag .modal { border-radius: 16px 16px 0 0 !important; }
-    .med-tipo-btn, .med-acesso-btn { padding: 6px 10px !important; font-size: 12px !important; }
+    /* ══ CRM ═════════════════════════════════════════════════════════════ */
+    #panel-crm { padding: 8px !important; }
+    #crm-content { padding: 8px !important; }
+    #crm-content > div { max-width: 100% !important; }
+    /* Abas CRM */
+    #crm-content div[style*="display:flex;gap:8px;margin-bottom:16px"] { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+    #crm-content button[style*="font-size:13px;font-weight:700"] { font-size: 11px !important; padding: 6px 10px !important; white-space: nowrap; flex-shrink: 0; }
+    /* Cards negociação */
+    #crm-content div[style*="padding:14px 16px"] { padding: 10px 12px !important; }
+    /* Ações do dia */
+    #crm-content div[style*="width:40px;height:40px"] { width: 32px !important; height: 32px !important; font-size: 16px !important; }
+    /* Modal follow-up */
+    #modal-followup > div { border-radius: 16px 16px 0 0 !important; position: fixed !important; bottom: 0 !important; left: 0 !important; right: 0 !important; max-width: 100% !important; }
+    #modal-followup { align-items: flex-end !important; }
+
+    /* ══ FINANCEIRO — abas sticky ════════════════════════════════════════ */
+    #fin-tabs-sticky { margin: -8px -8px 0 !important; padding: 8px 8px 0 !important; }
+    #fin-tabs-sticky div { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap !important; }
+    #fin-tabs-sticky button { font-size: 11px !important; padding: 7px 10px !important; white-space: nowrap; flex-shrink: 0; }
+    /* Saldo por banco */
+    #financeiro-content div[style*="grid-template-columns:repeat(auto-fit"] { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+    /* Lançamentos */
+    #financeiro-content div[style*="padding:12px 20px;border-bottom"] { padding: 10px 12px !important; }
+    #financeiro-content div[style*="font-size:15px;font-weight:700"] { font-size: 13px !important; }
+    /* Contas a pagar */
+    #financeiro-content div[style*="padding:14px 20px;border-bottom"] { padding: 10px 12px !important; }
+    /* Checkboxes seleção */
+    .chk-lancamento, .chk-conta, .chk-receber, .chk-historico { width: 22px !important; height: 22px !important; }
+
+    /* ══ MATERIAIS do orçamento — scroll horizontal ═══════════════════ */
+    div[style*="min-width:700px"] { min-width: 600px !important; }
+    .materiais-linha { grid-template-columns: 2fr 0.8fr 0.7fr 0.7fr 0.7fr 0.7fr 0.7fr 0.9fr 0.7fr !important; gap: 3px !important; }
+    .materiais-linha input { padding: 4px 4px !important; font-size: 11px !important; }
+
+    /* ══ KANBAN — abas Comercial/Produção ═══════════════════════════════ */
+    .kanban-header { flex-wrap: wrap !important; gap: 6px !important; padding: 8px !important; }
+    .kanban-header > div:first-child { gap: 4px !important; }
+    .kanban-header > div:first-child button { font-size: 11px !important; padding: 6px 10px !important; }
+    .kanban-header > div:last-child { gap: 4px !important; flex-wrap: wrap !important; }
+    .kanban-header input[type=text] { width: 130px !important; font-size: 13px !important; }
+
+    /* ══ MODAL HISTÓRICO ═════════════════════════════════════════════════ */
+    #modal-historico > div { border-radius: 16px 16px 0 0 !important; position: fixed !important; bottom: 0 !important; left: 0 !important; right: 0 !important; max-width: 100% !important; max-height: 85vh !important; overflow-y: auto; }
+    #modal-historico { align-items: flex-end !important; padding: 0 !important; }
+
+    /* ══ IA ═══════════════════════════════════════════════════════════════ */
+    #panel-ia { padding: 8px !important; }
+    #ia-content { padding: 8px !important; }
 
   }
 </style>

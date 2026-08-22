@@ -4983,6 +4983,139 @@ async function apagarSelecionadasContas() {
   renderFinanceiro();
 }
 
+function editarTransacao(id) {
+  const t = transacoes.find(x => x.id === id);
+  if (!t) return;
+
+  const bancos = getBancos();
+  let modal = document.getElementById('modal-editar-transacao');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modal-editar-transacao';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML = `
+    <div style="background:white;border-radius:16px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:90vh;overflow-y:auto;">
+      <div style="background:var(--stone);color:white;padding:16px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:1;">
+        <div style="font-size:15px;font-weight:700;">✏️ Editar Lançamento</div>
+        <button onclick="document.getElementById('modal-editar-transacao').remove()" style="background:none;border:none;color:white;font-size:22px;cursor:pointer;">✕</button>
+      </div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+        <div>
+          <label class="form-label">TIPO *</label>
+          <div style="display:flex;gap:8px;margin-top:6px;">
+            <label style="flex:1;display:flex;align-items:center;gap:8px;background:${t.tipo==='entrada'?'#e8f5e9':'#f5f5f5'};border:2px solid ${t.tipo==='entrada'?'#2E7D32':'#ddd'};border-radius:8px;padding:10px;cursor:pointer;">
+              <input type="radio" name="et-tipo" value="entrada" ${t.tipo==='entrada'?'checked':''} style="accent-color:#2E7D32;"> Entrada
+            </label>
+            <label style="flex:1;display:flex;align-items:center;gap:8px;background:${t.tipo==='saida'?'#ffebee':'#f5f5f5'};border:2px solid ${t.tipo==='saida'?'#B85A4A':'#ddd'};border-radius:8px;padding:10px;cursor:pointer;">
+              <input type="radio" name="et-tipo" value="saida" ${t.tipo==='saida'?'checked':''} style="accent-color:#B85A4A;"> Saída
+            </label>
+          </div>
+        </div>
+        <div>
+          <label class="form-label">DESCRIÇÃO *</label>
+          <input class="form-input" id="et-descricao" value="${t.descricao||''}" placeholder="Ex: Recebimento João, Pagamento fornecedor...">
+        </div>
+        <div>
+          <label class="form-label">VALOR (R$) *</label>
+          <input class="form-input" id="et-valor" type="number" step="0.01" value="${t.valor||0}" style="font-size:20px;font-weight:700;text-align:center;">
+        </div>
+        <div>
+          <label class="form-label">DATA *</label>
+          <input class="form-input" id="et-data" type="date" value="${t.data||''}">
+        </div>
+        <div>
+          <label class="form-label">BANCO</label>
+          <select class="form-select" id="et-banco">
+            <option value="">Selecione...</option>
+            ${bancos.map(b => `<option value="${b.nome}" ${t.banco===b.nome?'selected':''}>${b.nome}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="form-label">CATEGORIA</label>
+          <input class="form-input" id="et-categoria" value="${t.categoria||''}" placeholder="Ex: Venda, Fornecedor, Fixo...">
+        </div>
+        <div>
+          <label class="form-label">OBSERVAÇÃO</label>
+          <input class="form-input" id="et-obs" value="${t.observacao||t.obs||''}" placeholder="Opcional...">
+        </div>
+        <div style="display:flex;gap:10px;margin-top:4px;">
+          <button onclick="salvarEdicaoTransacao('${id}')" style="flex:1;background:#2E7D32;color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">💾 Salvar Alterações</button>
+          <button onclick="document.getElementById('modal-editar-transacao').remove()" style="background:#eee;color:#333;border:none;padding:12px 16px;border-radius:8px;font-size:14px;cursor:pointer;">Cancelar</button>
+        </div>
+        ${t.pedido_id ? `
+        <div style="border-top:1px solid var(--cream-dark);padding-top:12px;margin-top:4px;">
+          <button onclick="cancelarLancamento('${id}','${t.pedido_id}')" style="width:100%;background:#FDEAEA;color:#B85A4A;border:1.5px solid #B85A4A;padding:10px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+            ↩ Cancelar Lançamento — volta pedido para A Receber
+          </button>
+        </div>` : ''}
+      </div>
+    </div>`;
+
+  modal.style.display = 'flex';
+}
+
+async function cancelarLancamento(transacaoId, pedidoId) {
+  if (!confirm('Cancelar este lançamento?\n\nO pedido voltará para "A Receber" e o lançamento será removido dos registros financeiros.')) return;
+
+  showLoading('Cancelando lançamento...');
+
+  // 1. Remove a transação
+  const { error: errDel } = await getSB().from('transacoes').delete().eq('id', transacaoId);
+  if (errDel) { hideLoading(); showNotif('Erro ao cancelar: ' + errDel.message, 'error'); return; }
+
+  // 2. Limpa as parcelas pagas do pedido (volta saldo a receber)
+  const order = orders.find(o => o.id === pedidoId);
+  if (order && order.parcelas_previstas) {
+    // Marca todas as parcelas como não pagas
+    const parcelasReset = order.parcelas_previstas.map(p => ({ ...p, pago: false }));
+    await getSB().from('pedidos').update({ parcelas_previstas: parcelasReset }).eq('id', pedidoId);
+    order.parcelas_previstas = parcelasReset;
+  }
+
+  // 3. Remove da memória
+  const idx = transacoes.findIndex(t => t.id === transacaoId);
+  if (idx >= 0) transacoes.splice(idx, 1);
+
+  hideLoading();
+  document.getElementById('modal-editar-transacao')?.remove();
+  showNotif('Lançamento cancelado! Pedido voltou para A Receber ✓', 'success');
+  renderFinanceiro();
+}
+
+async function salvarEdicaoTransacao(id) {
+  const tipo      = document.querySelector('input[name="et-tipo"]:checked')?.value;
+  const descricao = document.getElementById('et-descricao')?.value.trim();
+  const valor     = parseFloat(document.getElementById('et-valor')?.value)||0;
+  const data      = document.getElementById('et-data')?.value;
+  const banco     = document.getElementById('et-banco')?.value;
+  const categoria = document.getElementById('et-categoria')?.value.trim();
+  const observacao= document.getElementById('et-obs')?.value.trim();
+
+  if (!tipo)      { showNotif('Selecione o tipo!', 'error'); return; }
+  if (!descricao) { showNotif('Informe a descrição!', 'error'); return; }
+  if (!valor)     { showNotif('Informe o valor!', 'error'); return; }
+  if (!data)      { showNotif('Informe a data!', 'error'); return; }
+
+  showLoading('Salvando...');
+  const { error } = await getSB().from('transacoes').update({
+    tipo, descricao, valor, data, banco, categoria, observacao
+  }).eq('id', id);
+  hideLoading();
+
+  if (error) { showNotif('Erro: ' + error.message, 'error'); return; }
+
+  // Atualiza em memória
+  const idx = transacoes.findIndex(t => t.id === id);
+  if (idx >= 0) transacoes[idx] = { ...transacoes[idx], tipo, descricao, valor, data, banco, categoria, observacao };
+
+  document.getElementById('modal-editar-transacao')?.remove();
+  showNotif('Lançamento atualizado! ✓', 'success');
+  renderFinanceiro();
+}
+
 async function deletarTransacao(id) {
   if (!confirm('Excluir este lançamento?')) return;
   await getSB().from('transacoes').delete().eq('id', id);
@@ -7330,6 +7463,7 @@ async function renderFinanceiro() {
           <div style="font-size:15px;font-weight:700;color:${t.tipo==='entrada'?'#2E7D32':'#B85A4A'};">
             ${t.tipo==='entrada'?'+':'-'}${fmtV(t.valor)}
           </div>
+          <button onclick="editarTransacao('${t.id}')" style="background:#E8F4F7;border:none;color:#1e5f74;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">✏️</button>
           <button onclick="deletarTransacao('${t.id}')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">🗑</button>
         </div>`).join('')}
       </div>

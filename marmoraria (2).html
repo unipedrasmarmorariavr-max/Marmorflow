@@ -7440,12 +7440,12 @@ async function renderFinanceiro() {
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               ${saldoPedido>0?`
               <button onclick="abrirDefinirParcelas('${o.id}','${o.cliente}',${valor},${saldoPedido.toFixed(2)})"
-                style="flex:1;background:#8B6914;color:white;border:none;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">
-                📅 Definir Condições
+                style="background:#8B6914;color:white;border:none;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">
+                📅 Condição de Pagamento
               </button>
               <button onclick="abrirConfirmarRecebimento('${o.id}','${o.cliente}',${saldoPedido.toFixed(2)})"
-                style="flex:1;background:#2E7D32;color:white;border:none;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">
-                💵 Registrar Entrada
+                style="flex:1;background:#2E7D32;color:white;border:none;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">
+                ✅ Registrar Recebimento
               </button>`:`
               <div style="text-align:center;font-size:13px;color:#2E7D32;font-weight:600;width:100%;">✅ Totalmente recebido!</div>`}
             </div>

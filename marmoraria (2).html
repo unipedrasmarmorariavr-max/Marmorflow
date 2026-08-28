@@ -3093,9 +3093,9 @@ function ativarSessao(perfil) {
         _kanbanAba = localStorage.getItem('mf_kanban_aba') || 'comercial';
       }
       // Restaura a aba onde o usuário estava antes de recarregar
-      const abaSalva = localStorage.getItem('mf_aba') || 'kanban';
+      const abaSalva = localStorage.getItem('mf_aba') || (isDono ? 'dashboard' : 'kanban');
       const abasValidas = ['kanban','agenda','materiais','financeiro','crm','ia','dashboard','configuracoes'];
-      const abaRestaurar = abasValidas.includes(abaSalva) ? abaSalva : 'kanban';
+      const abaRestaurar = abasValidas.includes(abaSalva) ? abaSalva : (isDono ? 'dashboard' : 'kanban');
       showTab(abaRestaurar);
     }
     // Estado inicial no histórico do navegador (para ← não sair imediatamente)
@@ -3253,183 +3253,167 @@ function renderDashboard(abaAtiva) {
   const el = document.getElementById('dashboard-content');
   if (!el) return;
 
-  const abaDash = abaAtiva || localStorage.getItem('dash_aba') || 'comercial';
-
-  // Header com abas
-  el.innerHTML = `
-    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:20px;">
-      ${[
-        ['comercial','💼 Comercial'],
-        ['producao','⚙️ Produção'],
-        ['financeiro','💰 Financeiro']
-      ].map(([id,label])=>`
-      <button onclick="renderDashboard('${id}')" 
-        style="padding:8px 14px;border:none;background:${abaDash===id?'var(--gold)':'var(--cream-dark)'};
-               color:${abaDash===id?'white':'var(--stone)'};border-radius:8px;cursor:pointer;
-               font-size:12px;font-weight:600;">
-        ${label}
-      </button>`).join('')}
-    </div>
-    <div id="dash-conteudo"></div>
-  `;
-
-  localStorage.setItem('dash_aba', abaDash);
-
-  if (abaDash === 'comercial') renderDashComercial();
-  else if (abaDash === 'producao') renderDashProducao();
-  else if (abaDash === 'financeiro') renderDashFinanceiro(localStorage.getItem('dash_fin_mes')||'todos');
-}
-
-function renderIA() {
-  const el = document.getElementById('ia-content');
-  if (!el) return;
-  el.innerHTML = `
-    <div style="text-align:center;margin-bottom:24px;">
-      <div style="font-size:32px;margin-bottom:8px;">🤖</div>
-      <div style="font-size:20px;font-weight:800;color:var(--stone);">Assistente MarmorFlow</div>
-      <div style="font-size:13px;color:#888;margin-top:4px;">Análise inteligente baseada nos dados reais da Unipedras</div>
-    </div>
-
-    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;margin-bottom:16px;">
-      <label style="font-size:12px;font-weight:600;color:var(--stone);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:8px;">Sua pergunta</label>
-      <textarea id="ia-pergunta" placeholder="Ex: Como está a empresa hoje? O que o comercial deve priorizar?"
-        style="width:100%;border:1.5px solid var(--vein);border-radius:10px;padding:12px 14px;font-size:14px;resize:none;height:90px;font-family:inherit;box-sizing:border-box;"></textarea>
-
-      <div style="margin:10px 0 16px;display:flex;flex-wrap:wrap;gap:6px;" id="ia-sugestoes"></div>
-
-      <button onclick="gerarBriefingIA()"
-        style="width:100%;background:linear-gradient(135deg,#1a1a2e,#16213e);color:white;border:none;padding:14px;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;">
-        🚀 Gerar Análise
-      </button>
-    </div>
-
-    <div id="ia-resposta" style="display:none;background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;font-size:14px;line-height:1.7;color:var(--stone);"></div>`;
-
-  // Popula sugestões via JS para evitar template literals aninhados
-  const sugestoes = ['Como está a empresa hoje?','O que o comercial deve priorizar?','Situação financeira do mês','Quais pedidos precisam de atenção?'];
-  const divSug = document.getElementById('ia-sugestoes');
-  if (divSug) {
-    sugestoes.forEach(s => {
-      const btn = document.createElement('button');
-      btn.textContent = s;
-      btn.style.cssText = 'background:var(--cream);border:1px solid var(--vein);color:var(--stone);padding:6px 12px;border-radius:20px;cursor:pointer;font-size:12px;';
-      btn.onclick = () => { const el = document.getElementById('ia-pergunta'); if (el) el.value = s; };
-      divSug.appendChild(btn);
-    });
-  }
-}
-
-function abrirBriefingIA() { showTab('ia'); }
-function fecharBriefingIA() { showTab('kanban'); }
-
-async function gerarBriefingIA() {
-  const pergunta = document.getElementById('ia-pergunta')?.value?.trim()
-    || 'Como está a empresa hoje? O que preciso priorizar?';
-  const respostaEl = document.getElementById('ia-resposta');
-  if (!respostaEl) return;
-
-  respostaEl.style.display = 'block';
-  respostaEl.textContent = '⏳ Analisando os dados do MarmorFlow...';
-
-  // Coleta dados do sistema
   const hoje = new Date();
-  const mesAtual = hoje.toISOString().substring(0,7);
-  const hojeStr = hoje.toLocaleDateString('pt-BR');
+  const fmtV = v => 'R$ ' + (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtN = v => (v||0).toLocaleString('pt-BR',{maximumFractionDigits:1});
 
-  const emNegociacao = orders.filter(o => o.stage === 'negociacao');
-  const aguardando   = orders.filter(o => o.stage === 'aguardando');
-  const emCorte      = orders.filter(o => o.stage === 'corte' && !o.ref_fechado);
-  const prontos      = orders.filter(o => o.stage === 'pronto' && !o.ref_fechado);
-  const fechadosMes  = orders.filter(o => ['fechado','corte','acabamento','pronto','entregue'].includes(o.stage) && (o.created_at||'').substring(0,7) === mesAtual);
+  // Filtro de período (padrão: mês atual)
+  let dtIni = localStorage.getItem('dash_dt_ini') || (hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-01');
+  let dtFim = localStorage.getItem('dash_dt_fim') || hoje.toISOString().substring(0,10);
 
-  const fmtV = v => 'R$ ' + (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
-  const parseV = o => parseFloat((o.valor||'0').toString().replace(',','.').replace(/[^0-9.]/g,''))||0;
-
-  const totalNeg = emNegociacao.reduce((s,o) => s+parseV(o), 0);
-  const totalFechMes = fechadosMes.reduce((s,o) => s+parseV(o), 0);
-  const txConv = orders.length > 0 ? Math.round(fechadosMes.length/orders.length*100) : 0;
-
-  // Busca transações financeiras do mês
-  let entradas = 0, saidas = 0;
-  try {
-    const { data: txs } = await getSB().from('transacoes').select('tipo,valor').like('data', mesAtual+'%');
-    (txs||[]).forEach(t => {
-      if (t.tipo === 'entrada') entradas += parseFloat(t.valor)||0;
-      else saidas += parseFloat(t.valor)||0;
-    });
-  } catch(e) {}
-
-  // Pedidos parados em negociação há mais de 7 dias
-  const negParados = emNegociacao.filter(o => {
-    const criado = o.created_at?.substring(0,10) || '';
-    if (!criado) return false;
-    const diff = Math.floor((hoje - new Date(criado)) / (1000*60*60*24));
-    return diff >= 7;
+  // Todos os pedidos no período (por created_at)
+  const pedidosPeriodo = orders.filter(o => {
+    const dt = (o.created_at||'').substring(0,10);
+    return dt >= dtIni && dt <= dtFim;
   });
 
-  const contexto = `
-Você é um assistente estratégico do sistema MarmorFlow da Unipedras, marmoraria em Volta Redonda/RJ.
-Hoje é ${hojeStr}. Responda sempre em português brasileiro, de forma direta e prática — como um sócio experiente falando com o dono.
-Use dados reais abaixo para dar conselhos concretos. Seja específico (cite nomes de clientes quando relevante).
-Formate a resposta com emojis e seções claras. Máximo 400 palavras.
+  // Fechados no período
+  const fechados = pedidosPeriodo.filter(o => o.stage === 'fechado' || o.stage === 'entregue' || o.stage === 'pronto');
+  // Perdidos (histórico arquivado de negociação)
+  const perdidos = pedidosPeriodo.filter(o => o.stage === 'negociacao' && isArquivado(o));
 
-DADOS DO SISTEMA:
-📋 KANBAN:
-- Aguardando Orçamento: ${aguardando.length} pedidos
-- Em Negociação: ${emNegociacao.length} pedidos (total: ${fmtV(totalNeg)})
-- Em Corte: ${emCorte.length} pedidos
-- Prontos para entrega: ${prontos.length} pedidos
-- Fechados este mês: ${fechadosMes.length} pedidos (${fmtV(totalFechMes)})
+  const parseV = o => parseFloat((o.valor||'0').toString().replace(',','.').replace(/[^0-9.]/g,''))||0;
+  const totalFechado = fechados.reduce((s,o)=>s+parseV(o),0);
+  const totalTodos = pedidosPeriodo.reduce((s,o)=>s+parseV(o),0);
+  const taxaConversao = pedidosPeriodo.length > 0 ? (fechados.length/pedidosPeriodo.length*100) : 0;
 
-💰 FINANCEIRO (${mesAtual}):
-- Entradas: ${fmtV(entradas)}
-- Saídas: ${fmtV(saidas)}
-- Resultado: ${fmtV(entradas - saidas)} ${entradas >= saidas ? '✅' : '⚠️'}
+  // Ponto de equilíbrio (custos fixos mensais)
+  const custosMensais = calcularCustosMensais ? calcularCustosMensais() : 0;
+  const pctEquilibrio = custosMensais > 0 ? Math.min(100, (totalFechado/custosMensais)*100) : 0;
 
-🎯 ALERTAS:
-- Pedidos em negociação há +7 dias: ${negParados.length} (${negParados.map(o=>o.cliente).join(', ')||'nenhum'})
-- Taxa de conversão: ${txConv}%
+  // Origens
+  const origens = {};
+  pedidosPeriodo.forEach(o => {
+    const orig = o.origemNome || o.origem || 'Não informado';
+    origens[orig] = (origens[orig]||0) + 1;
+  });
+  const origensTotal = Object.values(origens).reduce((a,b)=>a+b,0);
 
-PEDIDOS EM NEGOCIAÇÃO:
-${emNegociacao.slice(0,8).map(o => `- ${o.cliente}: ${fmtV(parseV(o))} (${o.peca||''})`).join('\n')||'Nenhum'}
+  const CORES_ORIG = ['#1e5f74','#2d8fa8','#4ab5d0','#7fd4e8','#b3e8f4','#d4f0f8'];
 
-PERGUNTA DO USUÁRIO: ${pergunta}`;
+  // Donut SVG
+  const donutSVG = (dados, total) => {
+    if (total === 0) return '<div style="text-align:center;color:#888;padding:20px;font-size:13px;">Sem dados</div>';
+    let offset = 0;
+    const r = 50, cx = 60, cy = 60, stroke = 22;
+    const circ = 2 * Math.PI * r;
+    const slices = Object.entries(dados).map(([label, val], i) => {
+      const pct = val/total;
+      const dash = pct * circ;
+      const gap = circ - dash;
+      const slice = '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+CORES_ORIG[i%CORES_ORIG.length]+'" stroke-width="'+stroke+'" stroke-dasharray="'+dash+' '+gap+'" stroke-dashoffset="'+(-(offset*circ))+'" transform="rotate(-90 '+cx+' '+cy+')"/>';
+      offset += pct;
+      return slice;
+    }).join('');
+    const legenda = Object.entries(dados).map(([label,val],i) =>
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><div style="width:10px;height:10px;border-radius:50%;background:'+CORES_ORIG[i%CORES_ORIG.length]+';flex-shrink:0;"></div><div style="font-size:11px;color:var(--stone);">'+label+'</div><div style="margin-left:auto;font-size:11px;font-weight:700;color:var(--stone);">'+(val/total*100).toFixed(0)+'%</div></div>'
+    ).join('');
+    return '<div style="display:flex;align-items:center;gap:16px;"><svg width="120" height="120" viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" fill="none" stroke="#f0f0f0" stroke-width="22"/>'+slices+'</svg><div style="flex:1;">'+legenda+'</div></div>';
+  };
 
-  try {
-    const response = await fetch('https://mute-wildflower-ed3c.unipedras-marmorariavr.workers.dev', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: contexto }]
-      })
-    });
-    const data = await response.json();
-    const texto = data.content?.[0]?.text || 'Não foi possível gerar a análise.';
-    // Renderiza markdown básico
-    const html = texto
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      .replace(/^#{3}\s+(.+)$/gm, '<h3 style="font-size:14px;font-weight:800;color:var(--stone);margin:16px 0 6px;">$1</h3>')
-      .replace(/^#{2}\s+(.+)$/gm, '<h2 style="font-size:15px;font-weight:800;color:var(--stone);margin:20px 0 8px;border-left:4px solid var(--gold);padding-left:10px;">$1</h2>')
-      .replace(/^#{1}\s+(.+)$/gm, '<h1 style="font-size:17px;font-weight:900;color:var(--stone);margin:0 0 16px;">$1</h1>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong style="color:var(--stone);">$1</strong>')
-      .replace(/^---$/gm, '<hr style="border:none;border-top:1px solid var(--cream-dark);margin:16px 0;">')
-      .replace(/^>\s+(.+)$/gm, '<blockquote style="background:var(--cream);border-left:4px solid var(--gold);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-style:italic;color:var(--stone);">$1</blockquote>')
-      .replace(/^\|\s*(.+?)\s*\|\s*(.+?)\s*\|$/gm, (_, a, b) => {
-        if (a.match(/^-+$/) && b.match(/^-+$/)) return '';
-        return `<div style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:0.5px solid var(--cream-dark);font-size:13px;"><span>${a}</span><span style="font-weight:700;color:#2E7D32;">${b}</span></div>`;
-      })
-      .replace(/^\d+\.\s+\*\*(.+?)\*\*\s*—\s*(.+)$/gm, '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--cream-dark);"><span style="background:var(--gold);color:white;font-weight:800;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;">$1</span><div><strong>$1</strong> — $2</div></div>')
-      .replace(/^\d+\.\s+(.+)$/gm, '<div style="padding:6px 0 6px 16px;border-left:2px solid var(--gold);margin:4px 0;font-size:13px;">$1</div>')
-      .replace(/^[-*]\s+(.+)$/gm, '<div style="padding:5px 0 5px 20px;font-size:13px;position:relative;">• $1</div>')
-      .replace(/\n\n/g, '<br>')
-      .replace(/\n/g, '');
-    respostaEl.style.whiteSpace = 'normal';
-    respostaEl.innerHTML = html;
-  } catch(e) {
-    respostaEl.textContent = '❌ Erro: ' + e.message;
-  }
+  // Card de métrica
+  const card = (icon, iconBg, label, value, sub='') =>
+    '<div style="background:white;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,0.07);padding:16px;display:flex;align-items:center;gap:12px;">'
+    +'<div style="width:40px;height:40px;border-radius:10px;background:'+iconBg+';display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">'+icon+'</div>'
+    +'<div><div style="font-size:11px;color:#888;margin-bottom:3px;">'+label+'</div><div style="font-size:18px;font-weight:800;color:var(--stone);">'+value+'</div>'+(sub?'<div style="font-size:11px;color:#888;">'+sub+'</div>':'')+'</div></div>';
+
+  // Seção com título
+  const secao = (icon, titulo, conteudo) =>
+    '<div style="margin-bottom:28px;">'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-left:12px;border-left:4px solid #1e5f74;">'
+    +'<span style="font-size:18px;">'+icon+'</span>'
+    +'<div style="font-size:15px;font-weight:700;color:#1e5f74;">'+titulo+'</div>'
+    +'</div>'+conteudo+'</div>';
+
+  // Gauge semicircular SVG para ponto de equilíbrio
+  const gaugeAngle = (pct) => {
+    const angle = -180 + (pct/100)*180;
+    const rad = angle * Math.PI/180;
+    const x = 60 + 40*Math.cos(rad);
+    const y = 60 + 40*Math.sin(rad);
+    return {x, y, angle};
+  };
+  const g = gaugeAngle(Math.min(100,pctEquilibrio));
+
+  el.innerHTML = `
+    <!-- FILTRO DE PERÍODO -->
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:24px;">
+      <div style="font-size:22px;font-weight:800;color:var(--stone);">Dashboard</div>
+      <div style="font-size:13px;color:#888;flex:1;">Visão geral do desempenho</div>
+      <div style="display:flex;align-items:center;gap:8px;background:white;border:1.5px solid var(--cream-dark);border-radius:8px;padding:6px 12px;">
+        <input type="date" value="\${dtIni}" style="border:none;outline:none;font-size:13px;color:var(--stone);"
+          onchange="localStorage.setItem('dash_dt_ini',this.value);renderDashboard()">
+        <span style="color:#888;">→</span>
+        <input type="date" value="\${dtFim}" style="border:none;outline:none;font-size:13px;color:var(--stone);"
+          onchange="localStorage.setItem('dash_dt_fim',this.value);renderDashboard()">
+        <button onclick="localStorage.removeItem('dash_dt_ini');localStorage.removeItem('dash_dt_fim');renderDashboard()" style="background:none;border:none;color:#888;cursor:pointer;font-size:11px;font-weight:600;">LIMPAR</button>
+      </div>
+    </div>
+
+    <!-- CARDS DE DESTAQUE -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px;">
+      <!-- Taxa de Conversão -->
+      <div style="background:white;border-radius:14px;box-shadow:0 1px 6px rgba(0,0,0,0.07);padding:20px;display:flex;align-items:center;gap:16px;">
+        <div style="width:48px;height:48px;border-radius:12px;background:#e8f4f7;display:flex;align-items:center;justify-content:center;font-size:24px;">📈</div>
+        <div>
+          <div style="font-size:12px;color:#888;margin-bottom:4px;">Taxa de Conversão</div>
+          <div style="font-size:32px;font-weight:900;color:#1e5f74;">\${taxaConversao.toFixed(1)}%</div>
+          <div style="font-size:11px;color:#888;">\${fechados.length} de \${pedidosPeriodo.length} pedidos fechados</div>
+        </div>
+      </div>
+      <!-- Ponto de Equilíbrio -->
+      <div style="background:white;border-radius:14px;box-shadow:0 1px 6px rgba(0,0,0,0.07);padding:20px;display:flex;align-items:center;gap:16px;">
+        <svg width="100" height="60" viewBox="0 0 120 70" style="flex-shrink:0;">
+          <path d="M 20 60 A 40 40 0 0 1 100 60" fill="none" stroke="#e0e0e0" stroke-width="12" stroke-linecap="round"/>
+          <path d="M 20 60 A 40 40 0 0 1 100 60" fill="none" stroke="#1e5f74" stroke-width="12" stroke-linecap="round"
+            stroke-dasharray="\${(pctEquilibrio/100)*125.7} 125.7"/>
+          <text x="60" y="58" text-anchor="middle" font-size="14" font-weight="900" fill="#1e5f74">\${pctEquilibrio.toFixed(0)}%</text>
+        </svg>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;color:#888;margin-bottom:4px;">Ponto de Equilíbrio</div>
+          <div style="font-size:16px;font-weight:800;color:var(--stone);">\${fmtV(totalFechado)}</div>
+          <div style="font-size:11px;color:#888;">Meta: \${fmtV(custosMensais)}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SEÇÃO: TODOS OS ORÇAMENTOS -->
+    \${secao('🔲','Todos os Orçamentos',
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;">'
+      +card('💰','#e8f4f7','Total Orçado',fmtV(totalTodos))
+      +card('🎟️','#e8f4f7','Ticket Médio',fmtV(pedidosPeriodo.length>0?totalTodos/pedidosPeriodo.length:0))
+      +card('📋','#e8f4f7','Qtd Orçamentos',pedidosPeriodo.length)
+      +'</div>'
+      +'<div style="background:white;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,0.07);padding:16px;">'
+      +'<div style="font-size:12px;font-weight:700;color:#1e5f74;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px;">Por Origem</div>'
+      +donutSVG(origens, origensTotal)
+      +'</div>'
+    )}
+
+    <!-- SEÇÃO: SOMENTE FECHADOS -->
+    \${secao('✓','Somente Fechados',
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;">'
+      +card('💰','#e8f5e9','Total Fechado',fmtV(totalFechado))
+      +card('🎟️','#e8f5e9','Ticket Médio',fmtV(fechados.length>0?totalFechado/fechados.length:0))
+      +card('✅','#e8f5e9','Qtd Fechados',fechados.length)
+      +card('📐','#e8f5e9','Área Total',fmtN(fechados.reduce((s,o)=>s+(o.areaTotal||0),0))+' m²')
+      +'</div>'
+      +'<div style="background:white;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,0.07);padding:16px;">'
+      +'<div style="font-size:12px;font-weight:700;color:#1e5f74;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px;">Por Origem</div>'
+      +donutSVG((() => {const o={};fechados.forEach(f=>{const orig=f.origemNome||f.origem||'Não informado';o[orig]=(o[orig]||0)+1;});return o;})(), fechados.length)
+      +'</div>'
+    )}
+
+    <!-- SEÇÃO: PRODUÇÃO -->
+    \${secao('⚙️','Produção no Período',
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">'
+      +card('🔪','#f3f0ff','Em Corte',orders.filter(o=>o.stage==='corte').length+' pedidos')
+      +card('✨','#f3f0ff','Acabamento',orders.filter(o=>o.stage==='acabamento').length+' pedidos')
+      +card('📦','#f3f0ff','Prontos',orders.filter(o=>o.stage==='pronto').length+' pedidos')
+      +card('🚚','#f3f0ff','Entregues',orders.filter(o=>o.stage==='entregue').length+' pedidos')
+      +'</div>'
+    )}
+  `;
 }
 
 function renderDashComercial() {

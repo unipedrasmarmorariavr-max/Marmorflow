@@ -3249,174 +3249,166 @@ const ORIGEM_LABELS = {
   arquiteto:'📐 Arquiteto', construtora:'🏗️ Construtora', indicacao:'🤝 Indicação', outro:'Outro'
 };
 
-function renderDashboard(abaAtiva) {
-  const el = document.getElementById('dashboard-content');
+function renderDashboard() {
+  var el = document.getElementById('dashboard-content');
   if (!el) return;
+
   try {
+    var hoje = new Date();
+    var fmtV = function(v){ return 'R$ ' + Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+    var fmtN = function(v){ return Number(v||0).toLocaleString('pt-BR',{maximumFractionDigits:1}); };
+    var parseV = function(o){ return parseFloat((o.valor||'0').toString().replace(',','.').replace(/[^0-9.]/g,''))||0; };
 
-  const hoje = new Date();
-  const fmtV = v => 'R$ ' + (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const fmtN = v => (v||0).toLocaleString('pt-BR',{maximumFractionDigits:1});
+    var dtIni = localStorage.getItem('dash_dt_ini') || (hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-01');
+    var dtFim = localStorage.getItem('dash_dt_fim') || hoje.toISOString().substring(0,10);
 
-  // Filtro de período (padrão: mês atual)
-  let dtIni = localStorage.getItem('dash_dt_ini') || (hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-01');
-  let dtFim = localStorage.getItem('dash_dt_fim') || hoje.toISOString().substring(0,10);
+    var pedidosPeriodo = orders.filter(function(o){
+      var dt = (o.created_at||'').substring(0,10);
+      return dt >= dtIni && dt <= dtFim;
+    });
 
-  // Todos os pedidos no período (por created_at)
-  const pedidosPeriodo = orders.filter(o => {
-    const dt = (o.created_at||'').substring(0,10);
-    return dt >= dtIni && dt <= dtFim;
-  });
+    var fechados = pedidosPeriodo.filter(function(o){ return o.stage==='fechado'||o.stage==='entregue'||o.stage==='pronto'; });
+    var totalFechado = fechados.reduce(function(s,o){return s+parseV(o);},0);
+    var totalTodos   = pedidosPeriodo.reduce(function(s,o){return s+parseV(o);},0);
+    var taxaConv = pedidosPeriodo.length>0 ? (fechados.length/pedidosPeriodo.length*100) : 0;
+    var custosMensais = (typeof calcularCustosMensais==='function') ? calcularCustosMensais() : 0;
+    var pctEq = custosMensais>0 ? Math.min(100,(totalFechado/custosMensais)*100) : 0;
 
-  // Fechados no período
-  const fechados = pedidosPeriodo.filter(o => o.stage === 'fechado' || o.stage === 'entregue' || o.stage === 'pronto');
-  // Perdidos (histórico arquivado de negociação)
-  const perdidos = pedidosPeriodo.filter(o => o.stage === 'negociacao' && (typeof isArquivado === 'function') && isArquivado(o));
+    // Origens — todos
+    var origTodos = {};
+    pedidosPeriodo.forEach(function(o){
+      var k = o.origemNome||o.origem||'Não informado';
+      origTodos[k] = (origTodos[k]||0)+1;
+    });
+    // Origens — fechados
+    var origFech = {};
+    fechados.forEach(function(o){
+      var k = o.origemNome||o.origem||'Não informado';
+      origFech[k] = (origFech[k]||0)+1;
+    });
 
-  const parseV = o => parseFloat((o.valor||'0').toString().replace(',','.').replace(/[^0-9.]/g,''))||0;
-  const totalFechado = fechados.reduce((s,o)=>s+parseV(o),0);
-  const totalTodos = pedidosPeriodo.reduce((s,o)=>s+parseV(o),0);
-  const taxaConversao = pedidosPeriodo.length > 0 ? (fechados.length/pedidosPeriodo.length*100) : 0;
+    var CORES = ['#1e5f74','#2d8fa8','#4ab5d0','#7fd4e8','#b3e8f4','#aaaaaa'];
 
-  // Ponto de equilíbrio (custos fixos mensais)
-  const custosMensais = (typeof calcularCustosMensais === 'function') ? calcularCustosMensais() : 0;
-  const pctEquilibrio = custosMensais > 0 ? Math.min(100, (totalFechado/custosMensais)*100) : 0;
+    function donut(dados, total) {
+      if (!total) return '<div style="text-align:center;color:#888;padding:20px;font-size:13px;">Sem dados no período</div>';
+      var r=50,cx=60,cy=60,sw=22,circ=2*Math.PI*r;
+      var offset=0, slices='', legend='';
+      Object.keys(dados).forEach(function(lbl,i){
+        var val=dados[lbl], pct=val/total;
+        var dash=pct*circ, gap=circ-dash;
+        slices += '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+CORES[i%CORES.length]+'" stroke-width="'+sw+'" stroke-dasharray="'+dash.toFixed(2)+' '+gap.toFixed(2)+'" stroke-dashoffset="'+(-(offset*circ)).toFixed(2)+'" transform="rotate(-90 '+cx+' '+cy+')"/>';
+        legend += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><div style="width:10px;height:10px;border-radius:50%;background:'+CORES[i%CORES.length]+';flex-shrink:0;"></div><span style="font-size:11px;color:#333;flex:1;">'+lbl+'</span><span style="font-size:11px;font-weight:700;color:#333;">'+(pct*100).toFixed(0)+'%</span></div>';
+        offset+=pct;
+      });
+      return '<div style="display:flex;align-items:center;gap:16px;"><svg width="120" height="120" viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" fill="none" stroke="#f0f0f0" stroke-width="22"/>'+slices+'</svg><div style="flex:1;">'+legend+'</div></div>';
+    }
 
-  // Origens
-  const origens = {};
-  pedidosPeriodo.forEach(o => {
-    const orig = o.origemNome || o.origem || 'Não informado';
-    origens[orig] = (origens[orig]||0) + 1;
-  });
-  const origensTotal = Object.values(origens).reduce((a,b)=>a+b,0);
+    function metricCard(icon,bg,label,value,sub) {
+      return '<div style="background:white;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:16px;display:flex;align-items:center;gap:12px;">'
+        +'<div style="width:40px;height:40px;border-radius:10px;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:20px;">'+icon+'</div>'
+        +'<div><div style="font-size:11px;color:#888;margin-bottom:3px;">'+label+'</div>'
+        +'<div style="font-size:18px;font-weight:800;color:#1a2332;">'+value+'</div>'
+        +(sub?'<div style="font-size:11px;color:#888;">'+sub+'</div>':'')
+        +'</div></div>';
+    }
 
-  const CORES_ORIG = ['#1e5f74','#2d8fa8','#4ab5d0','#7fd4e8','#b3e8f4','#d4f0f8'];
+    function secao(icon, titulo, conteudo) {
+      return '<div style="margin-bottom:28px;">'
+        +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-left:12px;border-left:4px solid #1e5f74;">'
+        +'<span style="font-size:18px;">'+icon+'</span>'
+        +'<div style="font-size:15px;font-weight:700;color:#1e5f74;">'+titulo+'</div>'
+        +'</div>'+conteudo+'</div>';
+    }
 
-  // Donut SVG
-  const donutSVG = (dados, total) => {
-    if (total === 0) return '<div style="text-align:center;color:#888;padding:20px;font-size:13px;">Sem dados</div>';
-    let offset = 0;
-    const r = 50, cx = 60, cy = 60, stroke = 22;
-    const circ = 2 * Math.PI * r;
-    const slices = Object.entries(dados).map(([label, val], i) => {
-      const pct = val/total;
-      const dash = pct * circ;
-      const gap = circ - dash;
-      const slice = '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+CORES_ORIG[i%CORES_ORIG.length]+'" stroke-width="'+stroke+'" stroke-dasharray="'+dash+' '+gap+'" stroke-dashoffset="'+(-(offset*circ))+'" transform="rotate(-90 '+cx+' '+cy+')"/>';
-      offset += pct;
-      return slice;
-    }).join('');
-    const legenda = Object.entries(dados).map(([label,val],i) =>
-      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><div style="width:10px;height:10px;border-radius:50%;background:'+CORES_ORIG[i%CORES_ORIG.length]+';flex-shrink:0;"></div><div style="font-size:11px;color:var(--stone);">'+label+'</div><div style="margin-left:auto;font-size:11px;font-weight:700;color:var(--stone);">'+(val/total*100).toFixed(0)+'%</div></div>'
-    ).join('');
-    return '<div style="display:flex;align-items:center;gap:16px;"><svg width="120" height="120" viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" fill="none" stroke="#f0f0f0" stroke-width="22"/>'+slices+'</svg><div style="flex:1;">'+legenda+'</div></div>';
-  };
+    // Gauge arc para ponto de equilíbrio
+    var arcLen = (pctEq/100)*125.7;
+    var gaugeHTML = '<svg width="110" height="65" viewBox="0 0 120 70" style="flex-shrink:0;">'
+      +'<path d="M 20 60 A 40 40 0 0 1 100 60" fill="none" stroke="#e0e0e0" stroke-width="14" stroke-linecap="round"/>'
+      +'<path d="M 20 60 A 40 40 0 0 1 100 60" fill="none" stroke="#1e5f74" stroke-width="14" stroke-linecap="round" stroke-dasharray="'+arcLen.toFixed(1)+' 125.7"/>'
+      +'<text x="60" y="58" text-anchor="middle" font-size="14" font-weight="900" fill="#1e5f74">'+pctEq.toFixed(0)+'%</text>'
+      +'</svg>';
 
-  // Card de métrica
-  const card = (icon, iconBg, label, value, sub='') =>
-    '<div style="background:white;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,0.07);padding:16px;display:flex;align-items:center;gap:12px;">'
-    +'<div style="width:40px;height:40px;border-radius:10px;background:'+iconBg+';display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">'+icon+'</div>'
-    +'<div><div style="font-size:11px;color:#888;margin-bottom:3px;">'+label+'</div><div style="font-size:18px;font-weight:800;color:var(--stone);">'+value+'</div>'+(sub?'<div style="font-size:11px;color:#888;">'+sub+'</div>':'')+'</div></div>';
+    // Filtro HTML
+    var filtroHTML = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:24px;background:white;border:1.5px solid #e0e0e0;border-radius:10px;padding:10px 16px;">'
+      +'<span style="font-size:13px;color:#888;">Período:</span>'
+      +'<input type="date" value="'+dtIni+'" style="border:none;outline:none;font-size:13px;color:#1a2332;" onchange="localStorage.setItem(&apos;dash_dt_ini&apos;,this.value);renderDashboard()">'
+      +'<span style="color:#888;">→</span>'
+      +'<input type="date" value="'+dtFim+'" style="border:none;outline:none;font-size:13px;color:#1a2332;" onchange="localStorage.setItem(&apos;dash_dt_fim&apos;,this.value);renderDashboard()">'
+      +'<button onclick="localStorage.removeItem(&apos;dash_dt_ini&apos;);localStorage.removeItem(&apos;dash_dt_fim&apos;);renderDashboard()" style="background:none;border:none;color:#888;cursor:pointer;font-size:11px;font-weight:600;margin-left:auto;">LIMPAR</button>'
+      +'</div>';
 
-  // Seção com título
-  const secao = (icon, titulo, conteudo) =>
-    '<div style="margin-bottom:28px;">'
-    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-left:12px;border-left:4px solid #1e5f74;">'
-    +'<span style="font-size:18px;">'+icon+'</span>'
-    +'<div style="font-size:15px;font-weight:700;color:#1e5f74;">'+titulo+'</div>'
-    +'</div>'+conteudo+'</div>';
+    // Cards de destaque
+    var destaqueHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px;">'
+      // Taxa de conversão
+      +'<div style="background:white;border-radius:14px;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:20px;display:flex;align-items:center;gap:16px;">'
+      +'<div style="width:48px;height:48px;border-radius:12px;background:#e8f4f7;display:flex;align-items:center;justify-content:center;font-size:24px;">📈</div>'
+      +'<div><div style="font-size:12px;color:#888;margin-bottom:4px;">Taxa de Conversão</div>'
+      +'<div style="font-size:32px;font-weight:900;color:#1e5f74;">'+taxaConv.toFixed(1)+'%</div>'
+      +'<div style="font-size:11px;color:#888;">'+fechados.length+' de '+pedidosPeriodo.length+' pedidos fechados</div>'
+      +'</div></div>'
+      // Ponto de equilíbrio
+      +'<div style="background:white;border-radius:14px;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:20px;display:flex;align-items:center;gap:16px;">'
+      +gaugeHTML
+      +'<div style="flex:1;min-width:0;">'
+      +'<div style="font-size:12px;color:#888;margin-bottom:4px;">Ponto de Equilíbrio</div>'
+      +'<div style="font-size:16px;font-weight:800;color:#1a2332;">'+fmtV(totalFechado)+'</div>'
+      +'<div style="font-size:11px;color:#888;">Meta: '+fmtV(custosMensais)+'</div>'
+      +'</div></div>'
+      +'</div>';
 
-  // Gauge semicircular SVG para ponto de equilíbrio
-  const gaugeAngle = (pct) => {
-    const angle = -180 + (pct/100)*180;
-    const rad = angle * Math.PI/180;
-    const x = 60 + 40*Math.cos(rad);
-    const y = 60 + 40*Math.sin(rad);
-    return {x, y, angle};
-  };
-  const g = gaugeAngle(Math.min(100,pctEquilibrio));
-
-  el.innerHTML = `
-    <!-- FILTRO DE PERÍODO -->
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:24px;">
-      <div style="font-size:22px;font-weight:800;color:var(--stone);">Dashboard</div>
-      <div style="font-size:13px;color:#888;flex:1;">Visão geral do desempenho</div>
-      <div style="display:flex;align-items:center;gap:8px;background:white;border:1.5px solid var(--cream-dark);border-radius:8px;padding:6px 12px;">
-        <input type="date" value="\${dtIni}" style="border:none;outline:none;font-size:13px;color:var(--stone);"
-          onchange="localStorage.setItem('dash_dt_ini',this.value);renderDashboard()">
-        <span style="color:#888;">→</span>
-        <input type="date" value="\${dtFim}" style="border:none;outline:none;font-size:13px;color:var(--stone);"
-          onchange="localStorage.setItem('dash_dt_fim',this.value);renderDashboard()">
-        <button onclick="localStorage.removeItem('dash_dt_ini');localStorage.removeItem('dash_dt_fim');renderDashboard()" style="background:none;border:none;color:#888;cursor:pointer;font-size:11px;font-weight:600;">LIMPAR</button>
-      </div>
-    </div>
-
-    <!-- CARDS DE DESTAQUE -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px;">
-      <!-- Taxa de Conversão -->
-      <div style="background:white;border-radius:14px;box-shadow:0 1px 6px rgba(0,0,0,0.07);padding:20px;display:flex;align-items:center;gap:16px;">
-        <div style="width:48px;height:48px;border-radius:12px;background:#e8f4f7;display:flex;align-items:center;justify-content:center;font-size:24px;">📈</div>
-        <div>
-          <div style="font-size:12px;color:#888;margin-bottom:4px;">Taxa de Conversão</div>
-          <div style="font-size:32px;font-weight:900;color:#1e5f74;">\${taxaConversao.toFixed(1)}%</div>
-          <div style="font-size:11px;color:#888;">\${fechados.length} de \${pedidosPeriodo.length} pedidos fechados</div>
-        </div>
-      </div>
-      <!-- Ponto de Equilíbrio -->
-      <div style="background:white;border-radius:14px;box-shadow:0 1px 6px rgba(0,0,0,0.07);padding:20px;display:flex;align-items:center;gap:16px;">
-        <svg width="100" height="60" viewBox="0 0 120 70" style="flex-shrink:0;">
-          <path d="M 20 60 A 40 40 0 0 1 100 60" fill="none" stroke="#e0e0e0" stroke-width="12" stroke-linecap="round"/>
-          <path d="M 20 60 A 40 40 0 0 1 100 60" fill="none" stroke="#1e5f74" stroke-width="12" stroke-linecap="round"
-            stroke-dasharray="\${(pctEquilibrio/100)*125.7} 125.7"/>
-          <text x="60" y="58" text-anchor="middle" font-size="14" font-weight="900" fill="#1e5f74">\${pctEquilibrio.toFixed(0)}%</text>
-        </svg>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:12px;color:#888;margin-bottom:4px;">Ponto de Equilíbrio</div>
-          <div style="font-size:16px;font-weight:800;color:var(--stone);">\${fmtV(totalFechado)}</div>
-          <div style="font-size:11px;color:#888;">Meta: \${fmtV(custosMensais)}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SEÇÃO: TODOS OS ORÇAMENTOS -->
-    \${secao('🔲','Todos os Orçamentos',
+    // Seções
+    var secTodos = secao('🔲','Todos os Orçamentos',
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;">'
-      +card('💰','#e8f4f7','Total Orçado',fmtV(totalTodos))
-      +card('🎟️','#e8f4f7','Ticket Médio',fmtV(pedidosPeriodo.length>0?totalTodos/pedidosPeriodo.length:0))
-      +card('📋','#e8f4f7','Qtd Orçamentos',pedidosPeriodo.length)
+      +metricCard('💰','#e8f4f7','Total Orçado',fmtV(totalTodos))
+      +metricCard('🎟','#e8f4f7','Ticket Médio',fmtV(pedidosPeriodo.length?totalTodos/pedidosPeriodo.length:0))
+      +metricCard('📋','#e8f4f7','Quantidade',pedidosPeriodo.length+' pedidos')
       +'</div>'
-      +'<div style="background:white;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,0.07);padding:16px;">'
+      +'<div style="background:white;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:16px;">'
       +'<div style="font-size:12px;font-weight:700;color:#1e5f74;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px;">Por Origem</div>'
-      +donutSVG(origens, origensTotal)
+      +donut(origTodos, pedidosPeriodo.length)
       +'</div>'
-    )}
+    );
 
-    <!-- SEÇÃO: SOMENTE FECHADOS -->
-    \${secao('✓','Somente Fechados',
+    var secFechados = secao('✅','Somente Fechados',
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;">'
-      +card('💰','#e8f5e9','Total Fechado',fmtV(totalFechado))
-      +card('🎟️','#e8f5e9','Ticket Médio',fmtV(fechados.length>0?totalFechado/fechados.length:0))
-      +card('✅','#e8f5e9','Qtd Fechados',fechados.length)
-      +card('📐','#e8f5e9','Área Total',fmtN(fechados.reduce((s,o)=>s+(o.areaTotal||0),0))+' m²')
+      +metricCard('💰','#e8f5e9','Total Fechado',fmtV(totalFechado))
+      +metricCard('🎟','#e8f5e9','Ticket Médio',fmtV(fechados.length?totalFechado/fechados.length:0))
+      +metricCard('✅','#e8f5e9','Quantidade',fechados.length+' pedidos')
       +'</div>'
-      +'<div style="background:white;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,0.07);padding:16px;">'
+      +'<div style="background:white;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:16px;">'
       +'<div style="font-size:12px;font-weight:700;color:#1e5f74;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px;">Por Origem</div>'
-      +donutSVG((() => {const o={};fechados.forEach(f=>{const orig=f.origemNome||f.origem||'Não informado';o[orig]=(o[orig]||0)+1;});return o;})(), fechados.length)
+      +donut(origFech, fechados.length)
       +'</div>'
-    )}
+    );
 
-    <!-- SEÇÃO: PRODUÇÃO -->
-    \${secao('⚙️','Produção no Período',
+    var emCorte    = orders.filter(function(o){return o.stage==='corte';}).length;
+    var emAcab     = orders.filter(function(o){return o.stage==='acabamento';}).length;
+    var prontos    = orders.filter(function(o){return o.stage==='pronto';}).length;
+    var entregues  = orders.filter(function(o){return o.stage==='entregue';}).length;
+
+    var secProd = secao('⚙️','Produção Atual',
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">'
-      +card('🔪','#f3f0ff','Em Corte',orders.filter(o=>o.stage==='corte').length+' pedidos')
-      +card('✨','#f3f0ff','Acabamento',orders.filter(o=>o.stage==='acabamento').length+' pedidos')
-      +card('📦','#f3f0ff','Prontos',orders.filter(o=>o.stage==='pronto').length+' pedidos')
-      +card('🚚','#f3f0ff','Entregues',orders.filter(o=>o.stage==='entregue').length+' pedidos')
+      +metricCard('🔪','#f3f0ff','Em Corte',emCorte+' pedidos')
+      +metricCard('✨','#f3f0ff','Acabamento',emAcab+' pedidos')
+      +metricCard('📦','#f3f0ff','Prontos',prontos+' pedidos')
+      +metricCard('🚚','#f3f0ff','Entregues',entregues+' pedidos')
       +'</div>'
-    )}
-  `;
+    );
+
+    el.innerHTML = '<div style="max-width:960px;">'
+      +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">'
+      +'<div style="font-size:24px;font-weight:900;color:#1a2332;">📊 Dashboard</div>'
+      +'<div style="font-size:13px;color:#888;">Visão geral do desempenho</div>'
+      +'</div>'
+      +filtroHTML
+      +destaqueHTML
+      +secTodos
+      +secFechados
+      +secProd
+      +'</div>';
+
   } catch(e) {
-    el.innerHTML = '<div style="padding:40px;text-align:center;color:#B85A4A;font-size:14px;">Erro no Dashboard: ' + e.message + '</div>';
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:#B85A4A;font-size:14px;background:white;border-radius:12px;margin:20px;">Erro no Dashboard: '+e.message+'</div>';
     console.error('Dashboard error:', e);
   }
 }

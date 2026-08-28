@@ -56,8 +56,9 @@
   .login-hint{margin-top:20px;font-size:11px;color:var(--vein);text-align:center;line-height:1.6;}
 
   /* APP */
-  #app{display:none;min-height:100vh;flex-direction:row;}
-  /* SIDEBAR */
+  #app{display:none;height:100vh;flex-direction:row;overflow:hidden;}
+  #main-content{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;}
+  .content{flex:1;padding:20px;width:100%;box-sizing:border-box;overflow-y:auto;height:calc(100vh - 52px);}
   #sidebar{width:220px;min-width:220px;background:#1a2332;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;transition:width 0.25s ease;z-index:200;flex-shrink:0;}
   #sidebar.collapsed{width:60px;min-width:60px;}
   #sidebar.collapsed .nav-label{display:none;}
@@ -82,7 +83,6 @@
   .btn-logout-side{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.5);padding:8px 12px;border-radius:6px;cursor:pointer;font-size:12px;width:100%;text-align:left;display:flex;align-items:center;gap:8px;font-family:inherit;}
   .btn-logout-side:hover{background:rgba(255,255,255,0.1);color:white;}
   /* MAIN CONTENT */
-  #main-content{flex:1;display:flex;flex-direction:column;min-width:0;overflow-x:hidden;}
   .topbar{background:white;border-bottom:1px solid var(--cream-dark);padding:0 20px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
   .topbar-logo{font-family:'DM Serif Display',serif;font-size:18px;color:var(--stone);letter-spacing:-0.3px;}
   .topbar-logo span{color:var(--gold);}
@@ -105,7 +105,6 @@
   .tab-btn{padding:12px 16px;border:none;background:none;font-size:12px;font-weight:500;color:var(--stone-light);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s;white-space:nowrap;display:flex;align-items:center;gap:6px;}
   .tab-btn:hover{color:var(--stone);background:var(--cream);}
   .tab-btn.active{color:var(--gold);border-bottom-color:var(--gold);font-weight:700;}
-  .content{flex:1;padding:20px;max-width:1500px;margin:0 auto;width:100%;}
   .panel{display:none;}
   .panel.active{display:block;}
 
@@ -3057,7 +3056,7 @@ function ativarSessao(perfil) {
   inicializarPedrasPadrao();
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
-  document.getElementById('app').style.flexDirection = 'column';
+  document.getElementById('app').style.flexDirection = 'row';
   document.getElementById('app').style.minHeight = '100vh';
   var p = PROFILES[currentUser];
   document.getElementById('user-info').innerHTML = p.icon + ' Olá, <strong>' + p.name + '</strong>';

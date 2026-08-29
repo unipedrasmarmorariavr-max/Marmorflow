@@ -3390,12 +3390,63 @@ function renderDashboard() {
     var prontos  = orders.filter(function(o){return o.stage==='pronto';}).length;
     var entregues= orders.filter(function(o){return o.stage==='entregue';}).length;
 
+    // Totais de produção — soma dos orçamentos dos pedidos FECHADOS no período (sem duplicar)
+    var orcs = typeof getOrcamentos==='function' ? getOrcamentos() : [];
+    var totProd = {
+      area:0, corte45:0, mont45:0, polReto:0, polAuto:0,
+      cubas:0, furos:0, recortes:0, horas:0
+    };
+    var orcsProcessados = {};
+    fechados.forEach(function(o){
+      if (orcsProcessados[o.id]) return;
+      orcsProcessados[o.id] = true;
+      var orc = orcs.find(function(r){return r.pedidoId===o.id;});
+      var orc = orcs.find(function(r){return r.pedidoId===o.id;});
+      if (!orc||!orc.itens) return;
+      orc.itens.forEach(function(it){
+        totProd.area    += parseFloat(it.areaTotal||it.m2Override||0);
+        totProd.corte45 += parseFloat(it.compCorte45||0);
+        totProd.mont45  += parseFloat(it.compMontagem45||0);
+        totProd.polReto += parseFloat(it.compPolimentoManual||0);
+        totProd.polAuto += parseFloat(it.compPolimentoAuto||0);
+        totProd.cubas   += parseInt(it.qtdCubas||0);
+        totProd.furos   += parseInt(it.qtdFlush||0)+parseInt(it.qtdFlath||0);
+        totProd.recortes+= parseInt(it.qtdRecortes||0);
+        if (it.calc) totProd.horas += parseFloat(it.calc.tempoProdInterno||0);
+      });
+    });
+
+    function prodCard(icon, label, value, unit) {
+      return '<div style="background:white;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);padding:12px 14px;display:flex;align-items:center;gap:10px;">'
+        +'<span style="font-size:18px;">'+icon+'</span>'
+        +'<div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px;">'+label+'</div>'
+        +'<div style="font-size:16px;font-weight:800;color:#1a2332;">'+fmtN(value)+'<span style="font-size:11px;font-weight:400;color:#888;margin-left:4px;">'+unit+'</span></div>'
+        +'</div></div>';
+    }
+
+    var detalheProd = fechados.length > 0
+      ? '<div style="margin-top:16px;padding-top:16px;border-top:1px solid #e8e8e8;">'
+        +'<div style="font-size:12px;font-weight:700;color:#1e5f74;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">Totais em Produção</div>'
+        +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">'
+        +prodCard('📐','Área Total',totProd.area,'m²')
+        +prodCard('✂️','Corte 45°',totProd.corte45,'m')
+        +prodCard('🔧','Montagem 45°',totProd.mont45,'m')
+        +prodCard('💎','Polimento Reto',totProd.polReto,'m')
+        +prodCard('⚡','Polimento Auto',totProd.polAuto,'m')
+        +prodCard('🕳️','Cubas',totProd.cubas,'un')
+        +prodCard('🔩','Furos/Ralos',totProd.furos,'un')
+        +prodCard('✂️','Recortes',totProd.recortes,'un')
+        +prodCard('⏱','Horas Prod.',totProd.horas,'h')
+        +'</div></div>'
+      : '';
+
     var cardsProd = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">'
       +card('🔪','#f3f0ff','Em Corte',emCorte+' pedidos')
       +card('✨','#f3f0ff','Acabamento',emAcab+' pedidos')
       +card('📦','#f3f0ff','Prontos',prontos+' pedidos')
       +card('🚚','#f3f0ff','Entregues',entregues+' pedidos')
-      +'</div>';
+      +'</div>'
+      +detalheProd;
 
     el.innerHTML = '<div style="width:100%;max-width:1400px;">'
       +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">'

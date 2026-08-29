@@ -3394,7 +3394,7 @@ function renderDashboard() {
     var orcs = typeof getOrcamentos==='function' ? getOrcamentos() : [];
     var totProd = {
       area:0, corte45:0, mont45:0, polReto:0, polAuto:0,
-      cubas:0, furos:0, recortes:0, horas:0
+      cubas:0, recortes:0, instalacoes:0, horas:0
     };
     var orcsProcessados = {};
     fechados.forEach(function(o){
@@ -3410,7 +3410,7 @@ function renderDashboard() {
         totProd.polReto += parseFloat(it.compPolimentoManual||0);
         totProd.polAuto += parseFloat(it.compPolimentoAuto||0);
         totProd.cubas   += parseInt(it.qtdCubas||0);
-        totProd.furos   += parseInt(it.qtdFlush||0)+parseInt(it.qtdFlath||0);
+        if ((it.tipoEntrega||'instalacao')==='instalacao') totProd.instalacoes++;
         totProd.recortes+= parseInt(it.qtdRecortes||0);
         if (it.calc) totProd.horas += parseFloat(it.calc.tempoProdInterno||0);
       });
@@ -3434,7 +3434,7 @@ function renderDashboard() {
         +prodCard('💎','Polimento Reto',totProd.polReto,'m')
         +prodCard('⚡','Polimento Auto',totProd.polAuto,'m')
         +prodCard('🕳️','Cubas',totProd.cubas,'un')
-        +prodCard('🔩','Furos/Ralos',totProd.furos,'un')
+        +prodCard('🏠','Instalações',totProd.instalacoes,'un')
         +prodCard('✂️','Recortes',totProd.recortes,'un')
         +prodCard('⏱','Horas Prod.',totProd.horas,'h')
         +'</div></div>'

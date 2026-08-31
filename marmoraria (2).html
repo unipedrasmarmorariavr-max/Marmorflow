@@ -450,22 +450,27 @@
   /* ═══ SIDEBAR ════════════════════════════════════════════════════════════ */
   #sidebar{
     width:220px;background:#1a2332;display:flex;flex-direction:column;
-    position:fixed;top:0;left:0;height:100vh;overflow-y:auto;
-    transition:transform 0.25s ease;z-index:500;
-    transform:translateX(-100%);
+    position:fixed;top:0;left:0;height:100vh;overflow-y:auto;overflow-x:hidden;
+    transition:width 0.25s ease;z-index:500;
   }
-  #sidebar.open{transform:translateX(0);}
-  #sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:499;}
-  #sidebar-backdrop.show{display:block;}
+  #sidebar.collapsed{width:56px;}
+  #sidebar.collapsed .nav-label{display:none;}
+  #sidebar.collapsed .sidebar-logo-text{display:none;}
+  #sidebar.collapsed .sidebar-user{display:none;}
+  #sidebar.collapsed .btn-logout-side span:last-child{display:none;}
+  #sidebar-backdrop{display:none;}
+  /* Push content when sidebar is open */
+  .content{margin-left:220px;transition:margin-left 0.25s ease;}
+  #sidebar.collapsed ~ * .content, #sidebar.collapsed + * .content{margin-left:56px;}
   .sidebar-logo{padding:16px 14px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.08);}
   .sidebar-logo-text{font-family:'DM Serif Display',serif;font-size:17px;color:white;white-space:nowrap;}
   .sidebar-logo-text span{color:#D4AF6E;}
   .sidebar-user{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.08);font-size:11px;color:rgba(255,255,255,0.5);}
   .sidebar-user strong{display:block;color:rgba(255,255,255,0.85);font-size:12px;margin-bottom:1px;}
-  .nav-item{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;color:rgba(255,255,255,0.6);font-size:13px;font-weight:500;transition:all 0.15s;border-left:3px solid transparent;background:none;border-top:none;border-right:none;border-bottom:none;width:100%;text-align:left;font-family:inherit;}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;color:rgba(255,255,255,0.6);font-size:13px;font-weight:500;transition:all 0.15s;border-left:3px solid transparent;background:none;border-top:none;border-right:none;border-bottom:none;width:100%;text-align:left;font-family:inherit;white-space:nowrap;overflow:hidden;}
   .nav-item:hover{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.9);}
   .nav-item.active{background:rgba(184,150,90,0.15);color:#D4AF6E;border-left-color:#D4AF6E;font-weight:700;}
-  .nav-icon{font-size:18px;flex-shrink:0;width:24px;text-align:center;}
+  .nav-icon{font-size:18px;flex-shrink:0;width:24px;text-align:center;min-width:24px;}
   .sidebar-footer{margin-top:auto;padding:12px 14px;border-top:1px solid rgba(255,255,255,0.08);}
   .btn-logout-side{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.5);padding:8px 12px;border-radius:6px;cursor:pointer;font-size:12px;width:100%;text-align:left;display:flex;align-items:center;gap:8px;font-family:inherit;}
   .btn-logout-side:hover{background:rgba(255,255,255,0.1);color:white;}
@@ -530,10 +535,10 @@
 <div id="app">
 
   <!-- SIDEBAR -->
-  <nav id="sidebar">
+  <nav id="sidebar" class="">
     <div class="sidebar-logo">
       <div class="sidebar-logo-text">Marmor<span>Flow</span></div>
-      <button onclick="toggleSidebar()" style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:18px;padding:2px;">✕</button>
+      <button onclick="toggleSidebar()" id="sidebar-close-btn" style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:16px;padding:4px;line-height:1;" title="Recolher">◀</button>
     </div>
     <div class="sidebar-user" id="sidebar-user-info"></div>
     <div id="sidebar-nav" style="flex:1;padding:8px 0;"></div>
@@ -543,7 +548,7 @@
       </button>
     </div>
   </nav>
-  <div id="sidebar-backdrop" onclick="toggleSidebar()"></div>
+  
   <div class="topbar">
     <div style="display:flex;align-items:center;">
       <button id="btn-sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -1224,15 +1229,20 @@ async function nextId() {
 // ── SIDEBAR ──────────────────────────────────────────────────────────────────
 function toggleSidebar() {
   const sb = document.getElementById('sidebar');
-  const bd = document.getElementById('sidebar-backdrop');
   if (!sb) return;
-  const isOpen = sb.classList.contains('open');
-  if (isOpen) {
-    sb.classList.remove('open');
-    bd.classList.remove('show');
+  const isCollapsed = sb.classList.contains('collapsed');
+  const content = document.querySelector('.content');
+  const btn = document.getElementById('sidebar-close-btn');
+  if (isCollapsed) {
+    sb.classList.remove('collapsed');
+    if (content) content.style.marginLeft = '220px';
+    if (btn) btn.textContent = '◀';
+    localStorage.setItem('mf_sidebar_collapsed', '0');
   } else {
-    sb.classList.add('open');
-    bd.classList.add('show');
+    sb.classList.add('collapsed');
+    if (content) content.style.marginLeft = '56px';
+    if (btn) btn.textContent = '▶';
+    localStorage.setItem('mf_sidebar_collapsed', '1');
   }
 }
 
@@ -11033,7 +11043,8 @@ function ajustarValorVendaManual(idx, orderId, valorDigitado) {
   recalcularTelaOrc(orderId);
 }
 
-function calcularItem(item, pedra, cfg) {
+function calcularItem(item, pedra, cfg, propArea) {
+  propArea = propArea !== undefined ? propArea : 1;
   if (!pedra) return null;
   const grupo = GRUPOS_DIFICULDADE.find(g => g.id === (pedra.grupoId||1)) || GRUPOS_DIFICULDADE[0];
   const dif = item.difOverride || grupo.dif || 1;
@@ -11165,8 +11176,9 @@ function calcularItem(item, pedra, cfg) {
   // IGUAL MARMOPRICE: instalação e deslocamento = tempo * custoHoraEmpresa (SEM multiplicar por nPessoas)
   // nPessoas afeta apenas o tempo exibido, não multiplica o custo
   const custoInstalacao   = tempoInstalEntrega * nPessoas * custoHoraEmpresa;
-  const custoDeslocamento = tempoDeslocamento  * nPessoas * custoHoraEmpresa;
-  const custoCombustivel  = (distancia*2*idas/(cfg.consumoCombustivel||8))*(cfg.custoCombustivel||7);
+  // Deslocamento e combustível rateados pela proporção de área do item
+  const custoDeslocamento = tempoDeslocamento * nPessoas * custoHoraEmpresa * propArea;
+  const custoCombustivel  = (distancia*2*idas/(cfg.consumoCombustivel||8))*(cfg.custoCombustivel||7) * propArea;
 
   const custoAcessorios   = parseFloat(item.custoAcessorios)||0;
   const custoArgamassa    = parseFloat(item.custoArgamassa)||0;
@@ -11679,10 +11691,28 @@ function renderFormOrcamento() {
   const pedras = getPedrasCadastradas();
   const cfg = getConfigOrc();
 
-  // Recalcula todos os itens
+  // Calcula área total do orçamento para ratear deslocamento/combustível
+  const areaTotal = orc.itens.reduce((s, item) => {
+    const pedra = resolverPedra(pedras, item);
+    if (!pedra) return s;
+    const m = item.pecas && item.pecas.length > 0 && item.pecas.some(p=>(p.medidas||'').trim())
+      ? item.pecas.reduce((a,p)=>{const pm=parseMedidas(p.medidas);return a+pm.l*pm.c*(parseInt(p.qtd)||1);},0)
+      : (parseFloat(item.m2Override)||0);
+    return s + m;
+  }, 0);
+
+  // Recalcula todos os itens com proporção de área
   orc.itens.forEach(item => {
     const pedra = resolverPedra(pedras, item);
-    item.calc = pedra ? calcularItem(item, pedra, cfg) : null;
+    const itemArea = (() => {
+      if (!pedra) return 0;
+      if (item.m2Override > 0) return parseFloat(item.m2Override)||0;
+      if (item.pecas && item.pecas.some(p=>(p.medidas||'').trim()))
+        return item.pecas.reduce((a,p)=>{const pm=parseMedidas(p.medidas);return a+pm.l*pm.c*(parseInt(p.qtd)||1);},0);
+      return 0;
+    })();
+    const propArea = areaTotal > 0 ? itemArea / areaTotal : 1 / (orc.itens.length || 1);
+    item.calc = pedra ? calcularItem(item, pedra, cfg, propArea) : null;
   });
 
   const totalGeral = orc.itens.reduce((s, it) => s + (it.calc ? it.calc.precoFinal : 0), 0);
@@ -12448,7 +12478,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
             ['Comissão Interna', 0, false, false, '#999'],
             ['Taxas Adicionais', 0, false, false, '#999'],
             [null],
-            ['M² de compra de Chapa', 0],
+            ['Compra Chapa (m²)', 0],
             ['Preço Final do Produto', calc.precoFinal, true, false, '#006382'],
             ['Preço Final do Produto sem Matéria Prima', Math.max(0, calc.precoFinal - (calc.custoMaterial/(1-(calc.margem||30)/100)))],
             ['Preço do Serviço (Mão de Obra)', Math.max(0, (calc.custoTotal - (calc.custoMaterial||0) - (calc.custoInsumos||0)) / (1 - (calc.margem||30)/100))],
@@ -12570,25 +12600,25 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
             value="${item.m2Override||''}"
             oninput="orcamentoAtual.itens[${idx}].m2Override=parseFloat(this.value)||0;recalcularTelaOrc('${orderId}')"
             style="width:90px;padding:4px 8px;border:2px solid #D4AF6E;border-radius:6px;font-size:13px;font-weight:700;color:#8B6914;text-align:center;">
-       m2Override>0?'<button onclick="orcamentoAtual.itens['+idx+'].m2Override=0;recalcularTelaOrc(''+orderId+'')" style="font-size:11px;color:#B85A4A;background:none;border:none;cursor:pointer;">✕ limpar m²</button>':''}</div>
+          ${item.m2Override>0?'<button onclick="orcamentoAtual.itens[${idx}].m2Override=0;recalcularTelaOrc(\'${orderId}\')" style="font-size:11px;color:#B85A4A;background:none;border:none;cursor:pointer;">✕ limpar m²</button>':''}</div>
       </div>
 
       <!-- CAMPOS ACABAMENTO — 5 colunas, igual Marmoprice -->
       <div class="acabamentos-grid" style="display:grid;gap:8px;margin-bottom:12px;">
         ${[
-          ['Comprimento de Acabamento 45° Saia (m)', 'compCorte45'],
-          ['Comprimento Polimento Reto 2cm Manual (m)', 'compPolimentoManual'],
-          ['Comprimento Polimento Automático (m)', 'compPolimentoAuto'],
-          ['Área de Bipolimento (m²)', 'areaBipolida'],
-          ['Comprimento de Acabamento 45° / Cuba Esculpida (m)', 'compCubEsculpida'],
+          ['Acab. 45° Saia (m)', 'compCorte45'],
+          ['Polimento Reto (m)', 'compPolimentoManual'],
+          ['Polimento Auto (m)', 'compPolimentoAuto'],
+          ['Bipolimento (m²)', 'areaBipolida'],
+          ['Acab. 45° / Cuba (m)', 'compCubEsculpida'],
           ['M² de compra de Chapa', 'm2ChapaNaoComercial'],
-          ['Acabamento Colagem de Topo (m)', 'compColagemTopo'],
-          ['Acabamento Meio Boleado (m)', 'compMeioBoelado'],
-          ['Acabamento Meio Boleado Duplo (m)', 'compMeioBoeladoDuplo'],
-          ['Acabamento Chanfrado 45° (m)', 'compChanfrado45'],
-          ['Acabamento Chanfrado Duplo (m)', 'compChanfradoDuplo'],
+          ['Colagem Topo (m)', 'compColagemTopo'],
+          ['Meio Boleado (m)', 'compMeioBoelado'],
+          ['Meio Boleado D (m)', 'compMeioBoeladoDuplo'],
+          ['Chanfrado 45° (m)', 'compChanfrado45'],
+          ['Chanfrado Duplo (m)', 'compChanfradoDuplo'],
           ['Chanfro Alongado', 'compChanfroAlongado'],
-          ['Acabamento Meia Cana (m)', 'compMeiaCana'],
+          ['Meia Cana (m)', 'compMeiaCana'],
           ['Acabamento Meia Cana Duplo', 'compMeiaCanaDuplo'],
           ['Acabamento Boleado Duplo', 'compBoeladoDuplo'],
           ['Rebaixo Italiano Usinado (m²)', 'areaRebaixoItaliano'],
@@ -12653,7 +12683,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
             ['Insumos de Instalação (R$)', 'custoInsumoInstal'],
             ['Custo com Argamassa (R$)', 'custoArgamassa'],
             ['Custos Adicionais (R$)', 'custoAdicionais'],
-            ['Custo Cantoneira/Mão Francesa/Tubulão (R$)', 'custoCantoneira'],
+            ['Cantoneira (R$)', 'custoCantoneira'],
           ].map(([label, field]) => `
           <div>
             <label style="font-size:10px;color:#666;display:block;margin-bottom:3px;">${label}</label>
@@ -12677,7 +12707,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
         <div style="min-width:700px;">
           <!-- Header colunas — mesmo grid que a linha de dados -->
           <div style="display:grid;grid-template-columns:2.5fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr 0.8fr;gap:4px;margin-bottom:3px;padding:0 2px;">
-            ${['Nome','Custo (m²)','Dif.','Margem %','Com. Vend.','Com. Terc.','Com. Int.','Valor Venda','LL/H'].map(h=>`<div style="font-size:9px;color:#1e5f74;font-weight:700;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${h}</div>`).join('')}
+            ${['Nome','Custo/m²','Dif. Trab.','Margem %','Com. Vend. %','Com. Terc. %','Com. Int. %','Valor Venda','LL/H'].map(h=>`<div style="font-size:10px;color:#1e5f74;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${h}</div>`).join('')}
           </div>
           <!-- Linha de dados -->
           <div class="materiais-linha" style="display:grid;grid-template-columns:2.5fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr 0.8fr;gap:4px;align-items:center;">

@@ -1309,6 +1309,7 @@ function showTab(tab, addHistory = true) {
 function renderIA() {
   const el = document.getElementById('ia-content');
   if (!el) return;
+  try {
 
   const WORKER_URL = 'https://mute-wildflower-ed3c.unipedras-marmorariavr.workers.dev';
 
@@ -1355,6 +1356,10 @@ Responda sempre em português de forma objetiva e prática.`;
     // Store context
     el.querySelector('.ia-chat')._contexto = contexto;
     el.querySelector('.ia-chat')._historico = [];
+  }
+  } catch(e) {
+    el.innerHTML = '<div style="padding:20px;color:#B85A4A;">Erro na IA: ' + e.message + '</div>';
+    console.error('renderIA error:', e);
   }
 }
 

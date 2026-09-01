@@ -670,7 +670,34 @@
       <div id="agenda-content"></div>
     </div>
     <div class="panel" id="panel-crm"><div id="crm-content" style="padding:20px;max-width:960px;margin:0 auto;"></div></div>
-    <div class="panel" id="panel-ia"><div id="ia-content" style="padding:16px;max-width:680px;margin:0 auto;"></div></div>
+    <div class="panel" id="panel-ia">
+      <div style="padding:16px;max-width:760px;margin:0 auto;">
+        <div style="background:white;border-radius:16px;box-shadow:0 2px 12px rgba(0,0,0,.08);overflow:hidden;">
+          <div style="background:#1a2332;color:white;padding:16px 20px;display:flex;align-items:center;gap:12px;">
+            <div style="width:40px;height:40px;border-radius:50%;background:rgba(212,175,110,0.2);display:flex;align-items:center;justify-content:center;font-size:22px;">🤖</div>
+            <div>
+              <div style="font-size:15px;font-weight:700;">Assistente MarmorFlow</div>
+              <div style="font-size:11px;opacity:.6;">Powered by Claude AI</div>
+            </div>
+          </div>
+          <div id="ia-msgs" style="height:380px;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;background:#f8f9fa;">
+            <div style="background:white;border-radius:12px;padding:12px 16px;max-width:85%;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+              <div style="font-size:13px;color:#333;line-height:1.5;">Olá! Sou o assistente da Unipedras. Como posso ajudar?</div>
+            </div>
+          </div>
+          <div style="padding:12px 16px;border-top:1px solid #e8e8e8;display:flex;gap:8px;background:white;">
+            <input id="ia-input" class="form-input" placeholder="Digite sua pergunta..." style="flex:1;padding:10px 14px;font-size:14px;">
+            <button onclick="enviarMensagemIA()" style="background:#1a2332;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">Enviar</button>
+          </div>
+          <div style="padding:8px 16px 12px;display:flex;gap:6px;flex-wrap:wrap;background:white;border-top:1px solid #f0f0f0;">
+            <button onclick="iaEnviar('Resumo do dia')" style="background:#f0f0f0;border:none;padding:5px 10px;border-radius:20px;cursor:pointer;font-size:12px;">📊 Resumo</button>
+            <button onclick="iaEnviar('Follow-ups pendentes')" style="background:#f0f0f0;border:none;padding:5px 10px;border-radius:20px;cursor:pointer;font-size:12px;">🔔 Follow-ups</button>
+            <button onclick="iaEnviar('Como esta a producao')" style="background:#f0f0f0;border:none;padding:5px 10px;border-radius:20px;cursor:pointer;font-size:12px;">⚙️ Produção</button>
+          </div>
+        </div>
+      </div>
+      <div id="ia-content"></div>
+    </div>
     <div class="panel" id="panel-financeiro">
       <div id="fin-tabs-sticky" style="position:sticky;top:52px;z-index:50;background:var(--cream);padding:12px 0 0;margin:-20px -20px 0;padding-left:20px;padding-right:20px;"></div>
       <div id="financeiro-content"></div>
@@ -1307,39 +1334,19 @@ function showTab(tab, addHistory = true) {
   if (tab==='produtos') renderProdutos();
   if (tab==='configuracoes') renderConfiguracoes();
   if (tab==='crm') renderCRM();
-function iaSetInput(v){var el=document.getElementById("ia-input");if(el)el.value=v;}
+function iaSetInput(v){var el=document.getElementById('ia-input');if(el)el.value=v;}
+function iaEnviar(texto){var el=document.getElementById('ia-input');if(el)el.value=texto;enviarMensagemIA();}
 function renderIA() {
-  var el = document.getElementById('ia-content');
-  if (!el) return;
-
-  var hoje = new Date().toISOString().substring(0,10);
-  var nAtivos = orders.filter(function(o){return o.stage!=='entregue';}).length;
-  var nNeg = orders.filter(function(o){return o.stage==='negociacao';}).length;
-  var nProd = orders.filter(function(o){return o.stage==='corte'||o.stage==='acabamento'||o.stage==='pronto';}).length;
-
-  var contexto = 'Você é o assistente de gestão da Unipedras Marmoraria, Volta Redonda/RJ. Data: '+hoje+'. Pedidos ativos: '+nAtivos+'. Negociações: '+nNeg+'. Em produção: '+nProd+'. Responda em português, de forma objetiva.';
-
-  el.innerHTML = '<div style="background:white;border-radius:16px;box-shadow:0 2px 12px rgba(0,0,0,.08);overflow:hidden;max-width:760px;margin:0 auto;">'
-    +'<div style="background:#1a2332;color:white;padding:16px 20px;display:flex;align-items:center;gap:12px;">'
-    +'<div style="width:40px;height:40px;border-radius:50%;background:rgba(212,175,110,0.2);display:flex;align-items:center;justify-content:center;font-size:22px;">🤖</div>'
-    +'<div><div style="font-size:15px;font-weight:700;">Assistente MarmorFlow</div>'
-    +'<div style="font-size:11px;opacity:.6;">Powered by Claude AI</div></div></div>'
-    +'<div id="ia-msgs" style="height:380px;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;background:#f8f9fa;">'
-    +'<div style="background:white;border-radius:12px;padding:12px 16px;max-width:85%;box-shadow:0 1px 4px rgba(0,0,0,.06);">'
-    +'<div style="font-size:13px;color:#333;line-height:1.5;">Olá! Sou o assistente da Unipedras. Como posso ajudar?</div>'
-    +'</div></div>'
-    +'<div style="padding:12px 16px;border-top:1px solid #e8e8e8;display:flex;gap:8px;background:white;">'
-    +'<input id="ia-input" class="form-input" placeholder="Digite sua pergunta..." style="flex:1;padding:10px 14px;font-size:14px;" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();enviarMensagemIA()}">'
-    +'<button onclick="enviarMensagemIA()" style="background:#1a2332;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">Enviar</button>'
-    +'</div>'
-    +'<button onclick="iaSetInput(\"Resumo do dia\");enviarMensagemIA()" style="background:#f0f0f0;border:none;padding:5px 10px;border-radius:20px;cursor:pointer;font-size:12px;">📊 Resumo</button>'
-    +'<button onclick="iaSetInput(\"Quais follow-ups estao pendentes hoje\");enviarMensagemIA()" style="background:#f0f0f0;border:none;padding:5px 10px;border-radius:20px;cursor:pointer;font-size:12px;">🔔 Follow-ups</button>'
-    +'<button onclick="iaSetInput(\"Como esta a producao hoje\");enviarMensagemIA()" style="background:#f0f0f0;border:none;padding:5px 10px;border-radius:20px;cursor:pointer;font-size:12px;">⚙️ Produção</button>'
-    +'<button onclick="iaSetInput(\"Como esta a producao hoje\");enviarMensagemIA()" style="background:#f0f0f0;border:none;padding:5px 10px;border-radius:20px;cursor:pointer;font-size:12px;">⚙️ Produção</button>'
-    +'</div></div>';
-
   var msgs = document.getElementById('ia-msgs');
-  if (msgs) { msgs._contexto = contexto; msgs._historico = []; }
+  if (!msgs) return;
+  if (msgs._contextoInit) return;
+  msgs._contextoInit = true;
+  var hoje = new Date().toISOString().substring(0,10);
+  var nAtivos = orders ? orders.filter(function(o){return o.stage!=='entregue';}).length : 0;
+  var nNeg = orders ? orders.filter(function(o){return o.stage==='negociacao';}).length : 0;
+  var nProd = orders ? orders.filter(function(o){return o.stage==='corte'||o.stage==='acabamento'||o.stage==='pronto';}).length : 0;
+  msgs._contexto = 'Você é o assistente de gestão da Unipedras Marmoraria, Volta Redonda/RJ. Data: '+hoje+'. Pedidos ativos: '+nAtivos+'. Negociações: '+nNeg+'. Em produção: '+nProd+'. Responda em português, de forma objetiva e prática.';
+  msgs._historico = [];
 }
 
 async function enviarMensagemIA() {

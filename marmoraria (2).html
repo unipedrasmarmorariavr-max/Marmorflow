@@ -1365,19 +1365,31 @@ function renderIA() {
 async function enviarMensagemIA() {
   const input = document.getElementById('ia-input');
   const msgs  = document.getElementById('ia-msgs');
-  if (!input || !msgs) return;
+  if (!input || !msgs) { alert('Chat não encontrado'); return; }
 
   const texto = input.value.trim();
   if (!texto) return;
   input.value = '';
 
-  const WORKER_URL = 'https://mute-wildflower-ed3c.unipedras-marmorariavr.workers.dev';
+  // Mostra mensagem do usuário IMEDIATAMENTE
+  const userMsg = document.createElement('div');
+  userMsg.style.cssText = 'background:#1a2332;color:white;border-radius:12px;padding:12px 16px;max-width:85%;box-shadow:0 1px 4px rgba(0,0,0,.06);align-self:flex-end;font-size:13px;line-height:1.5;margin-left:auto;';
+  userMsg.textContent = texto;
+  msgs.appendChild(userMsg);
 
-  const hoje = new Date().toISOString().substring(0,10);
-  const fmtV = function(v){ return 'R$ '+(parseFloat(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2}); };
-  const ords = orders || [];
-  const trns = transacoes || [];
-  const orcs = orcamentos || [];
+  const loadMsg = document.createElement('div');
+  loadMsg.style.cssText = 'background:white;border-radius:12px;padding:12px 16px;max-width:85%;box-shadow:0 1px 4px rgba(0,0,0,.06);align-self:flex-start;font-size:13px;color:#888;';
+  loadMsg.textContent = '⏳ Pensando...';
+  msgs.appendChild(loadMsg);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  try {
+    const WORKER_URL = 'https://mute-wildflower-ed3c.unipedras-marmorariavr.workers.dev';
+    const hoje = new Date().toISOString().substring(0,10);
+    const fmtV = function(v){ return 'R$ '+(parseFloat(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2}); };
+    const ords = (typeof orders!=='undefined' ? orders : []) || [];
+    const trns = (typeof transacoes!=='undefined' ? transacoes : []) || [];
+    const orcs = (typeof orcamentos!=='undefined' ? orcamentos : []) || [];
 
   // ── PEDIDOS POR ETAPA ────────────────────────────────────────
   const etapas = ['negociacao','fechado','corte','acabamento','pronto','entregue'];
@@ -1483,24 +1495,10 @@ async function enviarMensagemIA() {
     +' Responda sempre em português, de forma clara e objetiva. Use APENAS os dados abaixo — não invente nada.'
     +secPedidos + secFin + secReceber + secPagar + secCRM + secMateriais;
 
-  // Add user message
-  const userMsg = document.createElement('div');
-  userMsg.style.cssText = 'background:#1a2332;color:white;border-radius:12px;padding:12px 16px;max-width:85%;box-shadow:0 1px 4px rgba(0,0,0,.06);align-self:flex-end;font-size:13px;line-height:1.5;';
-  userMsg.textContent = texto;
-  msgs.appendChild(userMsg);
+    const historico = msgs._historico || [];
 
-  // Add loading
-  const loadMsg = document.createElement('div');
-  loadMsg.style.cssText = 'background:white;border-radius:12px;padding:12px 16px;max-width:85%;box-shadow:0 1px 4px rgba(0,0,0,.06);align-self:flex-start;font-size:13px;color:#888;';
-  loadMsg.textContent = '⏳ Pensando...';
-  msgs.appendChild(loadMsg);
-  msgs.scrollTop = msgs.scrollHeight;
-
-  const historico = msgs._historico || [];
-
-  try {
     const mensagens = [
-      { role:'user', content: contexto + '\n\n' + (historico.length ? 'Histórico:\n'+historico.map(h=>h.role+': '+h.content).join('\n')+'\n\n' : '') + texto }
+      { role:'user', content: contexto + '\n\n' + (historico.length ? 'Histórico:\n'+historico.map(function(h){return h.role+': '+h.content;}).join('\n')+'\n\n' : '') + texto }
     ];
 
     const resp = await fetch(WORKER_URL, {
@@ -1527,11 +1525,13 @@ async function enviarMensagemIA() {
     msgs._historico = historico;
 
   } catch(e) {
-    loadMsg.style.color = '#B85A4A';
-    loadMsg.textContent = '❌ Erro ao conectar: ' + e.message;
+    const errMsg = document.createElement('div');
+    errMsg.style.cssText = 'background:white;border-radius:12px;padding:12px 16px;max-width:85%;align-self:flex-start;font-size:13px;color:#B85A4A;';
+    errMsg.textContent = '❌ Erro: ' + e.message;
+    msgs.appendChild(errMsg);
+    msgs.scrollTop = msgs.scrollHeight;
+    console.error('IA error:', e);
   }
-
-  msgs.scrollTop = msgs.scrollHeight;
 }
 
 // Listener do botão ← do navegador

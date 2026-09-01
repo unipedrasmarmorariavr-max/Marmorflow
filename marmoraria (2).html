@@ -1373,50 +1373,115 @@ async function enviarMensagemIA() {
 
   const WORKER_URL = 'https://mute-wildflower-ed3c.unipedras-marmorariavr.workers.dev';
 
-  // Contexto completo gerado no momento do envio
   const hoje = new Date().toISOString().substring(0,10);
   const fmtV = function(v){ return 'R$ '+(parseFloat(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2}); };
-
-  // Pedidos por etapa
   const ords = orders || [];
-  const stageCount = function(s){ return ords.filter(function(o){return o.stage===s;}).length; };
-  const stageList  = function(s){ return ords.filter(function(o){return o.stage===s;}).map(function(o){return o.cliente+' ('+o.id+')';}).join(', '); };
+  const trns = transacoes || [];
+  const orcs = orcamentos || [];
 
-  // Financeiro — saldo e lançamentos do mês
+  // ── PEDIDOS POR ETAPA ────────────────────────────────────────
+  const etapas = ['negociacao','fechado','corte','acabamento','pronto','entregue'];
+  var secPedidos = '\n\n=== PEDIDOS ===';
+  etapas.forEach(function(s){
+    var lista = ords.filter(function(o){return o.stage===s;});
+    if (!lista.length) return;
+    var nomes = {negociacao:'Negociação',fechado:'Fechado/Aguardando Produção',corte:'Em Corte',acabamento:'Em Acabamento',pronto:'Pronto para Entrega',entregue:'Entregue'};
+    secPedidos += '\n'+nomes[s]+' ('+lista.length+'): '+lista.map(function(o){
+      return o.cliente+' ['+o.id+']'+(o.valor?' — '+fmtV(parseFloat(o.valor)):'');
+    }).join(' | ');
+  });
+
+  // ── FINANCEIRO MÊS ATUAL ─────────────────────────────────────
   const mesAtual = hoje.substring(0,7);
-  const transMes = (transacoes||[]).filter(function(t){return (t.data||'').startsWith(mesAtual);});
+  const transMes = trns.filter(function(t){return (t.data||'').startsWith(mesAtual);});
   const entradas = transMes.filter(function(t){return t.tipo==='entrada';}).reduce(function(s,t){return s+(parseFloat(t.valor)||0);},0);
   const saidas   = transMes.filter(function(t){return t.tipo==='saida';}).reduce(function(s,t){return s+(parseFloat(t.valor)||0);},0);
-  const saldo    = entradas - saidas;
+  var secFin = '\n\n=== FINANCEIRO ===';
+  secFin += '\nMês atual ('+mesAtual+'): Entradas '+fmtV(entradas)+' | Saídas '+fmtV(saidas)+' | Saldo '+fmtV(entradas-saidas);
+  // Últimos 5 lançamentos
+  var ultLanc = trns.slice(-5).reverse();
+  if (ultLanc.length) {
+    secFin += '\nÚltimos lançamentos: '+ultLanc.map(function(t){
+      return t.data+' '+t.descricao+' '+(t.tipo==='entrada'?'+':'-')+fmtV(t.valor);
+    }).join(' | ');
+  }
 
-  // CRM — follow-ups pendentes
-  const orcsComFollowup = (orcamentos||[]).filter(function(o){return o.followups && o.followups.length>0;});
-  const followupsPend   = orcsComFollowup.length;
+  // ── A RECEBER ────────────────────────────────────────────────
+  var secReceber = '\n\n=== A RECEBER ===';
+  var pedidosPendentes = ords.filter(function(o){
+    var valorTotal = parseFloat(o.valor)||0;
+    var recebido = trns.filter(function(t){return t.pedidoId===o.id&&t.tipo==='entrada';}).reduce(function(s,t){return s+(parseFloat(t.valor)||0);},0);
+    return valorTotal > 0 && recebido < valorTotal && (o.stage==='fechado'||o.stage==='corte'||o.stage==='acabamento'||o.stage==='pronto'||o.stage==='entregue');
+  });
+  if (pedidosPendentes.length) {
+    secReceber += '\n'+pedidosPendentes.map(function(o){
+      var valorTotal = parseFloat(o.valor)||0;
+      var recebido = trns.filter(function(t){return t.pedidoId===o.id&&t.tipo==='entrada';}).reduce(function(s,t){return s+(parseFloat(t.valor)||0);},0);
+      return o.cliente+' ['+o.id+'] — deve '+fmtV(valorTotal-recebido)+' de '+fmtV(valorTotal);
+    }).join('\n');
+  } else {
+    secReceber += '\nNenhum valor pendente a receber.';
+  }
 
-  // Materiais
-  const mats = typeof getPedrasCadastradas==='function' ? getPedrasCadastradas() : [];
+  // ── CONTAS A PAGAR ───────────────────────────────────────────
+  var secPagar = '\n\n=== CONTAS A PAGAR ===';
+  var contasPagar = typeof contasAPagar !== 'undefined' ? contasAPagar : [];
+  var pendPagar = contasPagar.filter(function(c){return c.status==='pendente';});
+  if (pendPagar.length) {
+    secPagar += '\n'+pendPagar.map(function(c){
+      return (c.vencimento||'sem data')+' — '+c.descricao+' — '+fmtV(c.valor)+(c.fornecedor?' ('+c.fornecedor+')':'');
+    }).join('\n');
+  } else {
+    secPagar += '\nNenhuma conta pendente a pagar.';
+  }
 
-  // Clientes únicos
-  const clientesUnicos = [...new Set(ords.map(function(o){return o.cliente;}))].length;
+  // ── CRM ──────────────────────────────────────────────────────
+  var secCRM = '\n\n=== CRM / FOLLOW-UPS ===';
+  var hoje_dt = new Date(hoje);
+  var comFollowup = orcs.filter(function(o){return o.followups&&o.followups.length>0;});
+  if (comFollowup.length) {
+    secCRM += '\n'+comFollowup.map(function(o){
+      var ult = o.followups[o.followups.length-1];
+      var diasSem = Math.floor((hoje_dt - new Date(o.updated_at||o.created_at||hoje))/86400000);
+      return o.cliente+' ['+o.id+'] — último contato: '+diasSem+' dias atrás — '+ult.tipo+': '+(ult.obs||'');
+    }).join('\n');
+  } else {
+    secCRM += '\nNenhum follow-up registrado.';
+  }
 
-  const contexto = 'Você é o assessor de gestão da Unipedras Marmoraria (Volta Redonda/RJ). Data: '+hoje+'.'
-    +'\n\n=== COMERCIAL ==='
-    +'\nNegociações: '+stageCount('negociacao')+(stageList('negociacao')?' — '+stageList('negociacao'):'')+'.'
-    +'\nFechados aguardando produção: '+stageCount('fechado')+(stageList('fechado')?' — '+stageList('fechado'):'')+'.'
-    +'\nClientes ativos: '+clientesUnicos+'.'
-    +'\nFollow-ups pendentes no CRM: '+followupsPend+'.'
-    +'\n\n=== PRODUÇÃO ==='
-    +'\nEm corte: '+stageCount('corte')+(stageList('corte')?' — '+stageList('corte'):'')+'.'
-    +'\nEm acabamento: '+stageCount('acabamento')+(stageList('acabamento')?' — '+stageList('acabamento'):'')+'.'
-    +'\nProntos para entrega: '+stageCount('pronto')+(stageList('pronto')?' — '+stageList('pronto'):'')+'.'
-    +'\nEntregues: '+stageCount('entregue')+'.'
-    +'\n\n=== FINANCEIRO (mês atual) ==='
-    +'\nEntradas: '+fmtV(entradas)+'.'
-    +'\nSaídas: '+fmtV(saidas)+'.'
-    +'\nSaldo do mês: '+fmtV(saldo)+'.'
-    +'\n\n=== MATERIAIS ==='
-    +'\nMateriais cadastrados: '+mats.length+'.'
-    +'\n\nResponda sempre em português, de forma objetiva e prática. Use os dados reais acima ao responder. Quando não souber algo, diga claramente.';
+  // ── MATERIAIS / ESTOQUE ──────────────────────────────────────
+  var secMateriais = '\n\n=== MATERIAIS / ESTOQUE ===';
+  try {
+    var chapas = typeof getEstoque==='function' ? getEstoque() : [];
+    var pedras = typeof getPedrasCadastradas==='function' ? getPedrasCadastradas() : [];
+    var disponiveis = chapas.filter(function(c){return c.status==='disponivel';});
+    var reservadas  = chapas.filter(function(c){return c.status==='reservada';});
+    var usadas      = chapas.filter(function(c){return c.status==='usada';});
+    secMateriais += '\nTotal chapas: '+chapas.length+' ('+disponiveis.length+' disponíveis, '+reservadas.length+' reservadas, '+usadas.length+' usadas)';
+    // Por material
+    var porMat = {};
+    disponiveis.forEach(function(c){
+      var pedra = pedras.find(function(p){return p.id===c.materialId;});
+      var nome = pedra ? pedra.nome : (c.materialId||'Sem nome');
+      porMat[nome] = (porMat[nome]||0)+1;
+    });
+    if (Object.keys(porMat).length) {
+      secMateriais += '\nDisponíveis por material: '+Object.entries(porMat).map(function(e){return e[0]+': '+e[1]+' chapa(s)';}).join(' | ');
+    }
+    // Materiais sem estoque
+    var semEstoque = pedras.filter(function(p){
+      return !disponiveis.some(function(c){return c.materialId===p.id;});
+    });
+    if (semEstoque.length) {
+      secMateriais += '\nSEM estoque disponível: '+semEstoque.map(function(p){return p.nome;}).join(', ');
+    }
+  } catch(e) {
+    secMateriais += '\nErro ao carregar estoque: '+e.message;
+  }
+
+  const contexto = 'Você é o assessor completo da Unipedras Marmoraria (Volta Redonda/RJ). Data hoje: '+hoje+'.'
+    +' Responda sempre em português, de forma clara e objetiva. Use APENAS os dados abaixo — não invente nada.'
+    +secPedidos + secFin + secReceber + secPagar + secCRM + secMateriais;
 
   // Add user message
   const userMsg = document.createElement('div');

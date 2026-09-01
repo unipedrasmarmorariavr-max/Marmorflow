@@ -473,6 +473,31 @@
     #sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:499;}
     #sidebar-backdrop.show{display:block;}
     #btn-sidebar-toggle{display:flex;}
+
+    /* IA chat input */
+    #panel-ia .content > div, #ia-msgs { max-width:100% !important; }
+    #ia-input { min-width:0; flex:1; font-size:14px; }
+    #panel-ia button[onclick*="enviar"] { padding:10px 12px; font-size:13px; white-space:nowrap; }
+
+    /* Financeiro — abas com scroll horizontal */
+    .fin-tabs, .abas-fin, [id*="fin-tabs"], .tabs-financeiro { overflow-x:auto; flex-wrap:nowrap !important; scrollbar-width:none; }
+    .fin-tabs::-webkit-scrollbar { display:none; }
+
+    /* Materiais — tabela com scroll */
+    .materiais-table-wrap, #materiais-content table { display:block; overflow-x:auto; width:100%; }
+    #materiais-content table { min-width:500px; }
+
+    /* Kanban — scroll horizontal */
+    .kanban-board { overflow-x:auto; scroll-snap-type:x mandatory; padding-bottom:12px; }
+    .kanban-col { scroll-snap-align:start; min-width:280px; }
+
+    /* Botões largos — não cortar */
+    .btn-apagar, [onclick*="apagar"], [onclick*="Apagar"] { white-space:nowrap; font-size:12px; padding:8px 10px; }
+
+    /* Geral — sem overflow horizontal na página */
+    body { overflow-x:hidden; }
+    .content { padding:12px 8px; overflow-x:hidden; }
+    .panel { overflow-x:hidden; }
   }
   .sidebar-logo{padding:16px 14px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.08);}
   .sidebar-logo-text{font-family:'DM Serif Display',serif;font-size:17px;color:white;white-space:nowrap;}
@@ -2315,7 +2340,7 @@ function renderCRM() {
         + label+'</button>').join('')
     + '</div>'
     // Conteúdo
-    + '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">'
+    + '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;overflow-x:auto;">'
     + (abaAtiva==='negociacoes' ? htmlNeg : abaAtiva==='acoes' ? htmlAcoes : htmlClientes)
     + '</div></div>';
 
@@ -4306,7 +4331,7 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
       <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
         <div style="background:var(--stone);color:white;padding:12px 18px;font-size:13px;font-weight:700;">📋 ${filtroAtual==='todos'?'Resultado por Mês':'Detalhes — '+tituloFiltro}</div>
         ${filtroAtual==='todos'?`
-        <table style="width:100%;border-collapse:collapse;">
+        <div class="materiais-table-wrap"><table style="width:100%;border-collapse:collapse;">
           <thead><tr style="background:#f8f8f8;">
             <th style="padding:8px 12px;text-align:left;font-size:11px;color:#888;">Mês</th>
             <th style="padding:8px 8px;text-align:right;font-size:11px;color:#2E7D32;">Fat.</th>

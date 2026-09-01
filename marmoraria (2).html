@@ -1309,8 +1309,9 @@ function showTab(tab, addHistory = true) {
   if (tab==='crm') renderCRM();
 function renderIA() {
   const el = document.getElementById('ia-content');
-  if (!el) return;
+  if (!el) { alert('ia-content não encontrado!'); return; }
   try {
+  el.innerHTML = '<div style="padding:20px;font-size:16px;">IA carregando...</div>';
 
   const WORKER_URL = 'https://mute-wildflower-ed3c.unipedras-marmorariavr.workers.dev';
 

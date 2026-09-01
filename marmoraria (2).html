@@ -1373,6 +1373,51 @@ async function enviarMensagemIA() {
 
   const WORKER_URL = 'https://mute-wildflower-ed3c.unipedras-marmorariavr.workers.dev';
 
+  // Contexto completo gerado no momento do envio
+  const hoje = new Date().toISOString().substring(0,10);
+  const fmtV = function(v){ return 'R$ '+(parseFloat(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2}); };
+
+  // Pedidos por etapa
+  const ords = orders || [];
+  const stageCount = function(s){ return ords.filter(function(o){return o.stage===s;}).length; };
+  const stageList  = function(s){ return ords.filter(function(o){return o.stage===s;}).map(function(o){return o.cliente+' ('+o.id+')';}).join(', '); };
+
+  // Financeiro — saldo e lançamentos do mês
+  const mesAtual = hoje.substring(0,7);
+  const transMes = (transacoes||[]).filter(function(t){return (t.data||'').startsWith(mesAtual);});
+  const entradas = transMes.filter(function(t){return t.tipo==='entrada';}).reduce(function(s,t){return s+(parseFloat(t.valor)||0);},0);
+  const saidas   = transMes.filter(function(t){return t.tipo==='saida';}).reduce(function(s,t){return s+(parseFloat(t.valor)||0);},0);
+  const saldo    = entradas - saidas;
+
+  // CRM — follow-ups pendentes
+  const orcsComFollowup = (orcamentos||[]).filter(function(o){return o.followups && o.followups.length>0;});
+  const followupsPend   = orcsComFollowup.length;
+
+  // Materiais
+  const mats = typeof getPedrasCadastradas==='function' ? getPedrasCadastradas() : [];
+
+  // Clientes únicos
+  const clientesUnicos = [...new Set(ords.map(function(o){return o.cliente;}))].length;
+
+  const contexto = 'Você é o assessor de gestão da Unipedras Marmoraria (Volta Redonda/RJ). Data: '+hoje+'.'
+    +'\n\n=== COMERCIAL ==='
+    +'\nNegociações: '+stageCount('negociacao')+(stageList('negociacao')?' — '+stageList('negociacao'):'')+'.'
+    +'\nFechados aguardando produção: '+stageCount('fechado')+(stageList('fechado')?' — '+stageList('fechado'):'')+'.'
+    +'\nClientes ativos: '+clientesUnicos+'.'
+    +'\nFollow-ups pendentes no CRM: '+followupsPend+'.'
+    +'\n\n=== PRODUÇÃO ==='
+    +'\nEm corte: '+stageCount('corte')+(stageList('corte')?' — '+stageList('corte'):'')+'.'
+    +'\nEm acabamento: '+stageCount('acabamento')+(stageList('acabamento')?' — '+stageList('acabamento'):'')+'.'
+    +'\nProntos para entrega: '+stageCount('pronto')+(stageList('pronto')?' — '+stageList('pronto'):'')+'.'
+    +'\nEntregues: '+stageCount('entregue')+'.'
+    +'\n\n=== FINANCEIRO (mês atual) ==='
+    +'\nEntradas: '+fmtV(entradas)+'.'
+    +'\nSaídas: '+fmtV(saidas)+'.'
+    +'\nSaldo do mês: '+fmtV(saldo)+'.'
+    +'\n\n=== MATERIAIS ==='
+    +'\nMateriais cadastrados: '+mats.length+'.'
+    +'\n\nResponda sempre em português, de forma objetiva e prática. Use os dados reais acima ao responder. Quando não souber algo, diga claramente.';
+
   // Add user message
   const userMsg = document.createElement('div');
   userMsg.style.cssText = 'background:#1a2332;color:white;border-radius:12px;padding:12px 16px;max-width:85%;box-shadow:0 1px 4px rgba(0,0,0,.06);align-self:flex-end;font-size:13px;line-height:1.5;';
@@ -1386,7 +1431,6 @@ async function enviarMensagemIA() {
   msgs.appendChild(loadMsg);
   msgs.scrollTop = msgs.scrollHeight;
 
-  const contexto = msgs._contexto || '';
   const historico = msgs._historico || [];
 
   try {
@@ -1880,7 +1924,7 @@ function createCard(o) {
   const medicaoHoje = proximaMedicao && proximaMedicao.data === hoje;
 
   const isProducao = ['corte','acabamento','pronto','entregue'].includes(o.stage);
-  const showValor = (currentUser !== 'producao' && currentUser !== 'medidor' && o.valor);
+  const showValor = (currentUser !== 'producao' && currentUser !== 'medidor' && o.valor && _kanbanAba !== 'producao');
   const tel = (o.telefone || '').replace(/\D/g,'');
   const enderecoMaps = o.endereco ? encodeURIComponent(o.endereco) : '';
 

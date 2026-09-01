@@ -1334,6 +1334,13 @@ function showTab(tab, addHistory = true) {
   if (tab==='produtos') renderProdutos();
   if (tab==='configuracoes') renderConfiguracoes();
   if (tab==='crm') renderCRM();
+  if (tab==='ia') renderIA();
+  // Registra no histórico do navegador para o botão ← funcionar
+  if (addHistory) {
+    history.pushState({ tab }, '', window.location.pathname + window.location.search + '#' + tab);
+  }
+}
+
 function iaSetInput(v){var el=document.getElementById('ia-input');if(el)el.value=v;}
 function iaEnviar(texto){var el=document.getElementById('ia-input');if(el)el.value=texto;enviarMensagemIA();}
 function renderIA() {
@@ -1416,12 +1423,6 @@ async function enviarMensagemIA() {
   }
 
   msgs.scrollTop = msgs.scrollHeight;
-}
-
-  // Registra no histórico do navegador para o botão ← funcionar
-  if (addHistory) {
-    history.pushState({ tab }, '', window.location.pathname + window.location.search + '#' + tab);
-  }
 }
 
 // Listener do botão ← do navegador

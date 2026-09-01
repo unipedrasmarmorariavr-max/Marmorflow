@@ -1030,13 +1030,15 @@ function getSB() {
   return sb;
 }
 
-const PINS = { dono:'1234', medidor:'2222', comercial:'3333', producao:'4444', financeiro:'5555' };
+const PINS = { dono:'1234', medidor:'2222', comercial:'3333', producao:'4444', financeiro:'5555', serrador:'6666', acabador:'7777' };
 const PROFILES = {
-  dono:       { name:'Dono',       icon:'👑', canCreate:true,  canDelete:true,  canEdit:true,  canMoveAll:true,  canFechar:true,  canFinanceiro:true,  canOrcamento:true  },
-  medidor:    { name:'Medidor',    icon:'📐', canCreate:true,  canDelete:false, canEdit:true,  canMoveAll:false, canFechar:false, canFinanceiro:false },
-  comercial:  { name:'Comercial',  icon:'💼', canCreate:true,  canDelete:false, canEdit:false, canMoveAll:true,  canFechar:true,  canFinanceiro:false, canOrcamento:true  },
-  producao:   { name:'Produção',   icon:'⚙️', canCreate:false, canDelete:false, canEdit:false, canMoveAll:false, canFechar:false, canFinanceiro:false },
-  financeiro: { name:'Financeiro', icon:'💰', canCreate:false, canDelete:false, canEdit:false, canMoveAll:false, canFechar:false, canFinanceiro:true  }
+  dono:       { name:'Dono',         icon:'👑', canCreate:true,  canDelete:true,  canEdit:true,  canMoveAll:true,  canFechar:true,  canFinanceiro:true,  canOrcamento:true  },
+  medidor:    { name:'Medidor',      icon:'📐', canCreate:true,  canDelete:false, canEdit:true,  canMoveAll:false, canFechar:false, canFinanceiro:false },
+  comercial:  { name:'Comercial',    icon:'💼', canCreate:true,  canDelete:false, canEdit:false, canMoveAll:true,  canFechar:true,  canFinanceiro:false, canOrcamento:true  },
+  producao:   { name:'Encarregado',  icon:'⚙️', canCreate:false, canDelete:false, canEdit:false, canMoveAll:false, canFechar:false, canFinanceiro:false },
+  financeiro: { name:'Financeiro',   icon:'💰', canCreate:false, canDelete:false, canEdit:false, canMoveAll:false, canFechar:false, canFinanceiro:true  },
+  serrador:   { name:'Serrador',     icon:'🪚', canCreate:false, canDelete:false, canEdit:false, canMoveAll:false, canFechar:false, canFinanceiro:false },
+  acabador:   { name:'Acabador',     icon:'✂️', canCreate:false, canDelete:false, canEdit:false, canMoveAll:false, canFechar:false, canFinanceiro:false },
 };
 const STAGES = [
   { id:'aguardando', label:'Aguardando Orçamento', color:'#5B7B9C', bg:'#E8F2FA' },
@@ -1292,6 +1294,89 @@ async function nextId() {
 // ============ TABS ============
 
 // ── SIDEBAR ──────────────────────────────────────────────────────────────────
+// ── ACABADORES ────────────────────────────────────────────────
+function getAcabadores() {
+  try { return JSON.parse(localStorage.getItem('mf_acabadores') || '["Paulo","Bras","Ronaldo","Ademir","Arnaldo"]'); } catch(e) { return ['Paulo','Bras','Ronaldo','Ademir','Arnaldo']; }
+}
+function getNomeAcabador() {
+  return localStorage.getItem('mf_acabador_nome') || '';
+}
+function mostrarSelecaoAcabador() {
+  var nomes = getAcabadores();
+  var modal = document.createElement('div');
+  modal.id = 'modal-sel-acabador';
+  modal.style.cssText = 'position:fixed;inset:0;background:linear-gradient(135deg,#1a2332 0%,#2d3e55 100%);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
+  modal.innerHTML = '<div style="background:white;border-radius:20px;padding:32px 24px;max-width:360px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">'
+    +'<div style="font-size:48px;margin-bottom:12px;">✂️</div>'
+    +'<div style="font-size:20px;font-weight:800;color:#1a2332;margin-bottom:6px;">Acabamento</div>'
+    +'<div style="font-size:14px;color:#888;margin-bottom:24px;">Quem é você?</div>'
+    +'<div style="display:flex;flex-direction:column;gap:10px;">'
+    +nomes.map(function(nome){
+      return '<button onclick="selecionarAcabador(\''+nome+'\')" style="background:#f8f9fa;border:2px solid #e0e0e0;border-radius:12px;padding:14px;font-size:16px;font-weight:700;color:#1a2332;cursor:pointer;">'+nome+'</button>';
+    }).join('')
+    +'</div>'
+    +'<button onclick="localStorage.removeItem(\'mf_acabador_nome\');document.getElementById(\'modal-sel-acabador\').remove();document.getElementById(\'login-screen\').style.display=\'flex\';" style="margin-top:16px;background:none;border:none;color:#888;font-size:13px;cursor:pointer;">← Voltar</button>'
+    +'</div>';
+  document.body.appendChild(modal);
+}
+function selecionarAcabador(nome) {
+  localStorage.setItem('mf_acabador_nome', nome);
+  var modal = document.getElementById('modal-sel-acabador');
+  if (modal) modal.remove();
+  currentUser = 'acabador';
+  selectedProfile = 'acabador';
+  perfilAtual = 'acabador';
+  if (!sb) { try { sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e) {} }
+  renderSidebar('acabador');
+  localStorage.setItem('mf_sessao', 'acabador');
+  inicializarPedrasPadrao();
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('app').style.flexDirection = 'column';
+  document.getElementById('app').style.minHeight = '100vh';
+  loadData().then(function(){
+    switchKanbanAba('producao');
+    showTab('kanban');
+  });
+}
+function getStagesFiltradosPerfil() {
+  if (currentUser === 'serrador') return ['corte'];
+  if (currentUser === 'acabador') return ['acabamento'];
+  if (currentUser === 'producao') return ['corte','acabamento','pronto','entregue'];
+  return null;
+}
+
+async function pegarPedido(id, e) {
+  if (e) e.stopPropagation();
+  var nome = currentUser === 'acabador' ? getNomeAcabador() : 'Serrador';
+  if (!nome) { showNotif('Nome não encontrado!','error'); return; }
+  var order = orders.find(function(o){return o.id===id;});
+  if (!order) return;
+  if (order.responsavel) { showNotif('Pedido já foi pego por '+order.responsavel,'error'); return; }
+  showLoading('Pegando pedido...');
+  var {error} = await getSB().from('pedidos').update({responsavel: nome}).eq('id', id);
+  hideLoading();
+  if (error) { showNotif('Erro: '+error.message,'error'); return; }
+  order.responsavel = nome;
+  showNotif('Pedido pego! ✓','success');
+  renderKanban();
+}
+
+async function concluirPedido(id, e) {
+  if (e) e.stopPropagation();
+  var order = orders.find(function(o){return o.id===id;});
+  if (!order) return;
+  var proximoStage = order.stage === 'corte' ? 'acabamento' : 'pronto';
+  showLoading('Concluindo...');
+  var {error} = await getSB().from('pedidos').update({stage: proximoStage, responsavel: null}).eq('id', id);
+  hideLoading();
+  if (error) { showNotif('Erro: '+error.message,'error'); return; }
+  order.stage = proximoStage;
+  order.responsavel = null;
+  showNotif('Concluído! ✓','success');
+  renderKanban();
+}
+
 function toggleSidebar() {
   const sb = document.getElementById('sidebar');
   if (!sb) return;
@@ -1331,10 +1416,12 @@ function renderSidebar(perfil) {
   const isProducao   = perfil === 'producao';
   const isFinanceiro = perfil === 'financeiro';
   const isMedidor    = perfil === 'medidor';
+  const isSerrador   = perfil === 'serrador';
+  const isAcabador   = perfil === 'acabador';
 
   const itens = [
     { id:'kanban',        icon:'📋', label:'Pedidos',        show: true },
-    { id:'agenda',        icon:'📅', label:'Agenda',         show: isDono||isComercial||isProducao||isMedidor||isFinanceiro },
+    { id:'agenda',        icon:'📅', label:'Agenda',         show: isDono||isComercial||isProducao||isMedidor||isFinanceiro||isSerrador||isAcabador },
     { id:'financeiro',    icon:'💰', label:'Financeiro',     show: isDono||isFinanceiro||isComercial },
     { id:'crm',           icon:'🤝', label:'CRM',            show: isDono||isComercial },
     { id:'materiais',     icon:'🪨', label:'Materiais',      show: isDono||isComercial||isFinanceiro },
@@ -1961,7 +2048,14 @@ function renderKanban(filter='') {
   if (!board) return;
   board.innerHTML='';
   const mesAtual = new Date().toISOString().substring(0,7);
-  const stagesVisiveis = _kanbanAba === 'producao' ? STAGES_PRODUCAO : STAGES_COMERCIAL;
+  // Filtra etapas por perfil
+  var stagesVisiveis;
+  var filtroPerf = getStagesFiltradosPerfil();
+  if (filtroPerf) {
+    stagesVisiveis = filtroPerf;
+  } else {
+    stagesVisiveis = _kanbanAba === 'producao' ? STAGES_PRODUCAO : STAGES_COMERCIAL;
+  }
 
   STAGES.forEach(stg=>{
     if (!stagesVisiveis.includes(stg.id)) return;
@@ -2074,7 +2168,11 @@ function createCard(o) {
   const medicaoHoje = proximaMedicao && proximaMedicao.data === hoje;
 
   const isProducao = ['corte','acabamento','pronto','entregue'].includes(o.stage);
-  const showValor = (currentUser !== 'producao' && currentUser !== 'medidor' && o.valor && _kanbanAba !== 'producao');
+  const showValor = (currentUser !== 'producao' && currentUser !== 'medidor' && currentUser !== 'serrador' && currentUser !== 'acabador' && o.valor && _kanbanAba !== 'producao');
+  const responsavel = o.responsavel || '';
+  const showPegar = (currentUser === 'serrador' || currentUser === 'acabador') && !responsavel;
+  const showConcluir = (currentUser === 'serrador' && o.stage === 'corte' && responsavel === getNomeAcabador()) ||
+                       (currentUser === 'acabador' && o.stage === 'acabamento' && responsavel === getNomeAcabador());
   const tel = (o.telefone || '').replace(/\D/g,'');
   const enderecoMaps = o.endereco ? encodeURIComponent(o.endereco) : '';
 
@@ -2112,6 +2210,9 @@ function createCard(o) {
     <div class="card-client">${o.cliente}</div>
     <div class="card-desc">${o.peca||''}${o.material?' · '+o.material:''}</div>
     ${showValor?`<div class="card-valor">R$ ${o.valor}</div>`:''}
+    ${responsavel?`<div style="background:#e8f5e9;color:#2E7D32;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;margin-bottom:4px;">👤 ${responsavel}</div>`:''}
+    ${showPegar?`<button onclick="pegarPedido('${o.id}',event)" style="width:100%;background:#1a2332;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:4px;">✋ Pegar este pedido</button>`:''}
+    ${showConcluir?`<button onclick="concluirPedido('${o.id}',event)" style="width:100%;background:#2E7D32;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:4px;">✅ Concluir</button>`:''}
     <div class="card-footer">
       <div class="card-date">${o.dataentrega?'📅 '+formatDate(o.dataentrega):(o.created_at?'📁 '+new Date(o.created_at).toLocaleDateString('pt-BR'):'')}</div>
       <div class="card-actions">${botoesMain}</div>
@@ -3335,6 +3436,8 @@ function entrar() {
   pinMap[pinsCustom.comercial  || '3333'] = 'comercial';
   pinMap[pinsCustom.producao   || '4444'] = 'producao';
   pinMap[pinsCustom.financeiro || '5555'] = 'financeiro';
+  pinMap[pinsCustom.serrador   || '6666'] = 'serrador';
+  pinMap[pinsCustom.acabador   || '7777'] = 'acabador';
   var perfilDoPin = pinMap[pin];
 
   if (!perfilDoPin) { alert('PIN incorreto!'); return; }
@@ -3355,6 +3458,16 @@ function ativarSessao(perfil) {
       sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     } catch(e) { alert('Erro banco: '+e.message); return false; }
   }
+
+  // Acabador — verifica se já tem nome salvo, senão pede
+  if (perfil === 'acabador') {
+    var nomeAcabador = localStorage.getItem('mf_acabador_nome');
+    if (!nomeAcabador) {
+      mostrarSelecaoAcabador();
+      return true;
+    }
+  }
+
   currentUser = perfil;
   selectedProfile = perfil;
   perfilAtual = perfil;
@@ -9224,6 +9337,20 @@ function calcDataInstalacao(diasUteis) {
 async function renderAgenda() {
   const el = document.getElementById('agenda-content');
   if (!el) return;
+
+  // Serrador, Acabador e Encarregado — só veem Instalações em leitura
+  const soLeitura = currentUser === 'serrador' || currentUser === 'acabador' || currentUser === 'producao';
+  if (soLeitura) {
+    el.innerHTML = '<div style="padding:24px;max-width:1000px;margin:0 auto;">'
+      +'<div style="font-family:\'DM Serif Display\',serif;font-size:26px;color:var(--stone);margin-bottom:20px;">📅 Agenda de Instalações</div>'
+      +'<div style="font-size:12px;color:#888;background:#f0f7ff;border-radius:8px;padding:8px 12px;margin-bottom:20px;">👁 Somente visualização</div>'
+      +'<div id="painel-agenda-instalacao"></div></div>';
+    window._agendaSoLeitura = true;
+    renderAgendaInstalacao();
+    return;
+  }
+  window._agendaSoLeitura = false;
+
   const abaAtiva = localStorage.getItem('agenda_aba') || 'medicao';
   
   el.innerHTML = `
@@ -14496,18 +14623,23 @@ function renderConfiguracoes() {
         style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
         🔐 Senhas
       </button>
+      <button onclick="showSubConfig('acabadores')" id="subcfg-acabadores"
+        style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
+        ✂️ Acabadores
+      </button>
     </div>
     <div id="subcfg-panel-gastos"><div id="gastos-content"></div></div>
     <div id="subcfg-panel-tempos" style="display:none;"><div id="tempos-content"></div></div>
     <div id="subcfg-panel-bancos" style="display:none;"><div id="bancos-content"></div></div>
     <div id="subcfg-panel-comissoes" style="display:none;"><div id="comissoes-content"></div></div>
     <div id="subcfg-panel-senhas" style="display:none;"><div id="senhas-content"></div></div>
+    <div id="subcfg-panel-acabadores" style="display:none;"><div id="acabadores-content"></div></div>
   </div>`;
   renderGastos();
 }
 
 function showSubConfig(aba) {
-  ['gastos','tempos','bancos','manutencao','comissoes','parceiros','senhas','resetar'].forEach(a => {
+  ['gastos','tempos','bancos','manutencao','comissoes','parceiros','senhas','resetar','acabadores'].forEach(a => {
     const panel = document.getElementById('subcfg-panel-' + a);
     const btn = document.getElementById('subcfg-' + a);
     if (panel) panel.style.display = a === aba ? '' : 'none';
@@ -14523,6 +14655,52 @@ function showSubConfig(aba) {
   if (aba === 'parceiros') renderParceiros();
   if (aba === 'senhas') renderSenhas();
   if (aba === 'resetar') renderResetar();
+  if (aba === 'acabadores') renderAcabadores();
+}
+
+function renderAcabadores() {
+  var el = document.getElementById('acabadores-content');
+  if (!el) return;
+  var nomes = getAcabadores();
+  var html = '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:24px;">'
+    +'<div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">✂️ Acabadores</div>'
+    +'<div style="font-size:13px;color:#888;margin-bottom:20px;">Nomes que aparecem na seleção ao entrar como Acabador (PIN 7777)</div>'
+    +'<div id="lista-acabadores" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">'
+    +nomes.map(function(nome, i){
+      return '<div style="display:flex;align-items:center;gap:10px;background:#f8f9fa;border-radius:8px;padding:10px 14px;">'
+        +'<span style="flex:1;font-size:14px;font-weight:600;color:var(--stone);">'+nome+'</span>'
+        +'<button onclick="removerAcabador('+i+')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">🗑 Remover</button>'
+        +'</div>';
+    }).join('')
+    +'</div>'
+    +'<div style="display:flex;gap:8px;">'
+    +'<input id="novo-acabador-input" class="form-input" placeholder="Nome do novo acabador..." style="flex:1;">'
+    +'<button onclick="adicionarAcabador()" style="background:var(--gold);color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">+ Adicionar</button>'
+    +'</div>'
+    +'</div>';
+  el.innerHTML = html;
+}
+
+function adicionarAcabador() {
+  var input = document.getElementById('novo-acabador-input');
+  var nome = input ? input.value.trim() : '';
+  if (!nome) { showNotif('Digite um nome!','error'); return; }
+  var nomes = getAcabadores();
+  if (nomes.includes(nome)) { showNotif('Nome já cadastrado!','error'); return; }
+  nomes.push(nome);
+  localStorage.setItem('mf_acabadores', JSON.stringify(nomes));
+  showNotif(nome+' adicionado! ✓','success');
+  renderAcabadores();
+}
+
+function removerAcabador(idx) {
+  var nomes = getAcabadores();
+  var nome = nomes[idx];
+  if (!confirm('Remover "'+nome+'" da lista?')) return;
+  nomes.splice(idx, 1);
+  localStorage.setItem('mf_acabadores', JSON.stringify(nomes));
+  showNotif(nome+' removido!','success');
+  renderAcabadores();
 }
 
 function renderResetar() {

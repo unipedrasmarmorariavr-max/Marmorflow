@@ -552,11 +552,19 @@
       </button>
       <button type="button" class="profile-btn" id="pb-producao" onclick="selPerfil('producao')">
         <div class="profile-icon">⚙️</div>
-        <div class="profile-name">Produção</div>
+        <div class="profile-name">Encarregado</div>
       </button>
       <button type="button" class="profile-btn" id="pb-financeiro" onclick="selPerfil('financeiro')">
         <div class="profile-icon">💰</div>
         <div class="profile-name">Financeiro</div>
+      </button>
+      <button type="button" class="profile-btn" id="pb-serrador" onclick="selPerfil('serrador')">
+        <div class="profile-icon">🪚</div>
+        <div class="profile-name">Serrador</div>
+      </button>
+      <button type="button" class="profile-btn" id="pb-acabador" onclick="selPerfil('acabador')">
+        <div class="profile-icon">✂️</div>
+        <div class="profile-name">Acabador</div>
       </button>
     </div>
     <div id="perfil-label" style="text-align:center;font-size:13px;color:var(--gold);min-height:20px;margin-bottom:8px;"></div>
@@ -3402,7 +3410,7 @@ function toggleOrigem() {
 
 function selPerfil(p) {
   perfilAtual = p;
-  var ids = ['dono','medidor','comercial','producao','financeiro'];
+  var ids = ['dono','medidor','comercial','producao','financeiro','serrador','acabador'];
   for (var i = 0; i < ids.length; i++) {
     var el = document.getElementById('pb-' + ids[i]);
     if (!el) continue;
@@ -3416,8 +3424,10 @@ function selPerfil(p) {
     dono:       '👑 Dono selecionado',
     medidor:    '📐 Medidor selecionado',
     comercial:  '💼 Comercial selecionado',
-    producao:   '⚙️ Produção selecionada',
-    financeiro: '💰 Financeiro selecionado'
+    producao:   '⚙️ Encarregado selecionado',
+    financeiro: '💰 Financeiro selecionado',
+    serrador:   '🪚 Serrador selecionado',
+    acabador:   '✂️ Acabador selecionado'
   };
   var lbl = document.getElementById('perfil-label');
   if (lbl) lbl.textContent = labels[p] || p;

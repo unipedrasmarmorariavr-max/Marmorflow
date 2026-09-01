@@ -1354,34 +1354,32 @@ function getStagesFiltradosPerfil() {
   return null;
 }
 
-async function pegarPedido(id, e) {
+async function concluirCorte(id, e) {
   if (e) e.stopPropagation();
-  var nome = currentUser === 'acabador' ? getNomeAcabador() : 'Serrador';
-  if (!nome) { showNotif('Nome não encontrado!','error'); return; }
+  if (!confirm('Confirmar: corte concluído? O pedido vai para Acabamento.')) return;
   var order = orders.find(function(o){return o.id===id;});
   if (!order) return;
-  if (order.responsavel) { showNotif('Pedido já foi pego por '+order.responsavel,'error'); return; }
-  showLoading('Pegando pedido...');
-  var {error} = await getSB().from('pedidos').update({responsavel: nome}).eq('id', id);
+  showLoading('Movendo para Acabamento...');
+  var res = await getSB().from('pedidos').update({stage:'acabamento'}).eq('id', id);
   hideLoading();
-  if (error) { showNotif('Erro: '+error.message,'error'); return; }
-  order.responsavel = nome;
-  showNotif('Pedido pego! ✓','success');
+  if (res.error) { showNotif('Erro: '+res.error.message,'error'); return; }
+  order.stage = 'acabamento';
+  showNotif('Corte concluído! Pedido em Acabamento ✓','success');
   renderKanban();
 }
 
-async function concluirPedido(id, e) {
+async function concluirAcabamento(id, e) {
   if (e) e.stopPropagation();
+  var nomeAcab = getNomeAcabador() || 'Acabador';
+  if (!confirm('Confirmar: acabamento concluído por '+nomeAcab+'? O pedido vai para Pronto.')) return;
   var order = orders.find(function(o){return o.id===id;});
   if (!order) return;
-  var proximoStage = order.stage === 'corte' ? 'acabamento' : 'pronto';
-  showLoading('Concluindo...');
-  var {error} = await getSB().from('pedidos').update({stage: proximoStage, responsavel: null}).eq('id', id);
+  showLoading('Movendo para Pronto...');
+  var res = await getSB().from('pedidos').update({stage:'pronto'}).eq('id', id);
   hideLoading();
-  if (error) { showNotif('Erro: '+error.message,'error'); return; }
-  order.stage = proximoStage;
-  order.responsavel = null;
-  showNotif('Concluído! ✓','success');
+  if (res.error) { showNotif('Erro: '+res.error.message,'error'); return; }
+  order.stage = 'pronto';
+  showNotif('Acabamento concluído por '+nomeAcab+'! Pedido Pronto ✓','success');
   renderKanban();
 }
 
@@ -2177,10 +2175,8 @@ function createCard(o) {
 
   const isProducao = ['corte','acabamento','pronto','entregue'].includes(o.stage);
   const showValor = (currentUser !== 'producao' && currentUser !== 'medidor' && currentUser !== 'serrador' && currentUser !== 'acabador' && o.valor && _kanbanAba !== 'producao');
-  const responsavel = o.responsavel || '';
-  const showPegar = (currentUser === 'serrador' || currentUser === 'acabador') && !responsavel;
-  const showConcluir = (currentUser === 'serrador' && o.stage === 'corte' && responsavel === getNomeAcabador()) ||
-                       (currentUser === 'acabador' && o.stage === 'acabamento' && responsavel === getNomeAcabador());
+  const showConcluirCorte = currentUser === 'serrador' && o.stage === 'corte';
+  const showConcluirAcab  = currentUser === 'acabador' && o.stage === 'acabamento';
   const tel = (o.telefone || '').replace(/\D/g,'');
   const enderecoMaps = o.endereco ? encodeURIComponent(o.endereco) : '';
 
@@ -2218,9 +2214,8 @@ function createCard(o) {
     <div class="card-client">${o.cliente}</div>
     <div class="card-desc">${o.peca||''}${o.material?' · '+o.material:''}</div>
     ${showValor?`<div class="card-valor">R$ ${o.valor}</div>`:''}
-    ${responsavel?`<div style="background:#e8f5e9;color:#2E7D32;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;margin-bottom:4px;">👤 ${responsavel}</div>`:''}
-    ${showPegar?`<button onclick="pegarPedido('${o.id}',event)" style="width:100%;background:#1a2332;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:4px;">✋ Pegar este pedido</button>`:''}
-    ${showConcluir?`<button onclick="concluirPedido('${o.id}',event)" style="width:100%;background:#2E7D32;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:4px;">✅ Concluir</button>`:''}
+    ${showConcluirCorte?`<button onclick="concluirCorte('${o.id}',event)" style="width:100%;background:#1e5f74;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">✂️ Corte Concluído → Acabamento</button>`:''}
+    ${showConcluirAcab?`<button onclick="concluirAcabamento('${o.id}',event)" style="width:100%;background:#2E7D32;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">✅ Acabamento Concluído → Pronto</button>`:''}
     <div class="card-footer">
       <div class="card-date">${o.dataentrega?'📅 '+formatDate(o.dataentrega):(o.created_at?'📁 '+new Date(o.created_at).toLocaleDateString('pt-BR'):'')}</div>
       <div class="card-actions">${botoesMain}</div>
@@ -3526,7 +3521,7 @@ function ativarSessao(perfil) {
       showTab('agenda');
     } else {
       // Define aba do kanban por perfil
-      if (isProducao) {
+      if (isProducao || currentUser === 'serrador' || currentUser === 'acabador') {
         _kanbanAba = 'producao';
         localStorage.setItem('mf_kanban_aba', 'producao');
       } else {

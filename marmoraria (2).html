@@ -71,7 +71,7 @@
   .tab-btn{padding:12px 16px;border:none;background:none;font-size:12px;font-weight:500;color:var(--stone-light);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s;white-space:nowrap;display:flex;align-items:center;gap:6px;}
   .tab-btn:hover{color:var(--stone);background:var(--cream);}
   .tab-btn.active{color:var(--gold);border-bottom-color:var(--gold);font-weight:700;}
-  .content{flex:1;padding:20px;max-width:1500px;margin:0 auto;width:100%;}
+  .content{flex:1;padding:20px;width:100%;box-sizing:border-box;}
   .panel{display:none;}
   .panel.active{display:block;}
 
@@ -461,8 +461,19 @@
   #sidebar.collapsed .btn-logout-side span:last-child{display:none;}
   #sidebar-backdrop{display:none;}
   /* Push content when sidebar is open */
-  .content{margin-left:220px;transition:margin-left 0.25s ease;}
-  #sidebar.collapsed ~ * .content, #sidebar.collapsed + * .content{margin-left:56px;}
+  body{margin-left:220px;transition:margin-left 0.25s ease;}
+  body.sidebar-collapsed{margin-left:56px;}
+
+  /* Mobile — sidebar como overlay, sem empurrar conteúdo */
+  @media (max-width:768px) {
+    body{margin-left:0 !important;}
+    #sidebar{transform:translateX(-100%);width:220px !important;transition:transform 0.25s ease;}
+    #sidebar.open{transform:translateX(0);}
+    #sidebar.collapsed{transform:translateX(-100%);}
+    #sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:499;}
+    #sidebar-backdrop.show{display:block;}
+    #btn-sidebar-toggle{display:flex;}
+  }
   .sidebar-logo{padding:16px 14px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.08);}
   .sidebar-logo-text{font-family:'DM Serif Display',serif;font-size:17px;color:white;white-space:nowrap;}
   .sidebar-logo-text span{color:#D4AF6E;}
@@ -549,6 +560,7 @@
       </button>
     </div>
   </nav>
+  <div id="sidebar-backdrop" onclick="toggleSidebar()"></div>
   
   <div class="topbar">
     <div style="display:flex;align-items:center;">
@@ -1258,19 +1270,33 @@ async function nextId() {
 function toggleSidebar() {
   const sb = document.getElementById('sidebar');
   if (!sb) return;
-  const isCollapsed = sb.classList.contains('collapsed');
-  const content = document.querySelector('.content');
-  const btn = document.getElementById('sidebar-close-btn');
-  if (isCollapsed) {
-    sb.classList.remove('collapsed');
-    if (content) content.style.marginLeft = '220px';
-    if (btn) btn.textContent = '◀';
-    localStorage.setItem('mf_sidebar_collapsed', '0');
+  const isMobile = window.innerWidth < 768;
+
+  if (isMobile) {
+    // Mobile: abre/fecha como overlay
+    const bd = document.getElementById('sidebar-backdrop');
+    const isOpen = sb.classList.contains('open');
+    if (isOpen) {
+      sb.classList.remove('open');
+      sb.classList.add('collapsed');
+      if (bd) bd.classList.remove('show');
+    } else {
+      sb.classList.add('open');
+      sb.classList.remove('collapsed');
+      if (bd) bd.classList.add('show');
+    }
   } else {
-    sb.classList.add('collapsed');
-    if (content) content.style.marginLeft = '56px';
-    if (btn) btn.textContent = '▶';
-    localStorage.setItem('mf_sidebar_collapsed', '1');
+    // Desktop: colapsa/expande empurrando conteúdo
+    const isCollapsed = sb.classList.contains('collapsed');
+    if (isCollapsed) {
+      sb.classList.remove('collapsed');
+      document.body.classList.remove('sidebar-collapsed');
+      localStorage.setItem('mf_sidebar_collapsed', '0');
+    } else {
+      sb.classList.add('collapsed');
+      document.body.classList.add('sidebar-collapsed');
+      localStorage.setItem('mf_sidebar_collapsed', '1');
+    }
   }
 }
 
@@ -1305,6 +1331,21 @@ function renderSidebar(perfil) {
     const nomes = {dono:'👑 Dono', comercial:'💼 Comercial', producao:'⚙️ Produção', financeiro:'💰 Financeiro', medidor:'📐 Medidor'};
     userEl.innerHTML = '<strong>'+( nomes[perfil]||perfil)+'</strong>Unipedras Marmoraria';
   }
+
+  // Restaura estado do sidebar
+  const sb2 = document.getElementById('sidebar');
+  const isMobile = window.innerWidth < 768;
+  if (isMobile) {
+    // Mobile: sidebar escondida, usa body sem margem
+    if (sb2) sb2.classList.add('collapsed');
+    document.body.classList.add('sidebar-collapsed');
+  } else if (localStorage.getItem('mf_sidebar_collapsed') === '1') {
+    if (sb2) sb2.classList.add('collapsed');
+    document.body.classList.add('sidebar-collapsed');
+  } else {
+    if (sb2) sb2.classList.remove('collapsed');
+    document.body.classList.remove('sidebar-collapsed');
+  }
 }
 
 function showTab(tab, addHistory = true) {
@@ -1316,11 +1357,14 @@ function showTab(tab, addHistory = true) {
   // Update sidebar active state
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
   document.getElementById('nav-'+tab)?.classList.add('active');
-  // Close sidebar after navigation
+  // Fecha sidebar após navegação
   const sb = document.getElementById('sidebar');
   const bd = document.getElementById('sidebar-backdrop');
-  if (sb) sb.classList.remove('open');
-  if (bd) bd.classList.remove('show');
+  const isMobile = window.innerWidth < 768;
+  if (isMobile) {
+    if (sb) { sb.classList.remove('open'); sb.classList.add('collapsed'); }
+    if (bd) bd.classList.remove('show');
+  }
   if (tab==='kanban') {
     renderKanban();
     // Atualiza visual dos botões de aba do kanban

@@ -1985,10 +1985,14 @@ function renderKanban(filter='') {
 
 function toggleCardMenu(id, e) {
   e.stopPropagation();
-  // Fecha todos os outros menus abertos
+
+  // Fecha todos os outros menus e remove backdrop
   document.querySelectorAll('.card-menu-dropdown.open').forEach(m => {
-    if (m.id !== 'menu-' + id) m.classList.remove('open');
+    m.classList.remove('open');
   });
+  const oldBd = document.getElementById('card-menu-backdrop');
+  if (oldBd) oldBd.remove();
+
   const menu = document.getElementById('menu-' + id);
   if (!menu) return;
 
@@ -1998,16 +2002,16 @@ function toggleCardMenu(id, e) {
   const btn = e.currentTarget;
   const rect = btn.getBoundingClientRect();
 
-  // Move o menu para o body para garantir z-index correto
+  // Move menu para body
   if (menu.parentElement !== document.body) {
     document.body.appendChild(menu);
   }
 
   menu.style.position = 'fixed';
   menu.style.zIndex = '99999';
-  menu.style.minWidth = '200px';
+  menu.style.minWidth = '210px';
 
-  // Horizontal — alinha à direita do botão sem sair da tela
+  // Horizontal
   const menuW = 210;
   let left = rect.right - menuW;
   if (left < 8) left = 8;
@@ -2015,21 +2019,33 @@ function toggleCardMenu(id, e) {
   menu.style.left = left + 'px';
   menu.style.right = 'auto';
 
-  // Vertical — abre para baixo se tiver espaço, senão para cima
+  // Vertical — sempre abre abaixo do botão
   const spaceBelow = window.innerHeight - rect.bottom;
-  if (spaceBelow >= 200) {
-    menu.style.top = (rect.bottom + 4) + 'px';
+  if (spaceBelow >= 160) {
+    menu.style.top = (rect.bottom + 6) + 'px';
     menu.style.bottom = 'auto';
   } else {
-    menu.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+    menu.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
     menu.style.top = 'auto';
   }
+
+  // Backdrop
+  const bd = document.createElement('div');
+  bd.id = 'card-menu-backdrop';
+  bd.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,0.25);';
+  bd.onclick = function() {
+    menu.classList.remove('open');
+    bd.remove();
+  };
+  document.body.insertBefore(bd, menu);
 
   menu.classList.add('open');
 }
 
 document.addEventListener('click', () => {
   document.querySelectorAll('.card-menu-dropdown.open').forEach(m => m.classList.remove('open'));
+  const bd = document.getElementById('card-menu-backdrop');
+  if (bd) bd.remove();
 });
 
 function createCard(o) {

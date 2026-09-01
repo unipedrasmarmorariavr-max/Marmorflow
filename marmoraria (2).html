@@ -1397,7 +1397,7 @@ async function enviarMensagemIA() {
     const resp = await fetch(WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: mensagens })
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1024, messages: mensagens })
     });
 
     if (!resp.ok) {

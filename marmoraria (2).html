@@ -1354,6 +1354,205 @@ function getStagesFiltradosPerfil() {
   return null;
 }
 
+// ── CONTROLE DE PRODUÇÃO (Serrador / Acabador) ───────────────────────────────
+
+function getProdKey(orderId) {
+  return 'mf_prod_' + orderId;
+}
+
+function getProdStatus(order) {
+  try {
+    var raw = localStorage.getItem(getProdKey(order.id));
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(e) { return null; }
+}
+
+function saveProdStatus(orderId, data) {
+  localStorage.setItem(getProdKey(orderId), JSON.stringify(data));
+}
+
+function calcTempoUtil(log) {
+  // Soma todos os intervalos ativo (inicio→pausa ou inicio→agora)
+  var total = 0;
+  for (var i = 0; i < log.length; i++) {
+    var entry = log[i];
+    if (entry.tipo === 'inicio' || entry.tipo === 'retomada') {
+      var fim = log[i+1] ? new Date(log[i+1].ts) : new Date();
+      var ini = new Date(entry.ts);
+      total += Math.max(0, fim - ini);
+    }
+  }
+  return total; // ms
+}
+
+function fmtTempo(ms) {
+  var s = Math.floor(ms/1000);
+  var h = Math.floor(s/3600);
+  var m = Math.floor((s%3600)/60);
+  if (h > 0) return h+'h'+String(m).padStart(2,'0')+'m';
+  return m+'min';
+}
+
+function renderProdBotoes(order, prod) {
+  var meuNome = currentUser === 'acabador' ? getNomeAcabador() : 'Serrador';
+  var estagio = currentUser === 'serrador' ? 'corte' : 'acabamento';
+  if (order.stage !== estagio) return '';
+
+  var html = '';
+
+  if (!prod) {
+    // Ninguém pegou ainda
+    html += '<button onclick="prodPegar(\''+order.id+'\',event)" '
+      +'style="width:100%;background:#1a2332;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
+      +'✋ Pegar esta obra</button>';
+    return html;
+  }
+
+  // Já tem alguém
+  var tempoMs = calcTempoUtil(prod.log);
+  var tempoStr = fmtTempo(tempoMs);
+  var isPausado = prod.log.length > 0 && (prod.log[prod.log.length-1].tipo === 'pausa');
+  var isMeu = prod.nome === meuNome;
+
+  // Badge de quem pegou
+  html += '<div style="background:'+(isMeu?'#e8f4f7':'#fff3e0')+';border-radius:8px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px;">'
+    +'<span style="font-size:16px;">'+(isPausado?'⏸':'▶')+'</span>'
+    +'<div style="flex:1;min-width:0;">'
+    +'<div style="font-size:12px;font-weight:700;color:#1a2332;">'+prod.nome+'</div>'
+    +'<div id="tempo-'+order.id+'" style="font-size:11px;color:#888;">⏱ '+tempoStr+(isPausado?' · pausado':'')+'</div>'
+    +'</div></div>';
+
+  if (isMeu) {
+    if (isPausado) {
+      html += '<button onclick="prodRetomar(\''+order.id+'\',event)" '
+        +'style="width:100%;background:#8B6914;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
+        +'▶ Retomar</button>';
+    } else {
+      html += '<button onclick="prodPausar(\''+order.id+'\',event)" '
+        +'style="width:100%;background:#555;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
+        +'⏸ Pausar</button>';
+    }
+    html += '<button onclick="prodConcluir(\''+order.id+'\',event)" '
+      +'style="width:100%;background:#2E7D32;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
+      +(currentUser==='serrador'?'✂️ Corte Concluído':'✅ Acabamento Concluído')+'</button>';
+  }
+
+  return html;
+}
+
+// Atualiza cronômetros em tempo real
+var _prodTimer = null;
+function iniciarTimerProd() {
+  if (_prodTimer) clearInterval(_prodTimer);
+  _prodTimer = setInterval(function() {
+    document.querySelectorAll('[id^="tempo-"]').forEach(function(el) {
+      var orderId = el.id.replace('tempo-','');
+      var prod = getProdStatus({id: orderId});
+      if (!prod) return;
+      var isPausado = prod.log.length > 0 && prod.log[prod.log.length-1].tipo === 'pausa';
+      var ms = calcTempoUtil(prod.log);
+      el.textContent = '⏱ ' + fmtTempo(ms) + (isPausado ? ' · pausado' : '');
+    });
+  }, 10000); // atualiza a cada 10s
+}
+
+function prodPegar(orderId, e) {
+  if (e) e.stopPropagation();
+  var meuNome = currentUser === 'acabador' ? getNomeAcabador() : 'Serrador';
+  var prod = getProdStatus({id: orderId});
+  if (prod) { showNotif('Esta obra já está com '+prod.nome,'error'); return; }
+  var data = {
+    nome: meuNome,
+    perfil: currentUser,
+    log: [{ tipo:'inicio', ts: new Date().toISOString() }]
+  };
+  saveProdStatus(orderId, data);
+  showNotif('Obra pega! Cronômetro iniciado ✓','success');
+  renderKanban();
+  iniciarTimerProd();
+}
+
+function prodPausar(orderId, e) {
+  if (e) e.stopPropagation();
+  var prod = getProdStatus({id: orderId});
+  if (!prod) return;
+  prod.log.push({ tipo:'pausa', ts: new Date().toISOString() });
+  saveProdStatus(orderId, prod);
+  showNotif('Pausado ⏸','success');
+  renderKanban();
+}
+
+function prodRetomar(orderId, e) {
+  if (e) e.stopPropagation();
+  var prod = getProdStatus({id: orderId});
+  if (!prod) return;
+  prod.log.push({ tipo:'retomada', ts: new Date().toISOString() });
+  saveProdStatus(orderId, prod);
+  showNotif('Retomado ▶','success');
+  renderKanban();
+  iniciarTimerProd();
+}
+
+async function prodConcluir(orderId, e) {
+  if (e) e.stopPropagation();
+  var prod = getProdStatus({id: orderId});
+  if (!prod) return;
+  if (!confirm('Confirmar conclusão?')) return;
+
+  // Fecha o log
+  var ultimo = prod.log[prod.log.length-1];
+  if (ultimo.tipo !== 'pausa') {
+    prod.log.push({ tipo:'fim', ts: new Date().toISOString() });
+  } else {
+    prod.log[prod.log.length-1].tipo = 'fim';
+  }
+  var tempoUtil = calcTempoUtil(prod.log);
+  prod.tempoUtilMs = tempoUtil;
+  prod.concluido = new Date().toISOString();
+
+  // Define próximo stage
+  var order = orders.find(function(o){return o.id===orderId;});
+  var proximoStage = currentUser === 'serrador' ? 'acabamento' : 'pronto';
+
+  showLoading('Salvando...');
+
+  // Salva historico_producao no Supabase (campo JSONB)
+  var historico = [];
+  try { historico = JSON.parse(order.historico_producao||'[]'); } catch(e){}
+  historico.push({
+    nome: prod.nome,
+    perfil: prod.perfil,
+    stage: order.stage,
+    inicio: prod.log[0].ts,
+    fim: prod.concluido,
+    tempoUtilMin: Math.round(tempoUtil/60000),
+    log: prod.log
+  });
+
+  var {error} = await getSB().from('pedidos').update({
+    stage: proximoStage,
+    historico_producao: JSON.stringify(historico)
+  }).eq('id', orderId);
+
+  hideLoading();
+
+  if (error) {
+    // Se campo não existe no Supabase, move só o stage
+    if (error.message && error.message.includes('historico_producao')) {
+      await getSB().from('pedidos').update({stage: proximoStage}).eq('id', orderId);
+    } else {
+      showNotif('Erro: '+error.message,'error');
+      return;
+    }
+  }
+
+  if (order) order.stage = proximoStage;
+  localStorage.removeItem(getProdKey(orderId));
+  showNotif('Concluído! Tempo: '+fmtTempo(tempoUtil)+' ✓','success');
+  renderKanban();
+}
+
 async function concluirCorte(id, e) {
   if (e) e.stopPropagation();
   if (!confirm('Confirmar: corte concluído? O pedido vai para Acabamento.')) return;
@@ -1382,6 +1581,8 @@ async function concluirAcabamento(id, e) {
   showNotif('Acabamento concluído por '+nomeAcab+'! Pedido Pronto ✓','success');
   renderKanban();
 }
+
+
 
 function toggleSidebar() {
   const sb = document.getElementById('sidebar');
@@ -1485,8 +1686,8 @@ function showTab(tab, addHistory = true) {
   }
   if (tab==='kanban') {
     renderKanban();
-    // Atualiza visual dos botões de aba do kanban
     setTimeout(() => switchKanbanAba(_kanbanAba), 50);
+    if (currentUser === 'serrador' || currentUser === 'acabador') iniciarTimerProd();
   }
   if (tab==='dashboard') renderDashboard();
   if (tab==='materiais') renderMateriais();
@@ -2175,8 +2376,8 @@ function createCard(o) {
 
   const isProducao = ['corte','acabamento','pronto','entregue'].includes(o.stage);
   const showValor = (currentUser !== 'producao' && currentUser !== 'medidor' && currentUser !== 'serrador' && currentUser !== 'acabador' && o.valor && _kanbanAba !== 'producao');
-  const showConcluirCorte = currentUser === 'serrador' && o.stage === 'corte';
-  const showConcluirAcab  = currentUser === 'acabador' && o.stage === 'acabamento';
+  const isProdUser = currentUser === 'serrador' || currentUser === 'acabador';
+  const prod = isProdUser ? getProdStatus(o) : null;
   const tel = (o.telefone || '').replace(/\D/g,'');
   const enderecoMaps = o.endereco ? encodeURIComponent(o.endereco) : '';
 
@@ -2214,8 +2415,7 @@ function createCard(o) {
     <div class="card-client">${o.cliente}</div>
     <div class="card-desc">${o.peca||''}${o.material?' · '+o.material:''}</div>
     ${showValor?`<div class="card-valor">R$ ${o.valor}</div>`:''}
-    ${showConcluirCorte?`<button onclick="concluirCorte('${o.id}',event)" style="width:100%;background:#1e5f74;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">✂️ Corte Concluído → Acabamento</button>`:''}
-    ${showConcluirAcab?`<button onclick="concluirAcabamento('${o.id}',event)" style="width:100%;background:#2E7D32;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">✅ Acabamento Concluído → Pronto</button>`:''}
+    ${isProdUser ? renderProdBotoes(o, prod) : ''}
     <div class="card-footer">
       <div class="card-date">${o.dataentrega?'📅 '+formatDate(o.dataentrega):(o.created_at?'📁 '+new Date(o.created_at).toLocaleDateString('pt-BR'):'')}</div>
       <div class="card-actions">${botoesMain}</div>
@@ -3464,13 +3664,10 @@ function ativarSessao(perfil) {
     } catch(e) { alert('Erro banco: '+e.message); return false; }
   }
 
-  // Acabador — verifica se já tem nome salvo, senão pede
+  // Acabador — sempre pede o nome ao entrar
   if (perfil === 'acabador') {
-    var nomeAcabador = localStorage.getItem('mf_acabador_nome');
-    if (!nomeAcabador) {
-      mostrarSelecaoAcabador();
-      return true;
-    }
+    mostrarSelecaoAcabador();
+    return true;
   }
 
   currentUser = perfil;

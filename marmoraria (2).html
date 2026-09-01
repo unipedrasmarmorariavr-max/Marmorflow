@@ -686,8 +686,8 @@
             </div>
           </div>
           <div style="padding:12px 16px;border-top:1px solid #e8e8e8;display:flex;gap:8px;background:white;">
-            <input id="ia-input" class="form-input" placeholder="Digite sua pergunta..." style="flex:1;padding:10px 14px;font-size:14px;" onkeydown="if(event.key==='Enter'){enviarMensagemIA();}">
-            <button onclick="enviarMensagemIA()" style="background:#1a2332;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">Enviar</button>
+            <input id="ia-input" class="form-input" placeholder="Digite sua pergunta..." style="flex:1;padding:10px 14px;font-size:14px;">
+            <button id="ia-send-btn" style="background:#1a2332;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">Enviar</button>
           </div>
           <div style="padding:8px 16px 12px;display:flex;gap:6px;flex-wrap:wrap;background:white;border-top:1px solid #f0f0f0;">
             <button onclick="iaEnviar('Resumo do dia')" style="background:#f0f0f0;border:none;padding:5px 10px;border-radius:20px;cursor:pointer;font-size:12px;">📊 Resumo</button>
@@ -1347,6 +1347,12 @@ function renderIA() {
   var nProd = orders ? orders.filter(function(o){return o.stage==='corte'||o.stage==='acabamento'||o.stage==='pronto';}).length : 0;
   msgs._contexto = 'Você é o assistente de gestão da Unipedras Marmoraria, Volta Redonda/RJ. Data: '+hoje+'. Pedidos ativos: '+nAtivos+'. Negociações: '+nNeg+'. Em produção: '+nProd+'. Responda em português, de forma objetiva e prática.';
   msgs._historico = [];
+
+  // Attach send button event
+  var btn = document.getElementById('ia-send-btn');
+  var input = document.getElementById('ia-input');
+  if (btn) btn.onclick = function(){ enviarMensagemIA(); };
+  if (input) input.onkeydown = function(e){ if(e.key==='Enter') enviarMensagemIA(); };
 }
 
 async function enviarMensagemIA() {

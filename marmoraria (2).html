@@ -1345,6 +1345,11 @@ function selecionarAcabador(nome) {
   loadData().then(function(){
     switchKanbanAba('producao');
     showTab('kanban');
+    setTimeout(function(){
+      var total = orders ? orders.length : 0;
+      var emAcab = orders ? orders.filter(function(o){return o.stage==='acabamento';}).length : 0;
+      showNotif('Carregado: '+total+' pedidos, '+emAcab+' em acabamento','success');
+    }, 500);
   });
 }
 function getStagesFiltradosPerfil() {
@@ -1357,47 +1362,48 @@ function getStagesFiltradosPerfil() {
 // ── CONTROLE DE PRODUÇÃO (Serrador / Acabador) ───────────────────────────────
 
 function getTemposPrevistosOrcamento(orderId) {
-  // Busca o orçamento vinculado ao pedido
-  var orcs = getOrcamentos();
-  var orc = orcs.find(function(o){ return o.pedidoId === orderId; });
-  if (!orc || !orc.itens) return { serrador: 0, acabador: 0 };
+  try {
+    var orcs = typeof getOrcamentos === 'function' ? getOrcamentos() : [];
+    var orc = orcs.find(function(o){ return o.pedidoId === orderId; });
+    if (!orc || !orc.itens) return { serrador: 0, acabador: 0 };
 
-  var tSerrador = 0;
-  var tAcabador = 0;
+    var tSerrador = 0;
+    var tAcabador = 0;
 
-  orc.itens.forEach(function(item) {
-    var c = item.calc;
-    if (!c) return;
-    // Serrador — só serra
-    tSerrador += (parseFloat(c.tSerra)||0);
-    // Acabador — tudo exceto serra
-    tAcabador += (parseFloat(c.tCorte45)||0)
-               + (parseFloat(c.tCorte45Interno)||0)
-               + (parseFloat(c.tMontagem45)||0)
-               + (parseFloat(c.tPolimentoManual)||0)
-               + (parseFloat(c.tPolimentoAuto)||0)
-               + (parseFloat(c.tBipolimento)||0)
-               + (parseFloat(c.tCubas)||0)
-               + (parseFloat(c.tCubEsculpida)||0)
-               + (parseFloat(c.tFlush)||0)
-               + (parseFloat(c.tFlath)||0)
-               + (parseFloat(c.tRecortes)||0)
-               + (parseFloat(c.tMeioBoelado)||0)
-               + (parseFloat(c.tMeioBoeladoDuplo)||0)
-               + (parseFloat(c.tChanfrado)||0)
-               + (parseFloat(c.tChanfradoDuplo)||0)
-               + (parseFloat(c.tMeiaCana)||0)
-               + (parseFloat(c.tMeiaCanaD)||0)
-               + (parseFloat(c.tBoleadoDuplo)||0)
-               + (parseFloat(c.tChanfroAlongado)||0)
-               + (parseFloat(c.tColagem)||0)
-               + (parseFloat(c.horasAdicionais)||0);
-  });
+    orc.itens.forEach(function(item) {
+      var c = item.calc;
+      if (!c) return;
+      tSerrador += (parseFloat(c.tSerra)||0);
+      tAcabador += (parseFloat(c.tCorte45)||0)
+                 + (parseFloat(c.tCorte45Interno)||0)
+                 + (parseFloat(c.tMontagem45)||0)
+                 + (parseFloat(c.tPolimentoManual)||0)
+                 + (parseFloat(c.tPolimentoAuto)||0)
+                 + (parseFloat(c.tBipolimento)||0)
+                 + (parseFloat(c.tCubas)||0)
+                 + (parseFloat(c.tCubEsculpida)||0)
+                 + (parseFloat(c.tFlush)||0)
+                 + (parseFloat(c.tFlath)||0)
+                 + (parseFloat(c.tRecortes)||0)
+                 + (parseFloat(c.tMeioBoelado)||0)
+                 + (parseFloat(c.tMeioBoeladoDuplo)||0)
+                 + (parseFloat(c.tChanfrado)||0)
+                 + (parseFloat(c.tChanfradoDuplo)||0)
+                 + (parseFloat(c.tMeiaCana)||0)
+                 + (parseFloat(c.tMeiaCanaD)||0)
+                 + (parseFloat(c.tBoleadoDuplo)||0)
+                 + (parseFloat(c.tChanfroAlongado)||0)
+                 + (parseFloat(c.tColagem)||0)
+                 + (parseFloat(c.horasAdicionais)||0);
+    });
 
-  return {
-    serrador: tSerrador * 3600000, // converte horas → ms
-    acabador: tAcabador * 3600000
-  };
+    return {
+      serrador: tSerrador * 3600000,
+      acabador: tAcabador * 3600000
+    };
+  } catch(e) {
+    return { serrador: 0, acabador: 0 };
+  }
 }
 
 function getProdKey(orderId) {
@@ -1439,11 +1445,12 @@ function fmtTempo(ms) {
 }
 
 function renderProdBotoes(order, prod) {
-  var meuNome = currentUser === 'acabador' ? getNomeAcabador() : 'Serrador';
-  var estagio = currentUser === 'serrador' ? 'corte' : 'acabamento';
-  if (order.stage !== estagio) return '';
+  try {
+    var meuNome = currentUser === 'acabador' ? getNomeAcabador() : 'Serrador';
+    var estagio = currentUser === 'serrador' ? 'corte' : 'acabamento';
+    if (order.stage !== estagio) return '';
 
-  var html = '';
+    var html = '';
 
   if (!prod) {
     // Busca tempo previsto do orçamento
@@ -1498,7 +1505,11 @@ function renderProdBotoes(order, prod) {
       +(currentUser==='serrador'?'✂️ Corte Concluído':'✅ Acabamento Concluído')+'</button>';
   }
 
-  return html;
+    return html;
+  } catch(e) {
+    console.error('renderProdBotoes error:', e);
+    return '';
+  }
 }
 
 var _prodTimer = null;

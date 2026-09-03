@@ -2558,7 +2558,10 @@ function createCard(o) {
   const isProducao = ['corte','acabamento','pronto','entregue'].includes(o.stage);
   const showValor = (currentUser !== 'producao' && currentUser !== 'medidor' && currentUser !== 'serrador' && currentUser !== 'acabador' && o.valor && _kanbanAba !== 'producao');
   const isProdUser = currentUser === 'serrador' || currentUser === 'acabador';
-  const prod = isProdUser ? getProdStatus(o) : null;  const tel = (o.telefone || '').replace(/\D/g,'');
+  const prod = isProdUser ? getProdStatus(o) : null;
+  // Para dono/comercial/encarregado — mostra quem está com o pedido
+  const prodInfo = !isProdUser ? getProdStatus(o) : null;
+  const tel = (o.telefone || '').replace(/\D/g,'');
   const enderecoMaps = o.endereco ? encodeURIComponent(o.endereco) : '';
 
   let botoesMain = '';
@@ -2595,6 +2598,11 @@ function createCard(o) {
     <div class="card-client">${o.cliente}</div>
     <div class="card-desc">${o.peca||''}${o.material?' · '+o.material:''}</div>
     ${showValor?`<div class="card-valor">R$ ${o.valor}</div>`:''}
+    ${prodInfo && prodInfo.nome ? `<div style="background:#e8f4f7;border-radius:6px;padding:5px 8px;margin-bottom:4px;display:flex;align-items:center;gap:6px;font-size:12px;">
+      <span>${prodInfo.log && prodInfo.log[prodInfo.log.length-1] && prodInfo.log[prodInfo.log.length-1].tipo==='pausa' ? '⏸' : '▶'}</span>
+      <span style="font-weight:700;color:#1a2332;">${prodInfo.nome}</span>
+      <span style="color:#888;">· ⏱ ${fmtTempo(calcTempoUtil(prodInfo.log))}</span>
+    </div>` : ''}
     ${isProdUser ? renderProdBotoes(o, prod) : ''}
     <div class="card-footer">
       <div class="card-date">${o.dataentrega?'📅 '+formatDate(o.dataentrega):(o.created_at?'📁 '+new Date(o.created_at).toLocaleDateString('pt-BR'):'')}</div>

@@ -1504,9 +1504,6 @@ function renderProdBotoes(order, prod) {
     if (order.stage !== estagio) return '';
 
     var html = '';
-    // Debug temporário
-    var debugInfo = 'prod_status: '+(order.prod_status ? JSON.stringify(order.prod_status).substring(0,50) : 'null');
-    html += '<div style="font-size:10px;color:#888;margin-bottom:4px;">'+debugInfo+'</div>';
 
   if (!prod) {
     // Busca tempo previsto do orçamento
@@ -2558,9 +2555,11 @@ function createCard(o) {
   const isProducao = ['corte','acabamento','pronto','entregue'].includes(o.stage);
   const showValor = (currentUser !== 'producao' && currentUser !== 'medidor' && currentUser !== 'serrador' && currentUser !== 'acabador' && o.valor && _kanbanAba !== 'producao');
   const isProdUser = currentUser === 'serrador' || currentUser === 'acabador';
-  const prod = isProdUser ? getProdStatus(o) : null;
+  // Busca order atualizado do array orders para ter prod_status mais recente
+  const orderAtual = orders ? (orders.find(function(x){return x.id===o.id;}) || o) : o;
+  const prod = isProdUser ? getProdStatus(orderAtual) : null;
   // Para dono/comercial/encarregado — mostra quem está com o pedido
-  const prodInfo = !isProdUser ? getProdStatus(o) : null;
+  const prodInfo = !isProdUser ? getProdStatus(orderAtual) : null;
   const tel = (o.telefone || '').replace(/\D/g,'');
   const enderecoMaps = o.endereco ? encodeURIComponent(o.endereco) : '';
 

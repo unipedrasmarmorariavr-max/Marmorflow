@@ -1356,6 +1356,50 @@ function getStagesFiltradosPerfil() {
 
 // ── CONTROLE DE PRODUÇÃO (Serrador / Acabador) ───────────────────────────────
 
+function getTemposPrevistosOrcamento(orderId) {
+  // Busca o orçamento vinculado ao pedido
+  var orcs = getOrcamentos();
+  var orc = orcs.find(function(o){ return o.pedidoId === orderId; });
+  if (!orc || !orc.itens) return { serrador: 0, acabador: 0 };
+
+  var tSerrador = 0;
+  var tAcabador = 0;
+
+  orc.itens.forEach(function(item) {
+    var c = item.calc;
+    if (!c) return;
+    // Serrador — só serra
+    tSerrador += (parseFloat(c.tSerra)||0);
+    // Acabador — tudo exceto serra
+    tAcabador += (parseFloat(c.tCorte45)||0)
+               + (parseFloat(c.tCorte45Interno)||0)
+               + (parseFloat(c.tMontagem45)||0)
+               + (parseFloat(c.tPolimentoManual)||0)
+               + (parseFloat(c.tPolimentoAuto)||0)
+               + (parseFloat(c.tBipolimento)||0)
+               + (parseFloat(c.tCubas)||0)
+               + (parseFloat(c.tCubEsculpida)||0)
+               + (parseFloat(c.tFlush)||0)
+               + (parseFloat(c.tFlath)||0)
+               + (parseFloat(c.tRecortes)||0)
+               + (parseFloat(c.tMeioBoelado)||0)
+               + (parseFloat(c.tMeioBoeladoDuplo)||0)
+               + (parseFloat(c.tChanfrado)||0)
+               + (parseFloat(c.tChanfradoDuplo)||0)
+               + (parseFloat(c.tMeiaCana)||0)
+               + (parseFloat(c.tMeiaCanaD)||0)
+               + (parseFloat(c.tBoleadoDuplo)||0)
+               + (parseFloat(c.tChanfroAlongado)||0)
+               + (parseFloat(c.tColagem)||0)
+               + (parseFloat(c.horasAdicionais)||0);
+  });
+
+  return {
+    serrador: tSerrador * 3600000, // converte horas → ms
+    acabador: tAcabador * 3600000
+  };
+}
+
 function getProdKey(orderId) {
   return 'mf_prod_' + orderId;
 }
@@ -1402,26 +1446,42 @@ function renderProdBotoes(order, prod) {
   var html = '';
 
   if (!prod) {
-    // Ninguém pegou ainda
+    // Busca tempo previsto do orçamento
+    var tempos = getTemposPrevistosOrcamento(order.id);
+    var prevMs = currentUser === 'serrador' ? tempos.serrador : tempos.acabador;
+    var prevStr = prevMs > 0 ? ' · previsto: '+fmtTempo(prevMs) : '';
     html += '<button onclick="prodPegar(\''+order.id+'\',event)" '
       +'style="width:100%;background:#1a2332;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
-      +'✋ Pegar esta obra</button>';
+      +'✋ Pegar esta obra'+prevStr+'</button>';
     return html;
   }
 
   // Já tem alguém
+  var temposP = getTemposPrevistosOrcamento(order.id);
+  var prevMs2 = currentUser === 'serrador' ? temposP.serrador : temposP.acabador;
   var tempoMs = calcTempoUtil(prod.log);
   var tempoStr = fmtTempo(tempoMs);
   var isPausado = prod.log.length > 0 && (prod.log[prod.log.length-1].tipo === 'pausa');
   var isMeu = prod.nome === meuNome;
 
-  // Badge de quem pegou
-  html += '<div style="background:'+(isMeu?'#e8f4f7':'#fff3e0')+';border-radius:8px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px;">'
+  // Calcula porcentagem do previsto
+  var pct = prevMs2 > 0 ? Math.min(150, Math.round(tempoMs/prevMs2*100)) : 0;
+  var barColor = pct < 85 ? '#2E7D32' : pct < 100 ? '#F59E0B' : '#B85A4A';
+
+  // Badge de quem pegou + cronômetro
+  html += '<div style="background:'+(isMeu?'#e8f4f7':'#fff3e0')+';border-radius:8px;padding:8px 10px;margin-bottom:6px;">'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'
     +'<span style="font-size:16px;">'+(isPausado?'⏸':'▶')+'</span>'
     +'<div style="flex:1;min-width:0;">'
     +'<div style="font-size:12px;font-weight:700;color:#1a2332;">'+prod.nome+'</div>'
-    +'<div id="tempo-'+order.id+'" style="font-size:11px;color:#888;">⏱ '+tempoStr+(isPausado?' · pausado':'')+'</div>'
-    +'</div></div>';
+    +'<div id="tempo-'+order.id+'" style="font-size:11px;color:#888;">⏱ '+tempoStr+(isPausado?' · pausado':'')+(prevMs2>0?' / '+fmtTempo(prevMs2):'')+'</div>'
+    +'</div>'
+    +(prevMs2>0?'<div style="font-size:11px;font-weight:700;color:'+barColor+';">'+pct+'%</div>':'')
+    +'</div>'
+    +(prevMs2>0?'<div style="background:#e0e0e0;border-radius:4px;height:4px;overflow:hidden;">'
+      +'<div style="background:'+barColor+';width:'+Math.min(100,pct)+'%;height:100%;border-radius:4px;transition:width 0.3s;"></div>'
+      +'</div>':'')
+    +'</div>';
 
   if (isMeu) {
     if (isPausado) {
@@ -1441,7 +1501,6 @@ function renderProdBotoes(order, prod) {
   return html;
 }
 
-// Atualiza cronômetros em tempo real
 var _prodTimer = null;
 function iniciarTimerProd() {
   if (_prodTimer) clearInterval(_prodTimer);
@@ -1452,9 +1511,14 @@ function iniciarTimerProd() {
       if (!prod) return;
       var isPausado = prod.log.length > 0 && prod.log[prod.log.length-1].tipo === 'pausa';
       var ms = calcTempoUtil(prod.log);
-      el.textContent = '⏱ ' + fmtTempo(ms) + (isPausado ? ' · pausado' : '');
+      var tempos = getTemposPrevistosOrcamento(orderId);
+      var prevMs = currentUser === 'serrador' ? tempos.serrador : tempos.acabador;
+      var txt = '⏱ ' + fmtTempo(ms);
+      if (prevMs > 0) txt += ' / ' + fmtTempo(prevMs);
+      if (isPausado) txt += ' · pausado';
+      el.textContent = txt;
     });
-  }, 10000); // atualiza a cada 10s
+  }, 10000);
 }
 
 function prodPegar(orderId, e) {

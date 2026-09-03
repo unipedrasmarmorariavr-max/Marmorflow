@@ -2252,8 +2252,9 @@ function isArquivado(o) {
 
   // Entregues de meses anteriores → arquivado
   if (o.stage === 'entregue') {
-    // Usa data_entregue se disponível, senão updated_at, senão created_at
-    var dataRef = (o.data_entregue || o.updated_at || o.created_at || '').substring(0,7);
+    // Se não tem data_entregue, considera como entregue hoje (não arquiva)
+    if (!o.data_entregue && !o.updated_at) return false;
+    var dataRef = (o.data_entregue || o.updated_at || '').substring(0,7);
     return dataRef && dataRef < mesAtual;
   }
 

@@ -1504,6 +1504,9 @@ function renderProdBotoes(order, prod) {
     if (order.stage !== estagio) return '';
 
     var html = '';
+    // Debug temporário
+    var debugInfo = 'prod_status: '+(order.prod_status ? JSON.stringify(order.prod_status).substring(0,50) : 'null');
+    html += '<div style="font-size:10px;color:#888;margin-bottom:4px;">'+debugInfo+'</div>';
 
   if (!prod) {
     // Busca tempo previsto do orçamento

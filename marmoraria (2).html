@@ -1493,8 +1493,17 @@ function fmtTempo(ms) {
   var s = Math.floor(ms/1000);
   var h = Math.floor(s/3600);
   var m = Math.floor((s%3600)/60);
+  var sec = s%60;
   if (h > 0) return h+'h'+String(m).padStart(2,'0')+'m';
   return m+'min';
+}
+
+function fmtCronometro(ms) {
+  var s = Math.floor(ms/1000);
+  var h = Math.floor(s/3600);
+  var m = Math.floor((s%3600)/60);
+  var sec = s%60;
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
 }
 
 function renderProdBotoes(order, prod) {
@@ -1520,26 +1529,30 @@ function renderProdBotoes(order, prod) {
   var temposP = getTemposPrevistosOrcamento(order.id);
   var prevMs2 = currentUser === 'serrador' ? temposP.serrador : temposP.acabador;
   var tempoMs = calcTempoUtil(prod.log);
-  var tempoStr = fmtTempo(tempoMs);
   var isPausado = prod.log.length > 0 && (prod.log[prod.log.length-1].tipo === 'pausa');
   var isMeu = prod.nome === meuNome;
 
   // Calcula porcentagem do previsto
   var pct = prevMs2 > 0 ? Math.min(150, Math.round(tempoMs/prevMs2*100)) : 0;
   var barColor = pct < 85 ? '#2E7D32' : pct < 100 ? '#F59E0B' : '#B85A4A';
+  var prevStr = prevMs2 > 0 ? fmtTempo(prevMs2)+' / ' : '';
 
   // Badge de quem pegou + cronômetro
-  html += '<div style="background:'+(isMeu?'#e8f4f7':'#fff3e0')+';border-radius:8px;padding:8px 10px;margin-bottom:6px;">'
-    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'
-    +'<span style="font-size:16px;">'+(isPausado?'⏸':'▶')+'</span>'
+  html += '<div style="background:'+(isMeu?'#e8f4f7':'#fff3e0')+';border-radius:8px;padding:10px 12px;margin-bottom:6px;">'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+    +'<span style="font-size:18px;">'+(isPausado?'⏸':'▶')+'</span>'
     +'<div style="flex:1;min-width:0;">'
-    +'<div style="font-size:12px;font-weight:700;color:#1a2332;">'+prod.nome+'</div>'
-    +'<div id="tempo-'+order.id+'" style="font-size:11px;color:#888;">⏱ '+tempoStr+(isPausado?' · pausado':'')+(prevMs2>0?' / '+fmtTempo(prevMs2):'')+'</div>'
+    +'<div style="font-size:13px;font-weight:700;color:#1a2332;">'+prod.nome+'</div>'
+    +'<div style="display:flex;align-items:center;gap:6px;margin-top:3px;">'
+    +(prevMs2>0?'<span style="font-size:12px;color:#888;">'+fmtTempo(prevMs2)+'</span><span style="color:#ccc;">|</span>':'')
+    +'<span id="tempo-'+order.id+'" style="font-size:15px;font-weight:800;color:'+(isPausado?'#888':barColor)+';font-variant-numeric:tabular-nums;">'+fmtCronometro(tempoMs)+'</span>'
+    +(isPausado?'<span style="font-size:11px;color:#888;">pausado</span>':'')
     +'</div>'
-    +(prevMs2>0?'<div style="font-size:11px;font-weight:700;color:'+barColor+';">'+pct+'%</div>':'')
+    +'</div>'
+    +(prevMs2>0?'<div style="font-size:12px;font-weight:700;color:'+barColor+';">'+pct+'%</div>':'')
     +'</div>'
     +(prevMs2>0?'<div style="background:#e0e0e0;border-radius:4px;height:4px;overflow:hidden;">'
-      +'<div style="background:'+barColor+';width:'+Math.min(100,pct)+'%;height:100%;border-radius:4px;transition:width 0.3s;"></div>'
+      +'<div style="background:'+barColor+';width:'+Math.min(100,pct)+'%;height:100%;border-radius:4px;"></div>'
       +'</div>':'')
     +'</div>';
 
@@ -1578,19 +1591,22 @@ function iniciarTimerProd() {
   _prodTimer = setInterval(function() {
     document.querySelectorAll('[id^="tempo-"]').forEach(function(el) {
       var orderId = el.id.replace('tempo-','');
-      var prod = getProdStatus({id: orderId});
-      if (!prod) return;
-      var isPausado = prod.log.length > 0 && prod.log[prod.log.length-1].tipo === 'pausa';
+      var orderAtual = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+      var prod = orderAtual ? getProdStatus(orderAtual) : null;
+      if (!prod || !prod.log) return;
+      var isPausado = prod.log[prod.log.length-1] && prod.log[prod.log.length-1].tipo === 'pausa';
+      if (isPausado) return;
       var ms = calcTempoUtil(prod.log);
       var tempos = getTemposPrevistosOrcamento(orderId);
       var prevMs = currentUser === 'serrador' ? tempos.serrador : tempos.acabador;
-      var txt = '⏱ ' + fmtTempo(ms);
-      if (prevMs > 0) txt += ' / ' + fmtTempo(prevMs);
-      if (isPausado) txt += ' · pausado';
-      el.textContent = txt;
+      var pct = prevMs > 0 ? Math.min(150, Math.round(ms/prevMs*100)) : 0;
+      var barColor = pct < 85 ? '#2E7D32' : pct < 100 ? '#F59E0B' : '#B85A4A';
+      el.textContent = fmtCronometro(ms);
+      el.style.color = barColor;
     });
-  }, 10000);
+  }, 1000);
 }
+
 
 function prodPassarPara(orderId, e) {
   if (e) e.stopPropagation();

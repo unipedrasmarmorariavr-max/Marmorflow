@@ -1343,13 +1343,13 @@ function selecionarAcabador(nome) {
   document.getElementById('app').style.flexDirection = 'column';
   document.getElementById('app').style.minHeight = '100vh';
   loadOrders().then(function(){
+    // Carrega orçamentos para ter os tempos previstos
+    if (typeof carregarOrcamentosDoSupabase === 'function') {
+      carregarOrcamentosDoSupabase();
+    }
     switchKanbanAba('producao');
     showTab('kanban');
-    setTimeout(function(){
-      var total = orders ? orders.length : 0;
-      var emAcab = orders ? orders.filter(function(o){return o.stage==='acabamento';}).length : 0;
-      showNotif('Carregado: '+total+' pedidos, '+emAcab+' em acabamento','success');
-    }, 500);
+    iniciarTimerProd();
   });
 }
 function getStagesFiltradosPerfil() {
@@ -1363,16 +1363,39 @@ function getStagesFiltradosPerfil() {
 
 function getTemposPrevistosOrcamento(orderId) {
   try {
+    // Tenta pelo orcamentos em memória primeiro
     var orcs = typeof getOrcamentos === 'function' ? getOrcamentos() : [];
-    var orc = orcs.find(function(o){ return o.pedidoId === orderId; });
+    var orc = orcs.find(function(o){ return o.pedidoId === orderId || o.pedidoKey === orderId; });
+
+    // Se não achou, tenta pelo pedido que pode ter orcamento_data
+    if (!orc) {
+      var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+      if (order && order.orcamento_data) {
+        try { orc = JSON.parse(order.orcamento_data); } catch(e){}
+      }
+    }
+
     if (!orc || !orc.itens) return { serrador: 0, acabador: 0 };
+
+    var cfg = typeof getConfigOrc === 'function' ? getConfigOrc() : {};
+    var pedras = typeof getPedrasCadastradas === 'function' ? getPedrasCadastradas() : [];
 
     var tSerrador = 0;
     var tAcabador = 0;
 
     orc.itens.forEach(function(item) {
       var c = item.calc;
+
+      // Se não tem calc salvo, tenta recalcular
+      if (!c && typeof calcularItem === 'function' && item.largura && item.comprimento) {
+        try {
+          var pedra = pedras.find(function(p){return p.id===item.pedraId||p.id===item.materialId;});
+          if (pedra) c = calcularItem(item, pedra, cfg, 1);
+        } catch(e) {}
+      }
+
       if (!c) return;
+
       tSerrador += (parseFloat(c.tSerra)||0);
       tAcabador += (parseFloat(c.tCorte45)||0)
                  + (parseFloat(c.tCorte45Interno)||0)
@@ -1495,6 +1518,13 @@ function renderProdBotoes(order, prod) {
       html += '<button onclick="prodRetomar(\''+order.id+'\',event)" '
         +'style="width:100%;background:#8B6914;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
         +'▶ Retomar</button>';
+      // Botão passar para outro — só aparece quando pausado
+      var outrosNomes = getAcabadores().filter(function(n){return n !== prod.nome;});
+      if (currentUser === 'acabador' && outrosNomes.length > 0) {
+        html += '<button onclick="prodPassarPara(\''+order.id+'\',event)" '
+          +'style="width:100%;background:#f0f0f0;color:#555;border:1px solid #ddd;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:4px;">'
+          +'🔄 Passar para outro acabador</button>';
+      }
     } else {
       html += '<button onclick="prodPausar(\''+order.id+'\',event)" '
         +'style="width:100%;background:#555;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
@@ -1530,6 +1560,56 @@ function iniciarTimerProd() {
       el.textContent = txt;
     });
   }, 10000);
+}
+
+function prodPassarPara(orderId, e) {
+  if (e) e.stopPropagation();
+  var prod = getProdStatus({id: orderId});
+  if (!prod) return;
+
+  var meuNome = getNomeAcabador();
+  var outros = getAcabadores().filter(function(n){return n !== meuNome;});
+  if (!outros.length) { showNotif('Não há outros acabadores cadastrados','error'); return; }
+
+  // Cria modal de seleção
+  var modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
+  modal.innerHTML = '<div style="background:white;border-radius:16px;padding:24px;max-width:320px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">'
+    +'<div style="font-size:16px;font-weight:800;color:#1a2332;margin-bottom:6px;">🔄 Passar para outro</div>'
+    +'<div style="font-size:13px;color:#888;margin-bottom:16px;">Selecione quem vai continuar esta obra</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px;">'
+    +outros.map(function(nome){
+      return '<button onclick="prodConfirmarPassagem(\''+orderId+'\',\''+nome+'\',this.closest(\'[style*=fixed]\')" '
+        +'style="background:#f8f9fa;border:2px solid #e0e0e0;border-radius:10px;padding:12px;font-size:15px;font-weight:700;color:#1a2332;cursor:pointer;">'
+        +nome+'</button>';
+    }).join('')
+    +'<button onclick="this.closest(\'[style*=fixed]\').remove()" '
+      +'style="background:none;border:none;color:#888;font-size:13px;cursor:pointer;padding:8px;">Cancelar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function prodConfirmarPassagem(orderId, novoNome, modal) {
+  var prod = getProdStatus({id: orderId});
+  if (!prod) return;
+
+  // Registra pausa com motivo e adiciona novo responsável
+  var agora = new Date().toISOString();
+  var tempoAteAgora = calcTempoUtil(prod.log);
+
+  prod.log.push({ tipo:'pausa', ts: agora, motivo:'passagem', para: novoNome });
+  prod.log.push({ tipo:'retomada', ts: agora, responsavel: novoNome });
+
+  // Atualiza nome atual
+  var nomeAnterior = prod.nome;
+  prod.nome = novoNome;
+  prod.historico_nomes = prod.historico_nomes || [];
+  prod.historico_nomes.push({ nome: nomeAnterior, tempoMs: tempoAteAgora });
+
+  saveProdStatus(orderId, prod);
+  if (modal) modal.remove();
+  showNotif('Obra passada para '+novoNome+' ✓','success');
+  renderKanban();
 }
 
 function prodPegar(orderId, e) {

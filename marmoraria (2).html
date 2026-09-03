@@ -1342,7 +1342,7 @@ function selecionarAcabador(nome) {
   document.getElementById('app').style.display = 'flex';
   document.getElementById('app').style.flexDirection = 'column';
   document.getElementById('app').style.minHeight = '100vh';
-  loadData().then(function(){
+  loadOrders().then(function(){
     switchKanbanAba('producao');
     showTab('kanban');
     setTimeout(function(){

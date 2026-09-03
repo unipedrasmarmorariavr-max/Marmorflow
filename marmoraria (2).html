@@ -1434,6 +1434,15 @@ function getProdKey(orderId) {
 }
 
 function getProdStatus(order) {
+  // Prioridade: campo prod_status do objeto order (vem do Supabase via loadOrders)
+  if (order && order.prod_status) {
+    try {
+      return typeof order.prod_status === 'string'
+        ? JSON.parse(order.prod_status)
+        : order.prod_status;
+    } catch(e) {}
+  }
+  // Fallback: localStorage (compatibilidade)
   try {
     var raw = localStorage.getItem(getProdKey(order.id));
     if (!raw) return null;
@@ -1441,8 +1450,29 @@ function getProdStatus(order) {
   } catch(e) { return null; }
 }
 
-function saveProdStatus(orderId, data) {
-  localStorage.setItem(getProdKey(orderId), JSON.stringify(data));
+async function saveProdStatus(orderId, data) {
+  // Salva em memória imediatamente
+  var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+  if (order) order.prod_status = data;
+
+  // Salva localStorage como cache local
+  try { localStorage.setItem(getProdKey(orderId), JSON.stringify(data)); } catch(e){}
+
+  // Sincroniza com Supabase
+  try {
+    await getSB().from('pedidos').update({ prod_status: data }).eq('id', orderId);
+  } catch(e) {
+    console.error('Erro ao salvar prod_status:', e);
+  }
+}
+
+async function limparProdStatus(orderId) {
+  var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+  if (order) order.prod_status = null;
+  try { localStorage.removeItem(getProdKey(orderId)); } catch(e){}
+  try {
+    await getSB().from('pedidos').update({ prod_status: null }).eq('id', orderId);
+  } catch(e) {}
 }
 
 function calcTempoUtil(log) {
@@ -1571,79 +1601,95 @@ function prodPassarPara(orderId, e) {
   var outros = getAcabadores().filter(function(n){return n !== meuNome;});
   if (!outros.length) { showNotif('Não há outros acabadores cadastrados','error'); return; }
 
-  // Cria modal de seleção
+  var old = document.getElementById('modal-passar-para');
+  if (old) old.remove();
+
   var modal = document.createElement('div');
+  modal.id = 'modal-passar-para';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
   modal.innerHTML = '<div style="background:white;border-radius:16px;padding:24px;max-width:320px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">'
     +'<div style="font-size:16px;font-weight:800;color:#1a2332;margin-bottom:6px;">🔄 Passar para outro</div>'
     +'<div style="font-size:13px;color:#888;margin-bottom:16px;">Selecione quem vai continuar esta obra</div>'
     +'<div style="display:flex;flex-direction:column;gap:8px;">'
     +outros.map(function(nome){
-      return '<button onclick="prodConfirmarPassagem(\''+orderId+'\',\''+nome+'\',this.closest(\'[style*=fixed]\')" '
-        +'style="background:#f8f9fa;border:2px solid #e0e0e0;border-radius:10px;padding:12px;font-size:15px;font-weight:700;color:#1a2332;cursor:pointer;">'
+      return '<button onclick="prodConfirmarPassagem(\''+orderId+'\',\''+nome+'\')" '
+        +'style="background:#f8f9fa;border:2px solid #e0e0e0;border-radius:10px;padding:14px;font-size:15px;font-weight:700;color:#1a2332;cursor:pointer;width:100%;">'
         +nome+'</button>';
     }).join('')
-    +'<button onclick="this.closest(\'[style*=fixed]\').remove()" '
+    +'<button onclick="document.getElementById(\'modal-passar-para\').remove()" '
       +'style="background:none;border:none;color:#888;font-size:13px;cursor:pointer;padding:8px;">Cancelar</button>'
     +'</div></div>';
   document.body.appendChild(modal);
 }
 
-function prodConfirmarPassagem(orderId, novoNome, modal) {
-  var prod = getProdStatus({id: orderId});
+async function prodConfirmarPassagem(orderId, novoNome) {
+  var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+  var prod = getProdStatus(order || {id:orderId});
   if (!prod) return;
 
-  // Registra pausa com motivo e adiciona novo responsável
   var agora = new Date().toISOString();
   var tempoAteAgora = calcTempoUtil(prod.log);
 
   prod.log.push({ tipo:'pausa', ts: agora, motivo:'passagem', para: novoNome });
   prod.log.push({ tipo:'retomada', ts: agora, responsavel: novoNome });
 
-  // Atualiza nome atual
-  var nomeAnterior = prod.nome;
-  prod.nome = novoNome;
   prod.historico_nomes = prod.historico_nomes || [];
-  prod.historico_nomes.push({ nome: nomeAnterior, tempoMs: tempoAteAgora });
+  prod.historico_nomes.push({ nome: prod.nome, tempoMs: tempoAteAgora });
+  prod.nome = novoNome;
 
-  saveProdStatus(orderId, prod);
+  showLoading('Salvando...');
+  await saveProdStatus(orderId, prod);
+  hideLoading();
+
+  var modal = document.getElementById('modal-passar-para');
   if (modal) modal.remove();
+
   showNotif('Obra passada para '+novoNome+' ✓','success');
   renderKanban();
 }
 
-function prodPegar(orderId, e) {
+async function prodPegar(orderId, e) {
   if (e) e.stopPropagation();
   var meuNome = currentUser === 'acabador' ? getNomeAcabador() : 'Serrador';
-  var prod = getProdStatus({id: orderId});
+  var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+  if (!order) { showNotif('Pedido não encontrado','error'); return; }
+  var prod = getProdStatus(order);
   if (prod) { showNotif('Esta obra já está com '+prod.nome,'error'); return; }
   var data = {
     nome: meuNome,
     perfil: currentUser,
     log: [{ tipo:'inicio', ts: new Date().toISOString() }]
   };
-  saveProdStatus(orderId, data);
+  showLoading('Salvando...');
+  await saveProdStatus(orderId, data);
+  hideLoading();
   showNotif('Obra pega! Cronômetro iniciado ✓','success');
   renderKanban();
   iniciarTimerProd();
 }
 
-function prodPausar(orderId, e) {
+async function prodPausar(orderId, e) {
   if (e) e.stopPropagation();
-  var prod = getProdStatus({id: orderId});
+  var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+  var prod = getProdStatus(order || {id:orderId});
   if (!prod) return;
   prod.log.push({ tipo:'pausa', ts: new Date().toISOString() });
-  saveProdStatus(orderId, prod);
+  showLoading('Salvando...');
+  await saveProdStatus(orderId, prod);
+  hideLoading();
   showNotif('Pausado ⏸','success');
   renderKanban();
 }
 
-function prodRetomar(orderId, e) {
+async function prodRetomar(orderId, e) {
   if (e) e.stopPropagation();
-  var prod = getProdStatus({id: orderId});
+  var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+  var prod = getProdStatus(order || {id:orderId});
   if (!prod) return;
   prod.log.push({ tipo:'retomada', ts: new Date().toISOString() });
-  saveProdStatus(orderId, prod);
+  showLoading('Salvando...');
+  await saveProdStatus(orderId, prod);
+  hideLoading();
   showNotif('Retomado ▶','success');
   renderKanban();
   iniciarTimerProd();
@@ -1651,59 +1697,34 @@ function prodRetomar(orderId, e) {
 
 async function prodConcluir(orderId, e) {
   if (e) e.stopPropagation();
-  var prod = getProdStatus({id: orderId});
+  var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+  var prod = getProdStatus(order || {id:orderId});
   if (!prod) return;
   if (!confirm('Confirmar conclusão?')) return;
 
-  // Fecha o log
+  var agora = new Date().toISOString();
   var ultimo = prod.log[prod.log.length-1];
-  if (ultimo.tipo !== 'pausa') {
-    prod.log.push({ tipo:'fim', ts: new Date().toISOString() });
-  } else {
-    prod.log[prod.log.length-1].tipo = 'fim';
+  if (ultimo && ultimo.tipo !== 'pausa') {
+    prod.log.push({ tipo:'fim', ts: agora });
   }
   var tempoUtil = calcTempoUtil(prod.log);
   prod.tempoUtilMs = tempoUtil;
-  prod.concluido = new Date().toISOString();
+  prod.concluido = agora;
 
-  // Define próximo stage
-  var order = orders.find(function(o){return o.id===orderId;});
   var proximoStage = currentUser === 'serrador' ? 'acabamento' : 'pronto';
 
   showLoading('Salvando...');
-
-  // Salva historico_producao no Supabase (campo JSONB)
-  var historico = [];
-  try { historico = JSON.parse(order.historico_producao||'[]'); } catch(e){}
-  historico.push({
-    nome: prod.nome,
-    perfil: prod.perfil,
-    stage: order.stage,
-    inicio: prod.log[0].ts,
-    fim: prod.concluido,
-    tempoUtilMin: Math.round(tempoUtil/60000),
-    log: prod.log
-  });
-
-  var {error} = await getSB().from('pedidos').update({
+  // Move stage e limpa prod_status
+  var res = await getSB().from('pedidos').update({
     stage: proximoStage,
-    historico_producao: JSON.stringify(historico)
+    prod_status: null
   }).eq('id', orderId);
-
   hideLoading();
 
-  if (error) {
-    // Se campo não existe no Supabase, move só o stage
-    if (error.message && error.message.includes('historico_producao')) {
-      await getSB().from('pedidos').update({stage: proximoStage}).eq('id', orderId);
-    } else {
-      showNotif('Erro: '+error.message,'error');
-      return;
-    }
-  }
+  if (res.error) { showNotif('Erro: '+res.error.message,'error'); return; }
 
-  if (order) order.stage = proximoStage;
-  localStorage.removeItem(getProdKey(orderId));
+  if (order) { order.stage = proximoStage; order.prod_status = null; }
+  try { localStorage.removeItem(getProdKey(orderId)); } catch(e){}
   showNotif('Concluído! Tempo: '+fmtTempo(tempoUtil)+' ✓','success');
   renderKanban();
 }
@@ -2532,8 +2553,7 @@ function createCard(o) {
   const isProducao = ['corte','acabamento','pronto','entregue'].includes(o.stage);
   const showValor = (currentUser !== 'producao' && currentUser !== 'medidor' && currentUser !== 'serrador' && currentUser !== 'acabador' && o.valor && _kanbanAba !== 'producao');
   const isProdUser = currentUser === 'serrador' || currentUser === 'acabador';
-  const prod = isProdUser ? getProdStatus(o) : null;
-  const tel = (o.telefone || '').replace(/\D/g,'');
+  const prod = isProdUser ? getProdStatus(o) : null;  const tel = (o.telefone || '').replace(/\D/g,'');
   const enderecoMaps = o.endereco ? encodeURIComponent(o.endereco) : '';
 
   let botoesMain = '';

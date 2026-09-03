@@ -1342,10 +1342,10 @@ function selecionarAcabador(nome) {
   document.getElementById('app').style.display = 'flex';
   document.getElementById('app').style.flexDirection = 'column';
   document.getElementById('app').style.minHeight = '100vh';
-  loadOrders().then(function(){
+  loadOrders().then(async function(){
     // Carrega orçamentos para ter os tempos previstos
     if (typeof carregarOrcamentosDoSupabase === 'function') {
-      carregarOrcamentosDoSupabase();
+      await carregarOrcamentosDoSupabase();
     }
     switchKanbanAba('producao');
     showTab('kanban');
@@ -3903,18 +3903,28 @@ function ativarSessao(perfil) {
   // Sempre abre no Kanban ao fazer login — exceto Medidor que abre na Agenda
   loadOrders().then(function() {
     carregarClientes(); // carrega clientes em paralelo
-    renderKanban();
+    if (isProducao || currentUser === 'serrador' || currentUser === 'acabador') {
+      _kanbanAba = 'producao';
+      localStorage.setItem('mf_kanban_aba', 'producao');
+    } else {
+      _kanbanAba = localStorage.getItem('mf_kanban_aba') || 'comercial';
+    }
+    // Serrador carrega orçamentos antes de renderizar kanban
+    if (currentUser === 'serrador') {
+      if (typeof carregarOrcamentosDoSupabase === 'function') {
+        carregarOrcamentosDoSupabase().then(function(){
+          renderKanban();
+          iniciarTimerProd();
+        });
+      } else {
+        renderKanban();
+      }
+    } else {
+      renderKanban();
+    }
     if (isMedidor) {
       localStorage.setItem('agenda_aba','medicao');
       showTab('agenda');
-    } else {
-      // Define aba do kanban por perfil
-      if (isProducao || currentUser === 'serrador' || currentUser === 'acabador') {
-        _kanbanAba = 'producao';
-        localStorage.setItem('mf_kanban_aba', 'producao');
-      } else {
-        _kanbanAba = localStorage.getItem('mf_kanban_aba') || 'comercial';
-      }
       // Restaura a aba onde o usuário estava antes de recarregar
       const abaSalva = localStorage.getItem('mf_aba') || (isDono ? 'dashboard' : 'kanban');
       const abasValidas = ['kanban','agenda','materiais','financeiro','crm','ia','dashboard','configuracoes'];

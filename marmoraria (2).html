@@ -2252,8 +2252,9 @@ function isArquivado(o) {
 
   // Entregues de meses anteriores → arquivado
   if (o.stage === 'entregue') {
-    const mes = (o.created_at||'').substring(0,7);
-    return mes && mes < mesAtual;
+    // Usa data_entregue se disponível, senão updated_at, senão created_at
+    var dataRef = (o.data_entregue || o.updated_at || o.created_at || '').substring(0,7);
+    return dataRef && dataRef < mesAtual;
   }
 
   // Pedidos Fechados de meses anteriores → arquivado
@@ -3391,7 +3392,10 @@ async function drop(e,stage) {
   history.push({stage,date:hoje});
   order.stage=stage; order.history=history;
   renderKanban(document.getElementById('search-kanban').value);
-  await getSB().from('pedidos').update({stage,history}).eq('id',id);
+  // Salva data_entregue quando move para entregue
+  var updateData = {stage, history};
+  if (stage === 'entregue') updateData.data_entregue = hoje;
+  await getSB().from('pedidos').update(updateData).eq('id',id);
   showNotif(`${id} → ${STAGES.find(s=>s.id===stage).label}`,'success');
 }
 

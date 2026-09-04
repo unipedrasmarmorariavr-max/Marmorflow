@@ -10820,6 +10820,7 @@ function renderAgendaInstalacao() {
           const btnResp = podeEditar ? '<button onclick="definirResponsavelInstalacao(\'' + (o.id||'') + '\',\'' + o.data + '\',\'' + o.tipo + '\')" style="background:#f0f0f0;border:1px solid #ddd;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;">👷 ' + (o.responsavel?'Trocar':'Definir') + ' responsável</button>' : '';
         const btnExcluir = (podeEditar && o.tipo === 'manual') ? '<button onclick="excluirInstalacao(\'' + o.id + '\')" style="background:#FDEAEA;border:1px solid #B85A4A;color:#B85A4A;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;margin-left:4px;">🗑 Excluir</button>' : '';
         const btnCorrigir = (podeEditar && o.tipo === 'pedido') ? '<button onclick="marcarComoSoEntrega(\'' + o.id + '\')" style="background:#FFF8E8;border:1px solid var(--gold);color:#8B6914;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;margin-left:4px;">🚚 É só entrega</button>' : '';
+        const btnReagendar = podeEditar ? '<button onclick="abrirReagendarInstalacao(\'' + (o.id||'') + '\',\'' + o.data + '\',\'' + (o.tipo||'pedido') + '\')" style="background:#e8f4f7;border:1px solid #1e5f74;color:#1e5f74;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;margin-left:4px;">📅 Reagendar</button>' : '';
         return '<div style="background:#f9f9f9;border-radius:10px;padding:12px 14px;margin-bottom:8px;border-left:3px solid '+corDia+';">'
           + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">'
           + '<div style="flex:1;">'
@@ -10831,12 +10832,96 @@ function renderAgendaInstalacao() {
           + '<div style="text-align:right;flex-shrink:0;">'
           + '<div style="font-size:14px;font-weight:700;color:'+corDia+';">'+dias[dd.getDay()]+', '+dd.getDate()+'/'+(dd.getMonth()+1)+'</div>'
           + '<div style="font-size:11px;color:#888;">'+(diasR===0?'Hoje':diasR===1?'Amanhã':diasR+' dias')+'</div>'
-          + btnResp + btnExcluir + btnCorrigir
+          + btnResp + btnReagendar + btnExcluir + btnCorrigir
           + '</div></div></div>';
         }).join('');
       })()}
     </div>
   </div>`;
+}
+
+function abrirReagendarInstalacao(pedidoId, dataAtual, tipo) {
+  var old = document.getElementById('modal-reagendar');
+  if (old) old.remove();
+
+  var order = pedidoId ? orders.find(function(o){return o.id===pedidoId;}) : null;
+  var nomeCliente = order ? (order.cliente||pedidoId) : pedidoId;
+
+  var modal = document.createElement('div');
+  modal.id = 'modal-reagendar';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+  modal.innerHTML = '<div style="background:white;border-radius:16px;padding:24px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">'
+    +'<div style="font-size:16px;font-weight:800;color:#1a2332;margin-bottom:6px;">📅 Reagendar Instalação</div>'
+    +'<div style="font-size:13px;color:#888;margin-bottom:20px;">'+nomeCliente+'</div>'
+    +'<div style="margin-bottom:16px;">'
+    +'<label style="font-size:12px;font-weight:600;color:#666;display:block;margin-bottom:6px;">DATA ATUAL</label>'
+    +'<div style="font-size:14px;font-weight:700;color:#B85A4A;padding:10px;background:#fff0f0;border-radius:8px;">📅 '+formatarDataBR(dataAtual)+'</div>'
+    +'</div>'
+    +'<div style="margin-bottom:20px;">'
+    +'<label style="font-size:12px;font-weight:600;color:#666;display:block;margin-bottom:6px;">NOVA DATA</label>'
+    +'<input type="date" id="reagendar-data" value="'+dataAtual+'" min="'+new Date().toISOString().substring(0,10)+'" style="width:100%;padding:10px;border:1.5px solid #1e5f74;border-radius:8px;font-size:14px;font-weight:700;box-sizing:border-box;color:#1a2332;">'
+    +'</div>'
+    +'<div style="display:flex;gap:10px;">'
+    +'<button onclick="confirmarReagendarInstalacao(\''+pedidoId+'\',\''+tipo+'\')" style="flex:1;background:#1e5f74;color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✓ Confirmar</button>'
+    +'<button onclick="document.getElementById(\'modal-reagendar\').remove()" style="background:#eee;color:#333;border:none;padding:12px 16px;border-radius:8px;font-size:14px;cursor:pointer;">Cancelar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function formatarDataBR(dataStr) {
+  if (!dataStr) return '—';
+  var parts = dataStr.split('-');
+  if (parts.length !== 3) return dataStr;
+  return parts[2]+'/'+parts[1]+'/'+parts[0];
+}
+
+async function confirmarReagendarInstalacao(pedidoId, tipo) {
+  var novaData = document.getElementById('reagendar-data')?.value;
+  if (!novaData) { showNotif('Selecione a nova data!','error'); return; }
+
+  showLoading('Reagendando...');
+
+  try {
+    if (tipo === 'pedido' && pedidoId) {
+      // Atualiza dataentrega no pedido
+      var {error} = await getSB().from('pedidos').update({
+        dataentrega: novaData
+      }).eq('id', pedidoId);
+
+      if (error) throw error;
+
+      // Atualiza em memória
+      var order = orders.find(function(o){return o.id===pedidoId;});
+      if (order) order.dataentrega = novaData;
+
+      // Atualiza cópia em produção se existir
+      var copia = orders.find(function(o){return o.ref_fechado===pedidoId;});
+      if (copia) {
+        await getSB().from('pedidos').update({dataentrega: novaData}).eq('id', copia.id);
+        copia.dataentrega = novaData;
+      }
+    } else if (tipo === 'manual' && pedidoId) {
+      // Atualiza instalação manual no localStorage
+      var instalacoes = JSON.parse(localStorage.getItem('mf_instalacoes')||'[]');
+      var inst = instalacoes.find(function(i){return i.id===pedidoId;});
+      if (inst) {
+        inst.data = novaData;
+        localStorage.setItem('mf_instalacoes', JSON.stringify(instalacoes));
+      }
+    }
+
+    hideLoading();
+    document.getElementById('modal-reagendar')?.remove();
+    showNotif('Reagendado para '+formatarDataBR(novaData)+' ✓','success');
+
+    // Atualiza kanban e agenda
+    renderKanban();
+    renderAgendaInstalacao();
+
+  } catch(e) {
+    hideLoading();
+    showNotif('Erro: '+e.message,'error');
+  }
 }
 
 async function marcarComoSoEntrega(pedidoId) {

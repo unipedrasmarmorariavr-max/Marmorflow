@@ -10749,29 +10749,26 @@ function renderAgendaInstalacao() {
     }
   }
 
-  // Monta semanas respeitando a posição correta do dia da semana
-  // getDay(): 0=dom, 1=seg, 2=ter, 3=qua, 4=qui, 5=sex, 6=sab
-  // Coluna na grade: seg=0, ter=1, qua=2, qui=3, sex=4
+  // Monta semanas posicionando cada dia na coluna correta (seg=0...sex=4)
+  // Agrupa por semana ISO (seg a sex)
   const semanas = [];
-  if (dias.length > 0) {
-    let semanaAtual = new Array(5).fill(null);
-    dias.forEach((dia) => {
-      const dd = new Date(dia.data + 'T12:00:00');
-      const dow = dd.getDay(); // 1=seg...5=sex
-      const col = dow - 1;    // 0=seg...4=sex
-      if (col < 0 || col > 4) return; // ignora sab/dom (não deve acontecer pois isDiaUtil filtra)
-      semanaAtual[col] = dia;
-      // Se é sexta (col=4) ou último dia, fecha a semana
-      if (col === 4) {
-        semanas.push([...semanaAtual]);
-        semanaAtual = new Array(5).fill(null);
-      }
-    });
-    // Adiciona última semana incompleta se houver
-    if (semanaAtual.some(d => d !== null)) {
-      semanas.push([...semanaAtual]);
-    }
-  }
+  const porSemana = {};
+  dias.forEach(function(dia) {
+    const dd = new Date(dia.data + 'T12:00:00');
+    const dow = dd.getDay(); // 0=dom,1=seg...5=sex,6=sab
+    const col = dow - 1;    // seg=0...sex=4
+    if (col < 0 || col > 4) return;
+    // Chave da semana = data da segunda-feira dessa semana
+    const seg = new Date(dd);
+    seg.setDate(dd.getDate() - (dow - 1));
+    const chave = dateToStr(seg);
+    if (!porSemana[chave]) porSemana[chave] = new Array(5).fill(null);
+    porSemana[chave][col] = dia;
+  });
+  // Ordena semanas por data
+  Object.keys(porSemana).sort().forEach(function(chave) {
+    semanas.push(porSemana[chave]);
+  });
 
   const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const diasSemana = ['Seg','Ter','Qua','Qui','Sex'];

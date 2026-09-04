@@ -12965,6 +12965,18 @@ function abrirTelaOrcamentoPedido(id) {
   // Busca orçamento salvo para este pedido (se existir)
   let orc = orcs.find(o => o.pedidoId === id) || null;
 
+  // Se o pedido veio de medição (history mostra que estava em medicao antes de negociacao)
+  // e o orçamento foi criado ANTES da última entrada em negociação, descarta o orçamento antigo
+  if (orc && order.history && order.history.length > 0) {
+    const histNeg = [...order.history].reverse().find(h => h.stage === 'negociacao');
+    const dataNeg = histNeg ? new Date(histNeg.date) : null;
+    const dataOrc = orc.criadoEm ? new Date(orc.criadoEm) : null;
+    if (dataNeg && dataOrc && dataOrc < dataNeg) {
+      // Orçamento mais antigo que a última entrada em negociação — limpa
+      orc = null;
+    }
+  }
+
   if (!orc) {
     // Novo orçamento — começa do zero
     orc = {

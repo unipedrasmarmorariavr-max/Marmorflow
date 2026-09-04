@@ -14145,8 +14145,9 @@ function pKD(e, el, idx, orderId) {
 function adicionarPecaItem(idx, orderId) {
   if (!orcamentoAtual.itens[idx]) return;
   if (!orcamentoAtual.itens[idx].pecas) orcamentoAtual.itens[idx].pecas = [];
-  var pi = orcamentoAtual.itens[idx].pecas.length;
+  // pi deve ser calculado AGORA, não em closure
   orcamentoAtual.itens[idx].pecas.push({nome:'', medidas:'', qtd:'1'});
+  var pi = orcamentoAtual.itens[idx].pecas.length - 1;
 
   var lista = document.getElementById('pecas-lista-' + idx);
   if (!lista) { recalcularTelaOrc(orderId); return; }

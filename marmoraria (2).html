@@ -14145,18 +14145,80 @@ function pKD(e, el, idx, orderId) {
 function adicionarPecaItem(idx, orderId) {
   if (!orcamentoAtual.itens[idx]) return;
   if (!orcamentoAtual.itens[idx].pecas) orcamentoAtual.itens[idx].pecas = [];
+  var pi = orcamentoAtual.itens[idx].pecas.length;
   orcamentoAtual.itens[idx].pecas.push({nome:'', medidas:'', qtd:'1'});
-  // Re-renderiza para usar o template correto e consistente
-  recalcularTelaOrc(orderId);
-  // Foca no campo nome da última peça adicionada
-  setTimeout(function(){
-    var lista = document.getElementById('pecas-lista-' + idx);
-    if (!lista) return;
-    var lastRow = lista.lastElementChild;
-    if (!lastRow) return;
-    var nomeInput = lastRow.querySelector('input');
-    if (nomeInput) nomeInput.focus();
-  }, 100);
+
+  var lista = document.getElementById('pecas-lista-' + idx);
+  if (!lista) { recalcularTelaOrc(orderId); return; }
+
+  // Cria nova linha com o mesmo layout do template
+  var row = document.createElement('div');
+  row.style.cssText = 'display:grid;grid-template-columns:1fr auto 32px 28px 28px;gap:4px;padding:8px;background:#f8fafc;border:1.5px solid #d0dde3;border-radius:8px;align-items:center;min-width:0;';
+
+  // Container nome + medidas empilhados
+  var stack = document.createElement('div');
+  stack.style.cssText = 'display:flex;flex-direction:column;gap:3px;min-width:0;';
+
+  var iNome = document.createElement('input');
+  iNome.className = 'form-input';
+  iNome.style.cssText = 'padding:5px 8px;font-weight:600;font-size:12px;min-width:0;';
+  iNome.placeholder = 'Nome';
+  iNome.onfocus = function(){ this.select(); };
+  iNome.oninput = (function(i){ return function(){ orcamentoAtual.itens[idx].pecas[i].nome = this.value; }; })(pi);
+  iNome.onkeydown = (function(i){ return function(e){ pKD(e, this, idx, orderId); }; })(pi);
+
+  var iMed = document.createElement('input');
+  iMed.className = 'form-input';
+  iMed.style.cssText = 'padding:5px 8px;font-variant-numeric:tabular-nums;font-weight:700;font-size:12px;min-width:0;';
+  iMed.placeholder = '1,20x0,60';
+  iMed.onfocus = function(){ this.select(); };
+  iMed.oninput = (function(i){ return function(){
+    orcamentoAtual.itens[idx].pecas[i].medidas = this.value;
+    orcamentoAtual.itens[idx].m2Override = 0;
+    recalcularTelaOrc(orderId);
+  }; })(pi);
+  iMed.onkeydown = (function(i){ return function(e){ pKD(e, this, idx, orderId); }; })(pi);
+
+  stack.appendChild(iNome);
+  stack.appendChild(iMed);
+
+  var iQtd = document.createElement('input');
+  iQtd.className = 'form-input';
+  iQtd.style.cssText = 'padding:5px 6px;text-align:center;width:48px;font-size:12px;';
+  iQtd.type = 'number';
+  iQtd.min = '1';
+  iQtd.value = '1';
+  iQtd.onfocus = function(){ this.select(); };
+  iQtd.oninput = (function(i){ return function(){
+    orcamentoAtual.itens[idx].pecas[i].qtd = this.value;
+    orcamentoAtual.itens[idx].m2Override = 0;
+    recalcularTelaOrc(orderId);
+  }; })(pi);
+  iQtd.onkeydown = (function(i){ return function(e){ pKD(e, this, idx, orderId); }; })(pi);
+
+  var bAdd = document.createElement('button');
+  bAdd.style.cssText = 'background:#e8f4f7;color:#1e5f74;border:none;padding:4px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700;width:28px;height:28px;display:flex;align-items:center;justify-content:center;';
+  bAdd.title = 'Adicionar'; bAdd.textContent = '+';
+  bAdd.onclick = function(){ adicionarPecaItem(idx, orderId); };
+
+  var bRem = document.createElement('button');
+  bRem.style.cssText = 'background:#fff0f0;color:#B85A4A;border:none;padding:4px;border-radius:6px;cursor:pointer;font-size:12px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;';
+  bRem.title = 'Remover'; bRem.textContent = '✕';
+  bRem.onclick = function(){ removerPecaItem(this, idx, orderId); };
+
+  var bDup = document.createElement('button');
+  bDup.style.cssText = 'background:#f5f5f5;color:#555;border:none;padding:4px;border-radius:6px;cursor:pointer;font-size:12px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;';
+  bDup.title = 'Duplicar'; bDup.textContent = '⧉';
+  bDup.onclick = (function(i){ return function(){ duplicarPecaItem(idx, i, orderId); }; })(pi);
+
+  row.appendChild(stack);
+  row.appendChild(iQtd);
+  row.appendChild(bAdd);
+  row.appendChild(bRem);
+  row.appendChild(bDup);
+  lista.appendChild(row);
+
+  setTimeout(function(){ iNome.focus(); }, 20);
 }
 
 // Remove linha pelo botão ✕

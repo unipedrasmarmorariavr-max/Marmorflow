@@ -1363,8 +1363,9 @@ function getStagesFiltradosPerfil() {
 
 function getTemposPrevistosOrcamento(orderId) {
   try {
-    // Prioridade: campos tempo_serrador/tempo_acabador direto no pedido (em segundos)
     var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+
+    // 1. Campos diretos no pedido (se colunas criadas no Supabase)
     if (order && (order.tempo_serrador || order.tempo_acabador)) {
       return {
         serrador: (parseFloat(order.tempo_serrador)||0) * 1000,
@@ -1372,26 +1373,23 @@ function getTemposPrevistosOrcamento(orderId) {
       };
     }
 
-    // Fallback: busca pelo orçamento no localStorage
+    // 2. Dentro do prod_status (salvo quando pegou a obra)
+    var prod = order ? getProdStatus(order) : null;
+    if (prod && prod.prevMs > 0) {
+      return {
+        serrador: currentUser === 'serrador' ? prod.prevMs : 0,
+        acabador: currentUser === 'acabador' ? prod.prevMs : 0
+      };
+    }
+
+    // 3. Fallback: calcula do orçamento no localStorage
     var orcs = typeof getOrcamentos === 'function' ? getOrcamentos() : [];
     var orc = orcs.find(function(o){ return o.pedidoId === orderId || o.pedidoKey === orderId; });
+    if (!orc || !orc.itens) return { serrador: 0, acabador: 0 };
 
-    if (!orc) return { serrador: 0, acabador: 0 };
-
-    var cfg = typeof getConfigOrc === 'function' ? getConfigOrc() : {};
-    var pedras = typeof getPedrasCadastradas === 'function' ? getPedrasCadastradas() : [];
-
-    var tSerrador = 0;
-    var tAcabador = 0;
-
+    var tSerrador = 0, tAcabador = 0;
     orc.itens.forEach(function(item) {
       var c = item.calc;
-      if (!c && typeof calcularItem === 'function' && item.largura && item.comprimento) {
-        try {
-          var pedra = pedras.find(function(p){return p.id===item.pedraId||p.id===item.materialId;});
-          if (pedra) c = calcularItem(item, pedra, cfg, 1);
-        } catch(e) {}
-      }
       if (!c) return;
       tSerrador += (parseFloat(c.tSerra)||0);
       tAcabador += (parseFloat(c.tCorte45)||0)+(parseFloat(c.tCorte45Interno)||0)
@@ -1405,11 +1403,7 @@ function getTemposPrevistosOrcamento(orderId) {
                  +(parseFloat(c.tBoleadoDuplo)||0)+(parseFloat(c.tChanfroAlongado)||0)
                  +(parseFloat(c.tColagem)||0)+(parseFloat(c.horasAdicionais)||0);
     });
-
-    return {
-      serrador: tSerrador * 3600000,
-      acabador: tAcabador * 3600000
-    };
+    return { serrador: tSerrador*3600000, acabador: tAcabador*3600000 };
   } catch(e) {
     return { serrador: 0, acabador: 0 };
   }
@@ -1657,9 +1651,15 @@ async function prodPegar(orderId, e) {
   if (!order) { showNotif('Pedido não encontrado','error'); return; }
   var prod = getProdStatus(order);
   if (prod) { showNotif('Esta obra já está com '+prod.nome,'error'); return; }
+
+  // Calcula tempos previstos do orçamento
+  var tempos = getTemposPrevistosOrcamento(orderId);
+  var prevMs = currentUser === 'serrador' ? tempos.serrador : tempos.acabador;
+
   var data = {
     nome: meuNome,
     perfil: currentUser,
+    prevMs: prevMs,
     log: [{ tipo:'inicio', ts: new Date().toISOString() }]
   };
   showLoading('Salvando...');

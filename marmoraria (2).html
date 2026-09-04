@@ -10769,6 +10769,7 @@ function renderAgendaInstalacao() {
   Object.keys(porSemana).sort().forEach(function(chave) {
     semanas.push(porSemana[chave]);
   });
+  console.log('dias:', dias.length, 'semanas:', semanas.length, 'porSemana keys:', Object.keys(porSemana));
 
   const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const diasSemana = ['Seg','Ter','Qua','Qui','Sex'];

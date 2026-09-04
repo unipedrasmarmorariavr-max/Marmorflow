@@ -13435,7 +13435,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
               <input class="form-input" style="padding:5px 8px;font-weight:600;font-size:12px;min-width:0;" placeholder="Nome" value="${peca.nome||''}"
                 oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].nome=this.value"
                 onkeydown="pKD(event,this,${idx},'${orderId}')">
-              <input class="form-input" style="padding:5px 8px;font-variant-numeric:tabular-nums;font-size:12px;min-width:0;" placeholder="1,20x0,60" value="${peca.medidas||''}"
+              <input class="form-input" style="padding:5px 8px;font-variant-numeric:tabular-nums;font-weight:700;font-size:12px;min-width:0;" placeholder="1,20x0,60" value="${peca.medidas||''}"
                 oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].medidas=this.value;orcamentoAtual.itens[${idx}].m2Override=0;recalcularTelaOrc('${orderId}')"
                 onkeydown="pKD(event,this,${idx},'${orderId}')">
             </div>

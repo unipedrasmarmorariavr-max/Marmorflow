@@ -13777,7 +13777,7 @@ function recalcularTelaOrc(orderId) {
     // Resolve custo override
     if (!item.custoM2Override && pedra && pedra.custoM2) {
       item.custoM2Override = pedra.custoM2;
-      item.margemOverride = pedra.margem;
+      if (!item.margemOverride) item.margemOverride = pedra.margem; // só seta se não foi definida manualmente
     }
 
     // Calcula

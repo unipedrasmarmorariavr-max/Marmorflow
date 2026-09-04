@@ -3419,8 +3419,10 @@ async function drop(e,stage) {
 
   history.push({stage,date:hoje});
   order.stage=stage; order.history=history;
+  // Salva data_entregue em memória imediatamente para evitar flicker no Realtime
+  if (stage === 'entregue') order.data_entregue = hoje;
   renderKanban(document.getElementById('search-kanban').value);
-  // Salva data_entregue quando move para entregue
+  // Salva no Supabase
   var updateData = {stage, history};
   if (stage === 'entregue') updateData.data_entregue = hoje;
   await getSB().from('pedidos').update(updateData).eq('id',id);
@@ -12013,9 +12015,20 @@ function ajustarValorVendaManual(idx, orderId, valorDigitado) {
   const insumoFrac = (cfg.custoInsumo || 5) / 100;
 
   const novaMargem = resolverMargemPorValor(valorNum, custosOp, insumoFrac);
-  item.margemOverride = Math.round(novaMargem * 1000) / 1000; // 3 casas, igual Marmoprice
+  item.margemOverride = Math.round(novaMargem * 1000) / 1000;
 
+  // Recalcula para atualizar calc.precoFinal do item
   recalcularTelaOrc(orderId);
+
+  // Depois do recalculo, soma todos os itens e atualiza valorNegociado
+  setTimeout(function() {
+    const novoTotal = orcamentoAtual.itens.reduce(function(s,it){ return s + (it.calc?.precoFinal||0); }, 0);
+    orcamentoAtual.valorNegociado = novoTotal;
+    orcamentoAtual.usandoValorNegociado = true;
+    // Atualiza cabeçalho
+    const elHdrValor = document.getElementById('hdr-valor');
+    if (elHdrValor) elHdrValor.textContent = fmt(novoTotal);
+  }, 100);
 }
 
 function calcularItem(item, pedra, cfg, propArea) {

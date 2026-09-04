@@ -3661,6 +3661,20 @@ function openDetail(id) {
       ${currentUser!=='producao'?row('Valor',o.valor?'R$ '+o.valor:''):''}
       ${row('Conclusão',o.tipoentrega?TIPO_LABELS[o.tipoentrega]||o.tipoentrega:'')}${row('Data de Entrega',o.dataentrega?formatDate(o.dataentrega):'')}${row('Observações',o.obs)}
       ${currentUser!=='producao'?row('Obs. Comercial',o.obsComercial):''}
+      ${(() => {
+        // Busca itens do cliente e observações do orçamento vinculado
+        const orcs = typeof getOrcamentos === 'function' ? getOrcamentos() : [];
+        const orc = orcs.find(r => r.pedidoId === o.id);
+        if (!orc) return '';
+        const itensMarcados = Object.entries(orc.itensCliente||{}).filter(([k,v])=>v).map(([k])=>k);
+        const obsCliente = orc.itensClienteObs || '';
+        const todosItens = itensMarcados.concat(obsCliente ? [obsCliente] : []);
+        const obsGeral = orc.obsGeral || '';
+        let html = '';
+        if (todosItens.length) html += row('📦 Itens do cliente', '<span style="color:#006382;font-weight:700;">'+todosItens.join(' · ')+'</span>');
+        if (obsGeral) html += row('📝 Obs. Orçamento', obsGeral);
+        return html;
+      })()}
     </div>
     ${currentUser!=='producao'?`<div class="detail-section"><div class="detail-section-title">Comercial</div>
       ${row('Vendedor',o.vendedor)}${row('Origem',o.origem?ORIGEM_LABELS[o.origem]||o.origem:'')}${row('Arquiteto/Construtora',o.origemNome)}
@@ -14537,6 +14551,12 @@ function imprimirOrcamento() {
     + (orc.enderecoObra ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">Endereço da Obra</td><td style="padding:6px 0;font-weight:600;" colspan="3">' + orc.enderecoObra + (orc.cidade ? ' — ' + orc.cidade : '') + '</td></tr>' : '')
     + (orc.obsGeral ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">Observações</td><td style="padding:6px 0;font-weight:600;" colspan="3">' + orc.obsGeral + '</td></tr>' : '')
     + (orc.dataPrevista ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">Data Prevista</td><td style="padding:6px 0;font-weight:600;" colspan="3">' + orc.dataPrevista + '</td></tr>' : '')
+    + (() => {
+        const itensMarcados = Object.entries(orc.itensCliente||{}).filter(([k,v])=>v).map(([k])=>k);
+        const obs = orc.itensClienteObs || '';
+        const todos = itensMarcados.concat(obs ? [obs] : []);
+        return todos.length ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">📦 Itens do cliente</td><td style="padding:6px 0;font-weight:600;color:#006382;" colspan="3">' + todos.join(' · ') + '</td></tr>' : '';
+      })()
     + '</table></div>'
 
     // AMBIENTES

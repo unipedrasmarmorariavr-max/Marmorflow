@@ -14404,6 +14404,13 @@ function imprimirOrcamento() {
   const orc = orcamentoAtual;
   if (!orc) return;
 
+  // Lê campos do rodapé diretamente do DOM antes de imprimir
+  const elObs = document.getElementById('orc-obs-geral') || document.querySelector('[oninput*="obsGeral"]');
+  if (elObs) orcamentoAtual.obsGeral = elObs.value;
+  // Também lê do rodapé fixo
+  const rodapeInputs = document.querySelectorAll('[oninput*="obsGeral"]');
+  rodapeInputs.forEach(function(el){ if (el.value) orcamentoAtual.obsGeral = el.value; });
+
   // Preencher dados do pedido como fallback nos campos vazios
   if (pedidoOrcAtual) {
     const order = orders.find(o => o.id === pedidoOrcAtual);

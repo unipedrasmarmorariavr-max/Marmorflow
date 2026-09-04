@@ -2269,10 +2269,9 @@ function isArquivado(o) {
 
   // Entregues de meses anteriores → arquivado
   if (o.stage === 'entregue') {
-    // Se não tem data_entregue, considera como entregue hoje (não arquiva)
-    if (!o.data_entregue && !o.updated_at) return false;
-    var dataRef = (o.data_entregue || o.updated_at || '').substring(0,7);
-    return dataRef && dataRef < mesAtual;
+    var dataRef = o.data_entregue || o.updated_at || null;
+    if (!dataRef) return false; // sem data → mantém visível
+    return dataRef.substring(0,7) < mesAtual;
   }
 
   // Pedidos Fechados de meses anteriores → arquivado

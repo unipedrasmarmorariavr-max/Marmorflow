@@ -14496,7 +14496,6 @@ function imprimirOrcamento() {
         + '<div>'
         + '<div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">MATERIAL / VALOR DO ITEM</div>'
         + '<div style="font-size:15px;font-weight:800;color:#1a1a1a;">' + pedra.nome.toUpperCase() + '</div>'
-        + (item.calc.custoM2 ? '<div style="font-size:11px;color:#666;margin-top:2px;">R$ ' + item.calc.custoM2.toFixed(2).replace('.',',') + '/m² · ' + (item.calc.areaComQuebra||0).toFixed(2).replace('.',',') + ' m²</div>' : '')
         + '</div>'
         + '<div style="text-align:right;">'
         + '<div style="font-size:24px;font-weight:900;color:'+TEAL+';">' + fmt(item.calc.precoFinal) + '</div>'

@@ -2269,8 +2269,9 @@ function isArquivado(o) {
 
   // Entregues de meses anteriores → arquivado
   if (o.stage === 'entregue') {
+    // Usa data_entregue (memória) ou updated_at (banco) — ambos confiáveis
     var dataRef = o.data_entregue || o.updated_at || null;
-    if (!dataRef) return false; // sem data → mantém visível
+    if (!dataRef) return false; // sem referência → mantém visível
     return dataRef.substring(0,7) < mesAtual;
   }
 
@@ -3418,13 +3419,11 @@ async function drop(e,stage) {
 
   history.push({stage,date:hoje});
   order.stage=stage; order.history=history;
-  // Salva data_entregue em memória imediatamente para evitar flicker no Realtime
+  // Salva data_entregue em memória imediatamente
   if (stage === 'entregue') order.data_entregue = hoje;
   renderKanban(document.getElementById('search-kanban').value);
-  // Salva no Supabase
-  var updateData = {stage, history};
-  if (stage === 'entregue') updateData.data_entregue = hoje;
-  await getSB().from('pedidos').update(updateData).eq('id',id);
+  // Salva no Supabase — não inclui data_entregue (coluna pode não existir)
+  await getSB().from('pedidos').update({stage, history}).eq('id',id);
   showNotif(`${id} → ${STAGES.find(s=>s.id===stage).label}`,'success');
 }
 
@@ -4037,8 +4036,13 @@ function iniciarAutoRefresh() {
     .channel('marmorflow-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, async (payload) => {
       console.log('🔄 Realtime pedidos:', payload?.eventType, payload?.new?.id);
+      // Salva data_entregue em memória antes de recarregar
+      const dataEntregueMap = {};
+      orders.forEach(function(o){ if (o.data_entregue) dataEntregueMap[o.id] = o.data_entregue; });
       // Atualiza os dados em memória sempre
       await loadOrders();
+      // Restaura data_entregue que estava só em memória
+      orders.forEach(function(o){ if (!o.data_entregue && dataEntregueMap[o.id]) o.data_entregue = dataEntregueMap[o.id]; });
 
       // Se estiver dentro de um orçamento: atualiza dados por baixo sem tirar do orçamento
       if (pedidoOrcAtual) {

@@ -13433,13 +13433,16 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
           <div style="display:grid;grid-template-columns:1fr auto 32px 28px 28px;gap:4px;padding:8px;background:#f8fafc;border:1.5px solid #d0dde3;border-radius:8px;align-items:center;min-width:0;">
             <div style="display:flex;flex-direction:column;gap:3px;min-width:0;">
               <input class="form-input" style="padding:5px 8px;font-weight:600;font-size:12px;min-width:0;" placeholder="Nome" value="${peca.nome||''}"
+                onfocus="this.select()"
                 oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].nome=this.value"
                 onkeydown="pKD(event,this,${idx},'${orderId}')">
               <input class="form-input" style="padding:5px 8px;font-variant-numeric:tabular-nums;font-weight:700;font-size:12px;min-width:0;" placeholder="1,20x0,60" value="${peca.medidas||''}"
+                onfocus="this.select()"
                 oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].medidas=this.value;orcamentoAtual.itens[${idx}].m2Override=0;recalcularTelaOrc('${orderId}')"
                 onkeydown="pKD(event,this,${idx},'${orderId}')">
             </div>
             <input class="form-input" style="padding:5px 6px;text-align:center;width:48px;font-size:12px;" type="number" min="1" value="${peca.qtd||1}"
+              onfocus="this.select()"
               oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].qtd=this.value;orcamentoAtual.itens[${idx}].m2Override=0;recalcularTelaOrc('${orderId}')"
               onkeydown="pKD(event,this,${idx},'${orderId}')">
             <button onclick="adicionarPecaItem(${idx},'${orderId}')" style="background:#e8f4f7;color:#1e5f74;border:none;padding:4px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700;width:28px;height:28px;display:flex;align-items:center;justify-content:center;" title="Adicionar">+</button>

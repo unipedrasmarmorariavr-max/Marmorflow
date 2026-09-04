@@ -15035,30 +15035,30 @@ function renderConfiguracoes() {
   el.innerHTML = `
   <div style="padding:12px;max-width:100%;margin:0 auto;">
     <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);margin-bottom:24px;">⚙️ Configurações</div>
-    <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--cream-dark);padding-bottom:0;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;">
+    <div style="display:flex;gap:2px;margin-bottom:16px;border-bottom:2px solid var(--cream-dark);overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;scrollbar-width:none;">
       <button onclick="showSubConfig('gastos')" id="subcfg-gastos"
-        style="padding:10px 20px;border:none;background:var(--gold);color:white;border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
-        💰 Grupo de Gastos
+        style="padding:10px 16px;border:none;background:var(--gold);color:white;border-radius:8px 8px 0 0;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">
+        Grupo de Gastos
       </button>
       <button onclick="showSubConfig('tempos')" id="subcfg-tempos"
-        style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
-        ⏱️ Tempos de Produção
+        style="padding:10px 16px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">
+        Tempos
       </button>
       <button onclick="showSubConfig('bancos')" id="subcfg-bancos"
-        style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
-        🏦 Bancos
+        style="padding:10px 16px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">
+        Bancos
       </button>
       <button onclick="showSubConfig('comissoes')" id="subcfg-comissoes"
-        style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
-        💼 Comissões
+        style="padding:10px 16px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">
+        Comissões
       </button>
       <button onclick="showSubConfig('senhas')" id="subcfg-senhas"
-        style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
-        🔐 Senhas
+        style="padding:10px 16px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">
+        Senhas
       </button>
       <button onclick="showSubConfig('acabadores')" id="subcfg-acabadores"
-        style="padding:10px 20px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
-        ✂️ Acabadores
+        style="padding:10px 16px;border:none;background:var(--cream-dark);color:var(--stone);border-radius:8px 8px 0 0;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">
+        Acabadores
       </button>
     </div>
     <div id="subcfg-panel-gastos"><div id="gastos-content"></div></div>
@@ -15866,143 +15866,84 @@ function renderTempos() {
   if (!el) return;
   const cfg = getConfigOrc();
 
-  const campos = [
-    ['Serra (hr/m²)', 'serra', 0.8],
-    ['Corte 45°/meia esquadria (hr/m)', 'corte45', 0.2],
-    ['Montagem 45° (ajuste + colagem) (hr/m)', 'montagem45', 1.2],
-    ['Corte, Desbaste e Polimento de Furo Cuba (hr/un.)', 'corteDPolimento', 2],
-    ['Área Bipolida (h/m²)', 'areaBipolida', 2],
-    ['Sistema Flush (h/un)', 'sistemaFlush', 3],
-    ['Sistema Flath (h/un)', 'sistemaFlath', 3],
-    ['Recortes/Furos sem Polimento (hr/un)', 'recortesSemPolimento', 0.5],
-    ['Rebaixo Italiano Usinado (Fresa + Polimento) hr/m²', 'rebaixoItaliano', 8],
-    ['Rebaixo Americano Colado (Corte + Polimento) hr/m²', 'rebaixoAmericano', 2],
-    ['Comprimento Linear Polimento Automático (hr/m)', 'polimentoAutomatico', 0.15],
-    ['Comprimento Linear Polimento Manual (hr/m)', 'polimentoManual', 0.2],
-    ['Custo de Insumo (%)', 'custoInsumo', 5],
-    ['Acabamento 45° Cuba Esculpida (hr/m)', 'cubEsculpida', 3],
-    ['Acabamento Meio Boleado (hr/m)', 'meioBoelado', 0.5],
-    ['Acabamento Meio Boleado Duplo (hr/m)', 'meioBoeladoDuplo', 1],
-    ['Acabamento Chanfrado 45° (hr/m)', 'chanfrado45', 1],
-    ['Acabamento Meia Cana (hr/m)', 'meiaCana', 1],
-    ['Acabamento Boleado Duplo (hr/m)', 'boeladoDuplo', 2],
-    ['Acabamento Chanfrado Duplo (hr/m)', 'chanfradoDuplo', 2],
-    ['Acabamento Meia Cana Duplo (hr/m)', 'meiaCanaDuplo', 2],
-    ['Quantidade de Funcionários (produção)', 'qtdFuncionarios', 5],
-    ['Colagem de topo (hr/m)', 'colagemTopo', 0.25],
-    ['Chanfro Alongado (hr/m)', 'chanfroAlongado', 2],
-    ['Water Jet (R$/m)', 'waterJet', 20],
-    ['Horas Produtivas/Mês', 'horasProdMes', 176],
-  ];
+  // CSS para esconder spinners em todos os inputs number
+  const spinnerCSS = '<style>#tempos-content input[type=number]{-webkit-appearance:textfield;-moz-appearance:textfield;appearance:textfield;}#tempos-content input[type=number]::-webkit-inner-spin-button,#tempos-content input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}</style>';
 
-  el.innerHTML = `
-  <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:14px;margin-bottom:16px;">
-    <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:20px;">⏱️ Informações de Produção — Atualize as informações de produção.</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:12px;">
-      ${campos.map(([label, key, def]) => `
-      <div>
-        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">${label}</label>
-        <input class="form-input" id="tempo-${key}" type="number" step="0.01" value="${cfg[key]!==undefined?cfg[key]:def}"
-          oninput="salvarTempoCfg('${key}',this.value)">
-      </div>`).join('')}
-    </div>
-  </div>
+  const campo = (label, key, def, step) => {
+    const v = cfg[key] !== undefined ? cfg[key] : def;
+    return '<div style="display:flex;flex-direction:column;gap:4px;">'
+      +'<label style="font-size:11px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:.3px;line-height:1.3;min-height:32px;display:flex;align-items:flex-end;">'+label+'</label>'
+      +'<input class="form-input" type="number" step="'+(step||'0.01')+'" value="'+v+'" style="text-align:center;font-weight:700;" oninput="salvarTempoCfg(\''+key+'\',this.value)">'
+      +'</div>';
+  };
 
-  <!-- DEPRECIAÇÃO -->
-  <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:14px;margin-bottom:16px;">
-    <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:16px;">🏗️ Depreciação de Máquinas</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:12px;">
-      <div>
-        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Valor de Investimentos (Máquinas)*</label>
-        <input class="form-input" id="tempo-valorMaquinas" type="number" step="0.01" value="${cfg.valorMaquinas||13800}"
-          oninput="salvarTempoCfg('valorMaquinas',this.value)">
-      </div>
-      <div>
-        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Anos de Depreciação*</label>
-        <input class="form-input" id="tempo-anosDepreciacao" type="number" step="1" value="${cfg.anosDepreciacao||10}"
-          oninput="salvarTempoCfg('anosDepreciacao',this.value)">
-      </div>
-      <div>
-        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Valor do Investimento após Depreciação (%)*</label>
-        <input class="form-input" id="tempo-valorResidual" type="number" step="1" value="${cfg.valorResidual||70}"
-          oninput="salvarTempoCfg('valorResidual',this.value)">
-      </div>
-    </div>
-  </div>
+  const secao = (icone, titulo, conteudo, cols) => {
+    return '<div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:20px;margin-bottom:16px;">'
+      +'<div style="font-size:13px;font-weight:700;color:var(--stone);margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--cream-dark);">'+icone+' '+titulo+'</div>'
+      +'<div style="display:grid;grid-template-columns:repeat('+(cols||3)+',1fr);gap:16px 12px;">'+conteudo+'</div>'
+      +'</div>';
+  };
 
-  <!-- TRANSPORTE -->
-  <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:14px;margin-bottom:16px;">
-    <div style="font-size:14px;font-weight:700;color:var(--stone);margin-bottom:16px;">🚚 Transporte</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:12px;margin-bottom:16px;">
-      <div>
-        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Média de Gasto de Comb. por Veículo (Km/L)*</label>
-        <input class="form-input" id="tempo-consumoCombustivel" type="number" step="0.1" value="${cfg.consumoCombustivel||8}"
-          oninput="salvarTempoCfg('consumoCombustivel',this.value)">
-      </div>
-      <div>
-        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Custo do Combustível*</label>
-        <input class="form-input" id="tempo-custoCombustivel" type="number" step="0.01" value="${cfg.custoCombustivel||7}"
-          oninput="salvarTempoCfg('custoCombustivel',this.value)">
-      </div>
-      <div>
-        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Min/Km Médio Trânsito Lento*</label>
-        <input class="form-input" id="tempo-minKmLento" type="number" step="0.1" value="${cfg.minKmLento||3}"
-          oninput="salvarTempoCfg('minKmLento',this.value)">
-      </div>
-      <div>
-        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Min/Km Médio Trânsito Intermediário*</label>
-        <input class="form-input" id="tempo-minKmIntermediario" type="number" step="0.1" value="${cfg.minKmIntermediario||2}"
-          oninput="salvarTempoCfg('minKmIntermediario',this.value)">
-      </div>
-      <div>
-        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Min/Km Médio Trânsito Rápido*</label>
-        <input class="form-input" id="tempo-minKmRapido" type="number" step="0.1" value="${cfg.minKmRapido||1}"
-          oninput="salvarTempoCfg('minKmRapido',this.value)">
-      </div>
-      <div>
-        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Trânsito Padrão*</label>
-        <select class="form-select" id="tempo-transito" onchange="salvarTempoCfg('transito',this.value)">
-          <option value="lento" ${cfg.transito==='lento'?'selected':''}>Lento</option>
-          <option value="intermediario" ${cfg.transito==='intermediario'?'selected':''}>Intermediário</option>
-          <option value="rapido" ${(!cfg.transito||cfg.transito==='rapido')?'selected':''}>Rápido</option>
-        </select>
-      </div>
-    </div>
+  el.innerHTML = spinnerCSS
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:16px;">
-      <div style="background:var(--cream);border-radius:10px;padding:12px;">
-        <div style="font-size:12px;font-weight:700;color:var(--stone);margin-bottom:10px;">Com instalação</div>
-        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Horas por m²*</label>
-        <input class="form-input" id="tempo-horasInstalacaoM2" type="number" step="0.01" value="${cfg.horasInstalacaoM2||1.5}" style="margin-bottom:8px;"
-          oninput="salvarTempoCfg('horasInstalacaoM2',this.value)">
-        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Quantid. de pessoas*</label>
-        <input class="form-input" id="tempo-pessoasInstalacao" type="number" step="1" value="${cfg.pessoasInstalacao||2}"
-          oninput="salvarTempoCfg('pessoasInstalacao',this.value)">
-      </div>
-      <div style="background:var(--cream);border-radius:10px;padding:12px;">
-        <div style="font-size:12px;font-weight:700;color:var(--stone);margin-bottom:10px;">Somente entrega</div>
-        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Horas por m²*</label>
-        <input class="form-input" id="tempo-horasEntregaM2" type="number" step="0.01" value="${cfg.horasEntregaM2||0.33}" style="margin-bottom:8px;"
-          oninput="salvarTempoCfg('horasEntregaM2',this.value)">
-        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Quantid. de pessoas*</label>
-        <input class="form-input" id="tempo-pessoasEntrega" type="number" step="1" value="${cfg.pessoasEntrega||1}"
-          oninput="salvarTempoCfg('pessoasEntrega',this.value)">
-      </div>
-      <div style="background:var(--cream);border-radius:10px;padding:12px;">
-        <div style="font-size:12px;font-weight:700;color:var(--stone);margin-bottom:10px;">Cliente retira na empresa</div>
-        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Horas por m²*</label>
-        <input class="form-input" id="tempo-horasRetiradaM2" type="number" step="0.01" value="${cfg.horasRetiradaM2||0}" style="margin-bottom:8px;"
-          oninput="salvarTempoCfg('horasRetiradaM2',this.value)">
-        <label style="font-size:11px;color:var(--stone-light);display:block;margin-bottom:4px;">Quantid. de pessoas*</label>
-        <input class="form-input" id="tempo-pessoasRetirada" type="number" step="1" value="${cfg.pessoasRetirada||0}"
-          oninput="salvarTempoCfg('pessoasRetirada',this.value)">
-      </div>
-    </div>
-  </div>
+  // TEMPOS DE PRODUÇÃO
+  + secao('⏱', 'Tempos de Produção (hr/unidade)',
+    campo('Serra', 'serra', 0.8)
+    +campo('Corte 45°', 'corte45', 0.2)
+    +campo('Montagem 45°', 'montagem45', 1.2)
+    +campo('Furo Cuba', 'corteDPolimento', 2)
+    +campo('Bipolimento', 'areaBipolida', 2)
+    +campo('Flush', 'sistemaFlush', 3)
+    +campo('Flath', 'sistemaFlath', 3)
+    +campo('Recorte s/ Pol.', 'recortesSemPolimento', 0.5)
+    +campo('Rebaixo Italiano', 'rebaixoItaliano', 8)
+    +campo('Rebaixo Americano', 'rebaixoAmericano', 2)
+    +campo('Pol. Automático', 'polimentoAutomatico', 0.15)
+    +campo('Pol. Manual', 'polimentoManual', 0.2)
+    +campo('Insumo (%)', 'custoInsumo', 5)
+    +campo('Cuba Esculpida', 'cubEsculpida', 3)
+    +campo('Meio Boleado', 'meioBoelado', 0.5)
+    +campo('Meio Boleado Duplo', 'meioBoeladoDuplo', 1)
+    +campo('Chanfrado 45°', 'chanfrado45', 1)
+    +campo('Meia Cana', 'meiaCana', 1)
+    +campo('Boleado Duplo', 'boeladoDuplo', 2)
+    +campo('Chanfrado Duplo', 'chanfradoDuplo', 2)
+    +campo('Meia Cana Duplo', 'meiaCanaDuplo', 2)
+    +campo('Colagem Topo', 'colagemTopo', 0.25)
+    +campo('Chanfro Alongado', 'chanfroAlongado', 2)
+    +campo('Water Jet (R$/m)', 'waterJet', 20)
+    +campo('Horas Prod./Mês', 'horasProdMes', 176, '1')
+    +campo('Funcionários', 'qtdFuncionarios', 5, '1')
+  )
 
-  <div style="text-align:right;">
-    <button onclick="salvarTodosTempos()" style="background:var(--green);color:white;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">💾 Salvar Tempos</button>
-  </div>`;
+  // DEPRECIAÇÃO
+  + secao('🏗', 'Depreciação de Máquinas',
+    campo('Valor Máquinas (R$)', 'valorMaquinas', 13800)
+    +campo('Anos Depreciação', 'anosDepreciacao', 10, '1')
+    +campo('Valor Residual (%)', 'valorResidual', 70, '1')
+  )
+
+  // TRANSPORTE
+  + secao('🚚', 'Transporte',
+    campo('Consumo (km/L)', 'consumoCombustivel', 8)
+    +campo('Custo Comb. (R$/L)', 'custoCombustivel', 7)
+    +campo('Min/km Lento', 'minKmLento', 3)
+    +campo('Min/km Intermediário', 'minKmMedio', 2)
+    +campo('Min/km Rápido', 'minKmRapido', 1)
+  )
+
+  // INSTALAÇÃO / ENTREGA
+  + secao('🔧', 'Instalação e Entrega',
+    campo('Instal. hr/m²', 'horasInstalacaoM2', 1.5)
+    +campo('N° Pessoas Instal.', 'nPessoasInstalacao', 2, '1')
+    +campo('Entrega hr/m²', 'horasEntregaM2', 0.33)
+    +campo('N° Pessoas Entrega', 'nPessoasEntrega', 1, '1')
+  )
+
+  // BOTÃO SALVAR STICKY
+  + '<div style="position:sticky;bottom:0;background:white;border-top:1px solid var(--cream-dark);padding:12px;margin:0 -20px;border-radius:0 0 12px 12px;">'
+  + '<button onclick="salvarTodosTempos()" style="background:var(--gold);color:white;border:none;padding:12px 32px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;width:100%;">💾 Salvar Configurações</button>'
+  + '</div>';
 }
 
 function salvarTempoCfg(key, valor) {

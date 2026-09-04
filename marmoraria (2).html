@@ -13173,7 +13173,7 @@ function renderTelaOrcamentoPedido(order) {
           }).join('')}
         </div>
         <div style="margin-top:10px;">
-          <input class="form-input" style="font-size:12px;" placeholder="Outros itens deixados pelo cliente..."
+          <input class="form-input" style="font-size:12px;width:100%;box-sizing:border-box;" placeholder="Outros itens deixados pelo cliente..."
             value="${orc.itensClienteObs||''}" oninput="orcamentoAtual.itensClienteObs=this.value">
         </div>
       </div>
@@ -13240,20 +13240,20 @@ function renderTelaOrcamentoPedido(order) {
     </div>
 
     <!-- RODAPÉ FIXO (igual Marmoprice) -->
-    <div class="orc-rodape-fixo" style="position:fixed;bottom:0;left:0;right:0;background:white;border-top:1px solid #ddd;padding:10px 24px;display:flex;gap:12px;align-items:center;z-index:99;box-shadow:0 -2px 8px rgba(0,0,0,0.08);">
-      <div style="display:flex;align-items:center;gap:8px;background:#f5f5f5;padding:8px 14px;border-radius:6px;cursor:pointer;" onclick="abrirDescontoGeral()">
+    <div class="orc-rodape-fixo" style="position:fixed;bottom:0;left:0;right:0;background:white;border-top:1px solid #ddd;padding:10px 16px;display:flex;gap:8px;align-items:center;z-index:99;box-shadow:0 -2px 8px rgba(0,0,0,0.08);flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;background:#f5f5f5;padding:8px 12px;border-radius:6px;cursor:pointer;flex-shrink:0;" onclick="abrirDescontoGeral()">
         <span style="font-size:18px;">🧮</span>
-        <span style="font-size:12px;font-weight:600;color:#333;">Desconto<br>Geral</span>
+        <span style="font-size:11px;font-weight:600;color:#333;white-space:nowrap;">Desconto<br>Geral</span>
       </div>
-      <div class="orc-rodape-campos" style="flex:1;display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;">
-        <div><label style="font-size:10px;color:#666;">Observações gerais</label><input class="form-input" style="padding:6px 10px;" value="${orc.obsGeral||''}" oninput="orcamentoAtual.obsGeral=this.value"></div>
-        <div><label style="font-size:10px;color:#666;">Prazo de Entrega</label><input class="form-input" style="padding:6px 10px;" value="${orc.prazoEntrega||''}" oninput="orcamentoAtual.prazoEntrega=this.value"></div>
-        <div><label style="font-size:10px;color:#666;">Desconto (%)</label><input class="form-input" style="padding:6px 10px;" type="number" value="${orc.desconto||0}" oninput="orcamentoAtual.desconto=parseFloat(this.value)||0"></div>
+      <div class="orc-rodape-campos" style="flex:1;min-width:200px;display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;">
+        <div><label style="font-size:10px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">Observações gerais</label><input class="form-input" style="padding:6px 10px;" value="${orc.obsGeral||''}" oninput="orcamentoAtual.obsGeral=this.value"></div>
+        <div><label style="font-size:10px;color:#666;white-space:nowrap;display:block;">Prazo</label><input class="form-input" style="padding:6px 10px;" value="${orc.prazoEntrega||''}" oninput="orcamentoAtual.prazoEntrega=this.value"></div>
+        <div><label style="font-size:10px;color:#666;white-space:nowrap;display:block;">Desconto (%)</label><input class="form-input" style="padding:6px 10px;" type="number" value="${orc.desconto||0}" oninput="orcamentoAtual.desconto=parseFloat(this.value)||0"></div>
       </div>
       <div class="orc-rodape-btns-wrap">
-        <button onclick="imprimirOrcamento()" style="background:#1a2332;color:white;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;flex:1;">🖨️ Imprimir</button>
-        <button onclick="salvarOrcamentoPedido()" style="background:#006382;color:white;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;flex:1;">💾 Salvar</button>
-        <button onclick="fecharTelaOrcamentoPedido()" style="background:#dc3545;color:white;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;flex:1;">← Voltar</button>
+        <button onclick="imprimirOrcamento()" style="background:#1a2332;color:white;border:none;padding:9px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;flex:1;">🖨️ Imprimir</button>
+        <button onclick="salvarOrcamentoPedido()" style="background:#006382;color:white;border:none;padding:9px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;flex:1;">💾 Salvar</button>
+        <button onclick="fecharTelaOrcamentoPedido()" style="background:#dc3545;color:white;border:none;padding:9px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;flex:1;">← Voltar</button>
       </div>
     </div>
   </div>`;
@@ -13426,23 +13426,24 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
       <!-- PEÇA A PEÇA -->
       <div style="margin-bottom:16px;">
         <div style="font-size:12px;font-weight:700;color:#1e5f74;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">✏️ Peça a Peça</div>
-        <div id="pecas-lista-${idx}" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div id="pecas-lista-${idx}" style="display:flex;flex-direction:column;gap:8px;">
           ${(item.pecas||[{nome:'',medidas:'',qtd:'1'}]).map((peca,pi) => `
-          <div class="peca-row" style="display:grid;gap:4px;padding:10px;background:#f8fafc;border:1.5px solid #d0dde3;border-radius:8px;align-items:center;">
-            <input class="form-input" style="padding:6px 10px;font-weight:600;" placeholder="Nome da peça" value="${peca.nome||''}"
-              oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].nome=this.value"
-              onkeydown="pKD(event,this,${idx},'${orderId}')">
-            <input class="form-input" style="padding:6px 10px;font-family:monospace;" placeholder="1,20x0,60" value="${peca.medidas||''}"
-              oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].medidas=this.value;orcamentoAtual.itens[${idx}].m2Override=0;recalcularTelaOrc('${orderId}')"
-              onkeydown="pKD(event,this,${idx},'${orderId}')">
-            <div style="display:flex;gap:6px;align-items:center;">
-              <input class="form-input" style="padding:6px 10px;text-align:center;width:70px;" type="number" min="1" value="${peca.qtd||1}"
-                oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].qtd=this.value;orcamentoAtual.itens[${idx}].m2Override=0;recalcularTelaOrc('${orderId}')"
+          <div class="peca-row" style="display:grid;grid-template-columns:1fr auto auto auto;gap:6px;padding:10px;background:#f8fafc;border:1.5px solid #d0dde3;border-radius:8px;align-items:center;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:0;">
+              <input class="form-input" style="padding:6px 10px;font-weight:600;min-width:0;" placeholder="Nome da peça" value="${peca.nome||''}"
+                oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].nome=this.value"
                 onkeydown="pKD(event,this,${idx},'${orderId}')">
-              <div style="display:flex;gap:4px;margin-left:auto;">
-                <button onclick="adicionarPecaItem(${idx},'${orderId}')" style="background:white;color:#1e5f74;border:1.5px solid #1e5f74;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700;" title="+">+</button>
-                <button onclick="removerPecaItem(this,${idx},'${orderId}')" style="background:white;color:#B85A4A;border:1.5px solid #B85A4A;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:13px;" title="Remover">✕</button>
-                <button onclick="duplicarPecaItem(${idx},${pi},'${orderId}')" style="background:white;color:#555;border:1.5px solid #ccc;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:13px;" title="Duplicar">⧉</button>
+              <input class="form-input" style="padding:6px 10px;font-family:monospace;min-width:0;" placeholder="1,20x0,60" value="${peca.medidas||''}"
+                oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].medidas=this.value;orcamentoAtual.itens[${idx}].m2Override=0;recalcularTelaOrc('${orderId}')"
+                onkeydown="pKD(event,this,${idx},'${orderId}')">
+            </div>
+            <input class="form-input" style="padding:6px 10px;text-align:center;width:60px;" type="number" min="1" value="${peca.qtd||1}"
+              oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].qtd=this.value;orcamentoAtual.itens[${idx}].m2Override=0;recalcularTelaOrc('${orderId}')"
+              onkeydown="pKD(event,this,${idx},'${orderId}')">
+            <button onclick="adicionarPecaItem(${idx},'${orderId}')" style="background:white;color:#1e5f74;border:1.5px solid #1e5f74;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:16px;font-weight:700;flex-shrink:0;" title="+">+</button>
+            <div style="display:flex;gap:4px;">
+              <button onclick="removerPecaItem(this,${idx},'${orderId}')" style="background:white;color:#B85A4A;border:1.5px solid #B85A4A;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;flex-shrink:0;" title="Remover">✕</button>
+              <button onclick="duplicarPecaItem(${idx},${pi},'${orderId}')" style="background:white;color:#555;border:1.5px solid #ccc;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;flex-shrink:0;" title="Duplicar">⧉</button>
               </div>
             </div>
           </div>`).join('')}

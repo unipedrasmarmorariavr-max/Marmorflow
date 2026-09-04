@@ -14404,7 +14404,16 @@ function imprimirOrcamento() {
   const orc = orcamentoAtual;
   if (!orc) return;
 
-  // Lê campos do rodapé diretamente do DOM antes de imprimir
+  // Se há valor negociado pelo Desconto Geral, distribui proporcionalmente nos itens
+  if (orc.usandoValorNegociado && orc.valorNegociado > 0) {
+    const totalCalc = orc.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
+    if (totalCalc > 0) {
+      const fator = orc.valorNegociado / totalCalc;
+      orc.itens.forEach(function(item) {
+        if (item.calc) item.calc.precoFinal = item.calc.precoFinal * fator;
+      });
+    }
+  }
   const elObsRodape = document.getElementById('orc-obs-rodape');
   if (elObsRodape && elObsRodape.value) orcamentoAtual.obsGeral = elObsRodape.value;
   const elObsGeral = document.getElementById('orc-obs-geral');
@@ -14430,7 +14439,9 @@ function imprimirOrcamento() {
     item.calc = (pedra && calcAreaTotalItem(item) > 0) ? calcularItem(item, pedra, {...cfg, transito: orc.transito}) : null;
   });
 
-  const totalGeral = orc.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
+  const totalGeral = (orc.usandoValorNegociado && orc.valorNegociado > 0)
+    ? orc.valorNegociado
+    : orc.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
   const dataHoje = new Date().toLocaleDateString('pt-BR');
   // Número do orçamento = número do pedido no kanban (MRM-071, etc.)
   const numOrc = orc.pedidoId || orc.pedidoKey || orc.numPedido || orc.id.replace('ORC-','').substring(0,10);
@@ -14819,6 +14830,25 @@ function salvarValorSimulado() {
   orcamentoAtual.margemNegociada      = margemFinal;
   orcamentoAtual.lucroNegociado       = lucroFinal;
   orcamentoAtual.usandoValorNegociado = true;
+
+  // Distribui o novo valor total proporcionalmente em cada item
+  // atualizando margemOverride para que precoFinal = mesmo valor do cabeçalho
+  const totalCalculado = orcamentoAtual.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
+  if (totalCalculado > 0 && valorFinal > 0) {
+    const fator = valorFinal / totalCalculado;
+    const cfg = getConfigOrc();
+    const insumoFrac = (cfg.custoInsumo || 5) / 100;
+    orcamentoAtual.itens.forEach(function(item) {
+      if (!item.calc) return;
+      const novoPreco = item.calc.precoFinal * fator;
+      const custosOp = item.calc.custoTotal - item.calc.custoInsumos;
+      const novaMargem = resolverMargemPorValor(novoPreco, custosOp, insumoFrac);
+      item.margemOverride = Math.round(novaMargem * 10000) / 10000;
+    });
+  }
+
+  // Recalcula tela para sincronizar linha do material com cabeçalho
+  if (pedidoOrcAtual) recalcularTelaOrc(pedidoOrcAtual);
 
   // Salva no localStorage imediatamente
   const orcsNow = getOrcamentos();

@@ -14038,57 +14038,18 @@ function pKD(e, el, idx, orderId) {
 function adicionarPecaItem(idx, orderId) {
   if (!orcamentoAtual.itens[idx]) return;
   if (!orcamentoAtual.itens[idx].pecas) orcamentoAtual.itens[idx].pecas = [];
-  var pi = orcamentoAtual.itens[idx].pecas.length;
   orcamentoAtual.itens[idx].pecas.push({nome:'', medidas:'', qtd:'1'});
-
-  var lista = document.getElementById('pecas-lista-' + idx);
-  if (!lista) return;
-
-  var row = document.createElement('div');
-  row.className = 'peca-row'; row.style.cssText = 'display:grid;gap:4px;padding:10px;background:#f8fafc;border:1.5px solid #d0dde3;border-radius:8px;align-items:center;';
-
-  function inp(style, type, placeholder, val) {
-    var el = document.createElement('input');
-    el.className = 'form-input';
-    el.style.cssText = style;
-    if (type) el.type = type;
-    if (placeholder) el.placeholder = placeholder;
-    if (val !== undefined) el.value = val;
-    return el;
-  }
-
-  var iNome = inp('padding:6px 10px;', null, 'Nome da peça', '');
-  iNome.oninput = (function(i){ return function(){ orcamentoAtual.itens[idx].pecas[i].nome = this.value; }; })(pi);
-  iNome.onkeydown = (function(i){ return function(e){ pKD(e, this, idx, orderId); }; })(pi);
-
-  var iMed = inp('padding:6px 10px;font-family:monospace;', null, '1,20x0,60', '');
-  iMed.oninput = (function(i){ return function(){ orcamentoAtual.itens[idx].pecas[i].medidas = this.value; }; })(pi);
-  iMed.onchange = function(){ recalcularTelaOrc(orderId); };
-  iMed.onkeydown = (function(i){ return function(e){ pKD(e, this, idx, orderId); }; })(pi);
-
-  var iQtd = inp('padding:6px 10px;text-align:center;', 'number', '', '1');
-  iQtd.min = '1';
-  iQtd.oninput = (function(i){ return function(){ orcamentoAtual.itens[idx].pecas[i].qtd = this.value; }; })(pi);
-  iQtd.onchange = function(){ recalcularTelaOrc(orderId); };
-  iQtd.onkeydown = (function(i){ return function(e){ pKD(e, this, idx, orderId); }; })(pi);
-
-  var btns = document.createElement('div');
-  btns.style.cssText = 'display:flex;gap:4px;';
-
-  var bAdd = document.createElement('button');
-  bAdd.style.cssText = 'background:#006382;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;';
-  bAdd.title = 'Nova linha (+Enter)'; bAdd.textContent = '+';
-  bAdd.onclick = function(){ adicionarPecaItem(idx, orderId); };
-
-  var bRem = document.createElement('button');
-  bRem.style.cssText = 'background:#dc3545;color:white;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;';
-  bRem.title = 'Apagar linha'; bRem.textContent = '✕';
-  bRem.onclick = function(){ removerLinhaItem(this, idx, orderId); };
-
-  btns.appendChild(bAdd); btns.appendChild(bRem);
-  row.appendChild(iNome); row.appendChild(iMed); row.appendChild(iQtd); row.appendChild(btns);
-  lista.appendChild(row);
-  setTimeout(function(){ iNome.focus(); }, 20);
+  // Re-renderiza para usar o template correto e consistente
+  recalcularTelaOrc(orderId);
+  // Foca no campo nome da última peça adicionada
+  setTimeout(function(){
+    var lista = document.getElementById('pecas-lista-' + idx);
+    if (!lista) return;
+    var lastRow = lista.lastElementChild;
+    if (!lastRow) return;
+    var nomeInput = lastRow.querySelector('input');
+    if (nomeInput) nomeInput.focus();
+  }, 100);
 }
 
 // Remove linha pelo botão ✕

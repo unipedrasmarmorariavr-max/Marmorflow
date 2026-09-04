@@ -14437,6 +14437,9 @@ function imprimirOrcamento() {
     ambientes[amb].push(item);
   });
 
+  const TEAL = '#006382';
+  const DARK = '#1a2332';
+
   const ambientesHTML = Object.entries(ambientes).map(([amb, itens]) => {
     const totalAmbiente = itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
 
@@ -14449,51 +14452,64 @@ function imprimirOrcamento() {
 
       const pecasHTML = pecas.map((p, pi) => {
         const m = parseMedidas(p.medidas);
-        const bg = pi % 2 === 0 ? 'background:#f9f9f9;' : 'background:white;';
+        const rowBg = pi % 2 === 0 ? '#ffffff' : '#f5f7f9';
         return '<tr>'
-          + '<td style="padding:7px 10px;border-bottom:1px solid #eee;border-left:3px solid #006382;' + bg + '">' + (p.nome||'—') + '</td>'
-          + '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center;' + bg + '">' + (p.qtd||1) + '</td>'
-          + '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center;' + bg + '">' + m.l.toFixed(2).replace('.',',') + '</td>'
-          + '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center;' + bg + '">' + m.c.toFixed(2).replace('.',',') + '</td>'
+          + '<td style="padding:7px 12px;border-bottom:1px solid #eee;background:'+rowBg+';border-left:3px solid '+TEAL+';">' + (p.nome||'—') + '</td>'
+          + '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center;background:'+rowBg+';">' + (p.qtd||1) + '</td>'
+          + '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center;background:'+rowBg+';">' + m.l.toFixed(2).replace('.',',') + '</td>'
+          + '<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:center;background:'+rowBg+';">' + m.c.toFixed(2).replace('.',',') + '</td>'
           + '</tr>';
       }).join('');
 
-      return '<div style="margin-bottom:20px;">'
-        + '<div style="font-size:18px;font-weight:800;color:#1a1a1a;margin-bottom:6px;">' + (item.nome||'Item') + '</div>'
-        + '<div style="font-size:12px;color:#555;margin-bottom:4px;">Tipo de Entrega <strong>' + tipoLabel + '</strong></div>'
-        + (item.obs ? '<div style="font-size:12px;color:#555;margin-bottom:10px;">Observações <strong>' + item.obs + '</strong></div>' : '<div style="margin-bottom:10px;"></div>')
+      return ''
+        // Item title bar — dark, bold, uppercase like MarmóPrice
+        + '<div style="background:'+DARK+';color:white;padding:9px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:0;">'
+        + (item.nome||'Item').toUpperCase()
+        + '</div>'
+        + '<div style="padding:12px 14px 0;">'
+        + '<div style="font-size:12px;color:#555;margin-bottom:8px;">Tipo de entrega: <strong>' + tipoLabel + '</strong></div>'
+        + (item.obs ? '<div style="font-size:12px;color:#555;margin-bottom:8px;">Observações: <strong>' + item.obs + '</strong></div>' : '')
+        + '</div>'
+        // Peça a peça table
         + (pecas.length > 0
-          ? '<div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:8px;">Peça a peça</div>'
-            + '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px;border:1px solid #e0e0e0;">'
-            + '<thead><tr style="background:#1a2332;">'
-            + '<th style="padding:8px 10px;text-align:left;font-weight:600;color:white;border-bottom:2px solid #006382;">Nome</th>'
-            + '<th style="padding:8px 10px;text-align:center;font-weight:600;color:white;border-bottom:2px solid #006382;width:60px;">Qtd</th>'
-            + '<th style="padding:8px 10px;text-align:center;font-weight:600;color:white;border-bottom:2px solid #006382;width:110px;">Compr. (m)</th>'
-            + '<th style="padding:8px 10px;text-align:center;font-weight:600;color:white;border-bottom:2px solid #006382;width:100px;">Larg. (m)</th>'
+          ? '<div style="margin:0 14px 12px;">'
+            + '<div style="background:#eef2f5;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#444;margin-bottom:0;">Peça a Peça</div>'
+            + '<table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #e0e0e0;">'
+            + '<thead><tr style="background:#f0f0f0;">'
+            + '<th style="padding:7px 12px;text-align:left;font-weight:700;color:#333;font-size:11px;border-bottom:2px solid '+TEAL+';">NOME</th>'
+            + '<th style="padding:7px 10px;text-align:center;font-weight:700;color:#333;font-size:11px;border-bottom:2px solid '+TEAL+';width:60px;">QTD</th>'
+            + '<th style="padding:7px 10px;text-align:center;font-weight:700;color:#333;font-size:11px;border-bottom:2px solid '+TEAL+';width:110px;">COMPR. (m)</th>'
+            + '<th style="padding:7px 10px;text-align:center;font-weight:700;color:#333;font-size:11px;border-bottom:2px solid '+TEAL+';width:100px;">LARG. (m)</th>'
             + '</tr></thead>'
             + '<tbody>' + pecasHTML + '</tbody>'
-            + '</table>'
+            + '</table></div>'
           : '')
-        + '<div style="border-left:4px solid #006382;padding:12px 16px;background:#f7f7f7;display:flex;justify-content:space-between;align-items:center;">'
+        // Material / Valor block — gray bg, teal accent
+        + '<div style="margin:0 14px 14px;background:#f5f7f9;border:1px solid #e0e0e0;border-left:4px solid '+TEAL+';padding:12px 14px;display:flex;justify-content:space-between;align-items:center;">'
         + '<div>'
-        + '<div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">MATERIAL</div>'
-        + '<div style="font-size:15px;font-weight:700;color:#1a1a1a;">' + pedra.nome.toUpperCase() + '</div>'
+        + '<div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">MATERIAL / VALOR DO ITEM</div>'
+        + '<div style="font-size:15px;font-weight:800;color:#1a1a1a;">' + pedra.nome.toUpperCase() + '</div>'
+        + (item.calc.custoM2 ? '<div style="font-size:11px;color:#666;margin-top:2px;">R$ ' + item.calc.custoM2.toFixed(2).replace('.',',') + '/m² · ' + (item.calc.areaComQuebra||0).toFixed(2).replace('.',',') + ' m²</div>' : '')
         + '</div>'
         + '<div style="text-align:right;">'
-        + '<div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">VALOR DO ITEM</div>'
-        + '<div style="font-size:22px;font-weight:900;color:#006382;">' + fmt(item.calc.precoFinal) + '</div>'
-        + '</div></div>'
-        + '</div>';
+        + '<div style="font-size:24px;font-weight:900;color:'+TEAL+';">' + fmt(item.calc.precoFinal) + '</div>'
+        + '</div></div>';
     }).join('');
 
-    return '<div style="border:1px solid #ddd;margin-bottom:20px;overflow:hidden;">'
-      + '<div style="background:#2C2C2C;color:white;padding:10px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">' + amb + '</div>'
-      + '<div style="padding:16px 16px 8px;">' + itensHTML + '</div>'
-      + '<div style="background:#f0f0f0;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #ddd;">'
-      + '<div style="font-size:12px;font-weight:700;text-transform:uppercase;color:#333;">VALOR TOTAL DO AMBIENTE ' + amb + ':</div>'
-      + '<div style="font-size:16px;font-weight:900;color:#006382;">' + fmt(totalAmbiente) + '</div>'
-      + '</div></div>';
+    return ''
+      // Ambiente container — closed card with border
+      + '<div style="border:1.5px solid #d0d0d0;border-radius:4px;margin-bottom:24px;overflow:hidden;page-break-inside:avoid;">'
+      // Ambiente title bar — solid black like MarmóPrice
+      + '<div style="background:#111111;color:white;padding:10px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;">' + amb + '</div>'
+      + itensHTML
+      // Total do ambiente
+      + '<div style="background:#e8edf0;border-top:2px solid '+TEAL+';padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">'
+      + '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#333;">VALOR TOTAL — ' + amb + '</div>'
+      + '<div style="font-size:18px;font-weight:900;color:'+TEAL+';">' + fmt(totalAmbiente) + '</div>'
+      + '</div>'
+      + '</div>';
   }).join('');
+
 
   const html = '<!DOCTYPE html>'
     + '<html lang="pt-BR"><head><meta charset="UTF-8">'
@@ -14538,26 +14554,34 @@ function imprimirOrcamento() {
     + '<div style="border-top:2px solid #1a2332;margin-bottom:16px;"></div>'
 
     // DADOS DO ORÇAMENTO
-    + '<div style="background:#2C2C2C;color:white;padding:9px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;">DADOS DO ORÇAMENTO</div>'
-    + '<div style="border:1px solid #ddd;border-top:none;padding:12px 14px;margin-bottom:20px;">'
+    + '<div style="border:1.5px solid #d0d0d0;border-radius:4px;margin-bottom:24px;overflow:hidden;">'
+    + '<div style="background:#111111;color:white;padding:10px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;">DADOS DO ORÇAMENTO</div>'
+    + '<div style="padding:14px 16px;background:white;">'
     + '<table style="width:100%;font-size:13px;border-collapse:collapse;">'
     + '<tr>'
-    + '<td style="padding:5px 0;width:100px;color:#888;font-size:11px;">Cliente</td>'
-    + '<td style="padding:5px 0;font-weight:700;font-size:14px;">' + (orc.cliente||'—') + '</td>'
-    + '<td style="padding:5px 0;width:140px;color:#888;font-size:11px;">Distância de Entrega</td>'
-    + '<td style="padding:5px 0;font-weight:700;">' + (orc.distancia||0) + ' km</td>'
+    + '<td style="padding:5px 0;width:110px;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Cliente</td>'
+    + '<td style="padding:5px 0;font-weight:800;font-size:15px;color:#1a1a1a;">' + (orc.cliente||'—') + '</td>'
+    + '<td style="padding:5px 0;width:120px;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Orçamento Nº</td>'
+    + '<td style="padding:5px 0;font-weight:700;color:#006382;">' + numOrc + '</td>'
     + '</tr>'
-    + ((orc.telefone||orc.tel) ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">Telefone(s)</td><td style="padding:6px 0;font-weight:700;" colspan="3">' + (orc.telefone||orc.tel) + '</td></tr>' : '')
-    + (orc.enderecoObra ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">Endereço da Obra</td><td style="padding:6px 0;font-weight:600;" colspan="3">' + orc.enderecoObra + (orc.cidade ? ' — ' + orc.cidade : '') + '</td></tr>' : '')
-    + (orc.obsGeral ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">Observações</td><td style="padding:6px 0;font-weight:600;" colspan="3">' + orc.obsGeral + '</td></tr>' : '')
-    + (orc.dataPrevista ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">Data Prevista</td><td style="padding:6px 0;font-weight:600;" colspan="3">' + orc.dataPrevista + '</td></tr>' : '')
+    + '<tr>'
+    + '<td style="padding:5px 0;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Data</td>'
+    + '<td style="padding:5px 0;font-weight:600;">' + dataHoje + '</td>'
+    + '<td style="padding:5px 0;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Distância</td>'
+    + '<td style="padding:5px 0;font-weight:600;">' + (orc.distancia||0) + ' km</td>'
+    + '</tr>'
+    + ((orc.telefone||orc.tel) ? '<tr><td style="padding:5px 0;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Telefone</td><td style="padding:5px 0;font-weight:600;" colspan="3">' + (orc.telefone||orc.tel) + '</td></tr>' : '')
+    + (orc.enderecoObra ? '<tr><td style="padding:5px 0;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Endereço</td><td style="padding:5px 0;font-weight:600;" colspan="3">' + orc.enderecoObra + (orc.cidade ? ' — ' + orc.cidade : '') + '</td></tr>' : '')
+    + (orc.obsGeral ? '<tr><td style="padding:5px 0;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Observações</td><td style="padding:5px 0;font-weight:600;color:#333;" colspan="3">' + orc.obsGeral + '</td></tr>' : '')
+    + (orc.dataPrevista ? '<tr><td style="padding:5px 0;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Data Prevista</td><td style="padding:5px 0;font-weight:600;" colspan="3">' + orc.dataPrevista + '</td></tr>' : '')
     + (() => {
         const itensMarcados = Object.entries(orc.itensCliente||{}).filter(([k,v])=>v).map(([k])=>k);
         const obs = orc.itensClienteObs || '';
         const todos = itensMarcados.concat(obs ? [obs] : []);
-        return todos.length ? '<tr><td style="padding:6px 0;color:#888;font-size:11px;">📦 Itens do cliente</td><td style="padding:6px 0;font-weight:600;color:#006382;" colspan="3">' + todos.join(' · ') + '</td></tr>' : '';
+        return todos.length ? '<tr><td style="padding:5px 0;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Itens do cliente</td><td style="padding:5px 0;font-weight:700;color:#006382;" colspan="3">📦 ' + todos.join(' · ') + '</td></tr>' : '';
       })()
-    + '</table></div>'
+    + '</table>'
+    + '</div></div>'
 
     // AMBIENTES
     + ambientesHTML

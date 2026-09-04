@@ -1352,6 +1352,24 @@ function selecionarAcabador(nome) {
     iniciarTimerProd();
   });
 }
+function mudarTipoEntregaItem(item, tipo, orderId) {
+  item.tipoEntrega = tipo;
+  // Define nPessoas padrão conforme tipo
+  var cfg = getConfigOrc();
+  if (tipo === 'instalacao') {
+    item.nPessoasInstal = cfg.nPessoasInstalacao || 2;
+  } else if (tipo === 'entrega') {
+    item.nPessoasInstal = cfg.nPessoasEntrega || 1;
+  } else {
+    item.nPessoasInstal = 0;
+  }
+  if (orderId) {
+    recalcularTelaOrc(orderId);
+  } else {
+    recalcularOrcamento();
+  }
+}
+
 function getStagesFiltradosPerfil() {
   if (currentUser === 'serrador') return ['corte'];
   if (currentUser === 'acabador') return ['acabamento'];
@@ -12661,7 +12679,7 @@ function renderItemOrcamento(item, idx, pedras, cfg) {
       </div>
       `}
       <div class="form-group"><label class="form-label">Tipo de Entrega</label>
-        <select class="form-select" onchange="orcamentoAtual.itens[${idx}].tipoEntrega=this.value;orcamentoAtual.itens[${idx}].nPessoasInstal=null;recalcularOrcamento()">
+        <select class="form-select" onchange="mudarTipoEntregaItem(orcamentoAtual.itens[${idx}], this.value, null)">
           <option value="instalacao" ${item.tipoEntrega==='instalacao'?'selected':''}>Com Instalação</option>
           <option value="entrega" ${item.tipoEntrega==='entrega'?'selected':''}>Só Entrega</option>
           <option value="retirada" ${item.tipoEntrega==='retirada'?'selected':''}>Retirada</option>
@@ -13390,7 +13408,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
             oninput="orcamentoAtual.itens[${idx}].ambiente=this.value"></div>
         <div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:#1e5f74;font-weight:600;text-transform:uppercase;letter-spacing:.3px;">Tipo de entrega</label>
           <select class="form-select" style="padding:7px 10px;"
-            onchange="orcamentoAtual.itens[${idx}].tipoEntrega=this.value;orcamentoAtual.itens[${idx}].nPessoasInstal=null;recalcularTelaOrc('${orderId}')">
+            onchange="mudarTipoEntregaItem(orcamentoAtual.itens[${idx}], this.value, '${orderId}')">
             <option value="instalacao" ${item.tipoEntrega==='instalacao'?'selected':''}>Com instalação</option>
             <option value="entrega" ${item.tipoEntrega==='entrega'?'selected':''}>Somente entrega</option>
             <option value="retirada" ${item.tipoEntrega==='retirada'?'selected':''}>Retirada</option>

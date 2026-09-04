@@ -1363,19 +1363,20 @@ function getStagesFiltradosPerfil() {
 
 function getTemposPrevistosOrcamento(orderId) {
   try {
-    // Tenta pelo orcamentos em memória primeiro
+    // Prioridade: campos tempo_serrador/tempo_acabador direto no pedido (em segundos)
+    var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+    if (order && (order.tempo_serrador || order.tempo_acabador)) {
+      return {
+        serrador: (parseFloat(order.tempo_serrador)||0) * 1000,
+        acabador: (parseFloat(order.tempo_acabador)||0) * 1000
+      };
+    }
+
+    // Fallback: busca pelo orçamento no localStorage
     var orcs = typeof getOrcamentos === 'function' ? getOrcamentos() : [];
     var orc = orcs.find(function(o){ return o.pedidoId === orderId || o.pedidoKey === orderId; });
 
-    // Se não achou, tenta pelo pedido que pode ter orcamento_data
-    if (!orc) {
-      var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
-      if (order && order.orcamento_data) {
-        try { orc = JSON.parse(order.orcamento_data); } catch(e){}
-      }
-    }
-
-    if (!orc || !orc.itens) return { serrador: 0, acabador: 0 };
+    if (!orc) return { serrador: 0, acabador: 0 };
 
     var cfg = typeof getConfigOrc === 'function' ? getConfigOrc() : {};
     var pedras = typeof getPedrasCadastradas === 'function' ? getPedrasCadastradas() : [];
@@ -1385,39 +1386,24 @@ function getTemposPrevistosOrcamento(orderId) {
 
     orc.itens.forEach(function(item) {
       var c = item.calc;
-
-      // Se não tem calc salvo, tenta recalcular
       if (!c && typeof calcularItem === 'function' && item.largura && item.comprimento) {
         try {
           var pedra = pedras.find(function(p){return p.id===item.pedraId||p.id===item.materialId;});
           if (pedra) c = calcularItem(item, pedra, cfg, 1);
         } catch(e) {}
       }
-
       if (!c) return;
-
       tSerrador += (parseFloat(c.tSerra)||0);
-      tAcabador += (parseFloat(c.tCorte45)||0)
-                 + (parseFloat(c.tCorte45Interno)||0)
-                 + (parseFloat(c.tMontagem45)||0)
-                 + (parseFloat(c.tPolimentoManual)||0)
-                 + (parseFloat(c.tPolimentoAuto)||0)
-                 + (parseFloat(c.tBipolimento)||0)
-                 + (parseFloat(c.tCubas)||0)
-                 + (parseFloat(c.tCubEsculpida)||0)
-                 + (parseFloat(c.tFlush)||0)
-                 + (parseFloat(c.tFlath)||0)
-                 + (parseFloat(c.tRecortes)||0)
-                 + (parseFloat(c.tMeioBoelado)||0)
-                 + (parseFloat(c.tMeioBoeladoDuplo)||0)
-                 + (parseFloat(c.tChanfrado)||0)
-                 + (parseFloat(c.tChanfradoDuplo)||0)
-                 + (parseFloat(c.tMeiaCana)||0)
-                 + (parseFloat(c.tMeiaCanaD)||0)
-                 + (parseFloat(c.tBoleadoDuplo)||0)
-                 + (parseFloat(c.tChanfroAlongado)||0)
-                 + (parseFloat(c.tColagem)||0)
-                 + (parseFloat(c.horasAdicionais)||0);
+      tAcabador += (parseFloat(c.tCorte45)||0)+(parseFloat(c.tCorte45Interno)||0)
+                 +(parseFloat(c.tMontagem45)||0)+(parseFloat(c.tPolimentoManual)||0)
+                 +(parseFloat(c.tPolimentoAuto)||0)+(parseFloat(c.tBipolimento)||0)
+                 +(parseFloat(c.tCubas)||0)+(parseFloat(c.tCubEsculpida)||0)
+                 +(parseFloat(c.tFlush)||0)+(parseFloat(c.tFlath)||0)
+                 +(parseFloat(c.tRecortes)||0)+(parseFloat(c.tMeioBoelado)||0)
+                 +(parseFloat(c.tMeioBoeladoDuplo)||0)+(parseFloat(c.tChanfrado)||0)
+                 +(parseFloat(c.tChanfradoDuplo)||0)+(parseFloat(c.tMeiaCana)||0)
+                 +(parseFloat(c.tBoleadoDuplo)||0)+(parseFloat(c.tChanfroAlongado)||0)
+                 +(parseFloat(c.tColagem)||0)+(parseFloat(c.horasAdicionais)||0);
     });
 
     return {
@@ -13870,6 +13856,35 @@ async function salvarOrcamentoPedido(silencioso) {
   if (idx >= 0) orcs[idx] = orcamentoAtual;
   else orcs.unshift(orcamentoAtual);
   salvarOrcamentos(orcs);
+
+  // Salva tempos previstos direto no pedido
+  if (orcamentoAtual.pedidoId && orcamentoAtual.itens) {
+    var tSerrador = 0, tAcabador = 0;
+    orcamentoAtual.itens.forEach(function(item) {
+      var c = item.calc; if (!c) return;
+      tSerrador += (parseFloat(c.tSerra)||0);
+      tAcabador += (parseFloat(c.tCorte45)||0)+(parseFloat(c.tCorte45Interno)||0)
+                 +(parseFloat(c.tMontagem45)||0)+(parseFloat(c.tPolimentoManual)||0)
+                 +(parseFloat(c.tPolimentoAuto)||0)+(parseFloat(c.tBipolimento)||0)
+                 +(parseFloat(c.tCubas)||0)+(parseFloat(c.tCubEsculpida)||0)
+                 +(parseFloat(c.tFlush)||0)+(parseFloat(c.tFlath)||0)
+                 +(parseFloat(c.tRecortes)||0)+(parseFloat(c.tMeioBoelado)||0)
+                 +(parseFloat(c.tMeioBoeladoDuplo)||0)+(parseFloat(c.tChanfrado)||0)
+                 +(parseFloat(c.tChanfradoDuplo)||0)+(parseFloat(c.tMeiaCana)||0)
+                 +(parseFloat(c.tBoleadoDuplo)||0)+(parseFloat(c.tChanfroAlongado)||0)
+                 +(parseFloat(c.tColagem)||0)+(parseFloat(c.horasAdicionais)||0);
+    });
+    if (tSerrador > 0 || tAcabador > 0) {
+      // Salva em segundos no pedido
+      getSB().from('pedidos').update({
+        tempo_serrador: Math.round(tSerrador * 3600),
+        tempo_acabador: Math.round(tAcabador * 3600)
+      }).eq('id', orcamentoAtual.pedidoId).then(function(){});
+      // Atualiza em memória
+      var ordRef = orders ? orders.find(function(o){return o.id===orcamentoAtual.pedidoId;}) : null;
+      if (ordRef) { ordRef.tempo_serrador = Math.round(tSerrador*3600); ordRef.tempo_acabador = Math.round(tAcabador*3600); }
+    }
+  }
 
   // Se tiver valor negociado na calculadora, usa ele; senão usa o calculado
   const totalCalculado = orcamentoAtual.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);

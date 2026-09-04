@@ -13377,7 +13377,7 @@ function renderTelaOrcamentoPedido(order) {
         <span style="font-size:11px;font-weight:600;color:#333;white-space:nowrap;">Desconto<br>Geral</span>
       </div>
       <div class="orc-rodape-campos" style="flex:1;min-width:200px;display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;">
-        <div><label style="font-size:10px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">Observações gerais</label><input class="form-input" style="padding:6px 10px;" value="${orc.obsGeral||''}" oninput="orcamentoAtual.obsGeral=this.value"></div>
+        <div><label style="font-size:10px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">Observações gerais</label><input id="orc-obs-rodape" class="form-input" style="padding:6px 10px;" value="${orc.obsGeral||''}" oninput="orcamentoAtual.obsGeral=this.value"></div>
         <div><label style="font-size:10px;color:#666;white-space:nowrap;display:block;">Prazo</label><input class="form-input" style="padding:6px 10px;" value="${orc.prazoEntrega||''}" oninput="orcamentoAtual.prazoEntrega=this.value"></div>
         <div><label style="font-size:10px;color:#666;white-space:nowrap;display:block;">Desconto (%)</label><input class="form-input" style="padding:6px 10px;" type="number" value="${orc.desconto||0}" oninput="orcamentoAtual.desconto=parseFloat(this.value)||0"></div>
       </div>
@@ -14405,11 +14405,10 @@ function imprimirOrcamento() {
   if (!orc) return;
 
   // Lê campos do rodapé diretamente do DOM antes de imprimir
-  const elObs = document.getElementById('orc-obs-geral') || document.querySelector('[oninput*="obsGeral"]');
-  if (elObs) orcamentoAtual.obsGeral = elObs.value;
-  // Também lê do rodapé fixo
-  const rodapeInputs = document.querySelectorAll('[oninput*="obsGeral"]');
-  rodapeInputs.forEach(function(el){ if (el.value) orcamentoAtual.obsGeral = el.value; });
+  const elObsRodape = document.getElementById('orc-obs-rodape');
+  if (elObsRodape && elObsRodape.value) orcamentoAtual.obsGeral = elObsRodape.value;
+  const elObsGeral = document.getElementById('orc-obs-geral');
+  if (elObsGeral && elObsGeral.value) orcamentoAtual.obsGeral = elObsGeral.value;
 
   // Preencher dados do pedido como fallback nos campos vazios
   if (pedidoOrcAtual) {
@@ -14579,6 +14578,12 @@ function imprimirOrcamento() {
     + ((orc.telefone||orc.tel) ? '<tr><td style="padding:5px 0;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Telefone</td><td style="padding:5px 0;font-weight:600;" colspan="3">' + (orc.telefone||orc.tel) + '</td></tr>' : '')
     + (orc.enderecoObra ? '<tr><td style="padding:5px 0;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Endereço</td><td style="padding:5px 0;font-weight:600;" colspan="3">' + orc.enderecoObra + (orc.cidade ? ' — ' + orc.cidade : '') + '</td></tr>' : '')
     + (orc.obsGeral ? '<tr><td style="padding:5px 0;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Observações</td><td style="padding:5px 0;font-weight:600;color:#333;" colspan="3">' + orc.obsGeral + '</td></tr>' : '')
+    + (() => {
+        // Observação do pedido (campo obs dos dados do cliente)
+        const order = pedidoOrcAtual ? orders.find(o => o.id === pedidoOrcAtual) : null;
+        const obsP = order ? (order.obs || '') : '';
+        return obsP ? '<tr><td style="padding:5px 0;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Obs. Cliente</td><td style="padding:5px 0;font-weight:600;color:#333;" colspan="3">' + obsP + '</td></tr>' : '';
+      })()
     + (orc.dataPrevista ? '<tr><td style="padding:5px 0;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Data Prevista</td><td style="padding:5px 0;font-weight:600;" colspan="3">' + orc.dataPrevista + '</td></tr>' : '')
     + (() => {
         const itensMarcados = Object.entries(orc.itensCliente||{}).filter(([k,v])=>v).map(([k])=>k);

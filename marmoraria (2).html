@@ -1554,23 +1554,57 @@ function renderProdBotoes(order, prod) {
       +'</div>':'')
     +'</div>';
 
-  if (isMeu) {
+  var podeGerenciarGlobal = currentUser === 'producao' || currentUser === 'dono' || currentUser === 'comercial' || currentUser === 'financeiro';
+
+  // Gerentes veem pausar/retomar em qualquer pedido em produção
+  if (!isMeu && podeGerenciarGlobal && prod) {
     if (isPausado) {
       html += '<button onclick="prodRetomar(\''+order.id+'\',event)" '
         +'style="width:100%;background:#8B6914;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
         +'▶ Retomar</button>';
-      // Botão passar para outro — só aparece quando pausado
-      var outrosNomes = getAcabadores().filter(function(n){return n !== prod.nome;});
-      if (currentUser === 'acabador' && outrosNomes.length > 0) {
-        html += '<button onclick="prodPassarPara(\''+order.id+'\',event)" '
-          +'style="width:100%;background:#f0f0f0;color:#555;border:1px solid #ddd;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:4px;">'
-          +'🔄 Passar para outro acabador</button>';
-      }
     } else {
       html += '<button onclick="prodPausar(\''+order.id+'\',event)" '
         +'style="width:100%;background:#555;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
         +'⏸ Pausar</button>';
     }
+  }
+
+  if (isMeu) {
+    var podeGerenciar = currentUser === 'producao' || currentUser === 'dono' || currentUser === 'comercial' || currentUser === 'financeiro';
+    if (isPausado) {
+      // Só gerentes podem retomar
+      if (podeGerenciar) {
+        html += '<button onclick="prodRetomar(\''+order.id+'\',event)" '
+          +'style="width:100%;background:#8B6914;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
+          +'▶ Retomar</button>';
+      }
+      // Passar para outro — apenas acabadores
+      if (currentUser === 'acabador') {
+        var outrosNomes = getAcabadores().filter(function(n){return n !== prod.nome;});
+        if (outrosNomes.length > 0) {
+          html += '<button onclick="prodPassarPara(\''+order.id+'\',event)" '
+            +'style="width:100%;background:#f0f0f0;color:#555;border:1px solid #ddd;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:4px;">'
+            +'🔄 Passar para outro acabador</button>';
+        }
+      }
+    } else {
+      // Só gerentes podem pausar
+      if (podeGerenciar) {
+        html += '<button onclick="prodPausar(\''+order.id+'\',event)" '
+          +'style="width:100%;background:#555;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
+          +'⏸ Pausar</button>';
+      }
+      // Passar para outro — apenas acabadores (sem pausar)
+      if (currentUser === 'acabador') {
+        var outrosNomes2 = getAcabadores().filter(function(n){return n !== prod.nome;});
+        if (outrosNomes2.length > 0) {
+          html += '<button onclick="prodPassarPara(\''+order.id+'\',event)" '
+            +'style="width:100%;background:#f0f0f0;color:#555;border:1px solid #ddd;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:4px;">'
+            +'🔄 Passar para outro acabador</button>';
+        }
+      }
+    }
+    // Concluir — todos podem
     html += '<button onclick="prodConcluir(\''+order.id+'\',event)" '
       +'style="width:100%;background:#2E7D32;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
       +(currentUser==='serrador'?'✂️ Corte Concluído':'✅ Acabamento Concluído')+'</button>';
@@ -12995,15 +13029,30 @@ function abrirTelaOrcamentoPedido(id) {
   // Busca orçamento salvo para este pedido (se existir)
   let orc = orcs.find(o => o.pedidoId === id) || null;
 
-  // Se o pedido veio de medição (history mostra que estava em medicao antes de negociacao)
-  // e o orçamento foi criado ANTES da última entrada em negociação, descarta o orçamento antigo
+  // Descarta se o orçamento é de outro cliente (segurança extra)
+  if (orc && order.cliente && orc.cliente && orc.cliente !== order.cliente) {
+    console.warn('Orçamento descartado: cliente diferente', orc.cliente, '!=', order.cliente);
+    orc = null;
+  }
+
+  // Se o pedido veio de medição — descarta orçamento anterior ao último stage negociacao
   if (orc && order.history && order.history.length > 0) {
     const histNeg = [...order.history].reverse().find(h => h.stage === 'negociacao');
     const dataNeg = histNeg ? new Date(histNeg.date) : null;
     const dataOrc = orc.criadoEm ? new Date(orc.criadoEm) : null;
     if (dataNeg && dataOrc && dataOrc < dataNeg) {
-      // Orçamento mais antigo que a última entrada em negociação — limpa
       orc = null;
+    }
+  }
+
+  // Se pedido foi criado há menos de 1 minuto, descarta qualquer orçamento antigo
+  if (orc && order.created_at) {
+    const criado = new Date(order.created_at);
+    const agora = new Date();
+    const diffMin = (agora - criado) / 60000;
+    if (diffMin < 2 && orc.criadoEm) {
+      const orcCriado = new Date(orc.criadoEm);
+      if (orcCriado < criado) { orc = null; }
     }
   }
 

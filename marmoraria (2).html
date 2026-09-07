@@ -1508,7 +1508,7 @@ function renderProdBotoes(order, prod) {
   try {
     var meuNome = currentUser === 'acabador' ? getNomeAcabador() : 'Serrador';
     var estagio = currentUser === 'serrador' ? 'corte' : 'acabamento';
-    var podeGerenciar = currentUser === 'producao' || currentUser === 'dono' || currentUser === 'comercial' || currentUser === 'financeiro';
+    var podeGerenciar = currentUser === 'producao' || currentUser === 'dono';
     // Só mostra botões de produção em corte e acabamento
     if (order.stage !== 'corte' && order.stage !== 'acabamento') return '';
     if (!podeGerenciar && order.stage !== estagio) return '';
@@ -1557,7 +1557,7 @@ function renderProdBotoes(order, prod) {
       +'</div>':'')
     +'</div>';
 
-  var podeGerenciarGlobal = currentUser === 'producao' || currentUser === 'dono' || currentUser === 'comercial' || currentUser === 'financeiro';
+  var podeGerenciarGlobal = currentUser === 'producao' || currentUser === 'dono';
 
   // Gerentes veem pausar/retomar em qualquer pedido em produção
   if (!isMeu && podeGerenciarGlobal && prod) {
@@ -1573,7 +1573,7 @@ function renderProdBotoes(order, prod) {
   }
 
   if (isMeu) {
-    var podeGerenciar = currentUser === 'producao' || currentUser === 'dono' || currentUser === 'comercial' || currentUser === 'financeiro';
+    var podeGerenciar = currentUser === 'producao' || currentUser === 'dono';
     if (isPausado) {
       // Só gerentes podem retomar
       if (podeGerenciar) {
@@ -2612,8 +2612,8 @@ function createCard(o) {
   const isProducao = ['corte','acabamento','pronto','entregue'].includes(o.stage);
   const showValor = (currentUser !== 'producao' && currentUser !== 'medidor' && currentUser !== 'serrador' && currentUser !== 'acabador' && o.valor && _kanbanAba !== 'producao');
   const isProdUser = currentUser === 'serrador' || currentUser === 'acabador';
-  const podeGerenciarProd = currentUser === 'producao' || currentUser === 'dono' || currentUser === 'comercial' || currentUser === 'financeiro';
-  // Busca prod_status para todos os perfis que precisam ver cronômetro
+  const podeGerenciarProd = currentUser === 'producao' || currentUser === 'dono';
+  // Busca prod_status para perfis de produção
   const orderAtual = orders ? (orders.find(function(x){return x.id===o.id;}) || o) : o;
   const prod = (isProdUser || podeGerenciarProd) ? getProdStatus(orderAtual) : null;
   const prodInfo = (!isProdUser && !podeGerenciarProd) ? getProdStatus(orderAtual) : null;

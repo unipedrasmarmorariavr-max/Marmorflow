@@ -2609,11 +2609,11 @@ function createCard(o) {
   const isProducao = ['corte','acabamento','pronto','entregue'].includes(o.stage);
   const showValor = (currentUser !== 'producao' && currentUser !== 'medidor' && currentUser !== 'serrador' && currentUser !== 'acabador' && o.valor && _kanbanAba !== 'producao');
   const isProdUser = currentUser === 'serrador' || currentUser === 'acabador';
-  // Busca order atualizado do array orders para ter prod_status mais recente
+  const podeGerenciarProd = currentUser === 'producao' || currentUser === 'dono' || currentUser === 'comercial' || currentUser === 'financeiro';
+  // Busca prod_status para todos os perfis que precisam ver cronômetro
   const orderAtual = orders ? (orders.find(function(x){return x.id===o.id;}) || o) : o;
-  const prod = isProdUser ? getProdStatus(orderAtual) : null;
-  // Para dono/comercial/encarregado — mostra quem está com o pedido
-  const prodInfo = !isProdUser ? getProdStatus(orderAtual) : null;
+  const prod = (isProdUser || podeGerenciarProd) ? getProdStatus(orderAtual) : null;
+  const prodInfo = (!isProdUser && !podeGerenciarProd) ? getProdStatus(orderAtual) : null;
   const tel = (o.telefone || '').replace(/\D/g,'');
   const enderecoMaps = o.endereco ? encodeURIComponent(o.endereco) : '';
 
@@ -2650,13 +2650,11 @@ function createCard(o) {
     <div class="card-id">${o.ref_fechado || o.id}</div>
     <div class="card-client">${o.cliente}</div>
     <div class="card-desc">${o.peca||''}${o.material?' · '+o.material:''}</div>
+    <div class="card-desc">${o.peca||''}${o.material?' · '+o.material:''}</div>
     ${showValor?`<div class="card-valor">R$ ${o.valor}</div>`:''}
-    ${prodInfo && prodInfo.nome ? `<div style="background:#e8f4f7;border-radius:6px;padding:5px 8px;margin-bottom:4px;display:flex;align-items:center;gap:6px;font-size:12px;">
-      <span>${prodInfo.log && prodInfo.log[prodInfo.log.length-1] && prodInfo.log[prodInfo.log.length-1].tipo==='pausa' ? '⏸' : '▶'}</span>
-      <span style="font-weight:700;color:#1a2332;">${prodInfo.nome}</span>
-      <span style="color:#888;">· ⏱ ${fmtTempo(calcTempoUtil(prodInfo.log))}</span>
-    </div>` : ''}
-    ${isProdUser ? renderProdBotoes(o, prod) : ''}
+    ${(podeGerenciarProd && prod && prod.nome) ? `<div style="background:#e8f4f7;border-radius:8px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px;"><span>${prod.log&&prod.log[prod.log.length-1]&&prod.log[prod.log.length-1].tipo==='pausa'?'⏸':'▶'}</span><div><div style="font-size:12px;font-weight:700;color:#1a2332;">${prod.nome}</div><div id="tempo-${o.id}" style="font-size:11px;color:#888;">⏱ ${fmtCronometro(calcTempoUtil(prod.log))}</div></div></div>` : ''}
+    ${(!podeGerenciarProd && prodInfo && prodInfo.nome) ? `<div style="background:#e8f4f7;border-radius:6px;padding:5px 8px;margin-bottom:4px;display:flex;align-items:center;gap:6px;font-size:12px;"><span>${prodInfo.log&&prodInfo.log[prodInfo.log.length-1]&&prodInfo.log[prodInfo.log.length-1].tipo==='pausa'?'⏸':'▶'}</span><span style="font-weight:700;color:#1a2332;">${prodInfo.nome}</span><span id="tempo-${o.id}" style="color:#888;">⏱ ${fmtCronometro(calcTempoUtil(prodInfo.log))}</span></div>` : ''}
+    ${(isProdUser || podeGerenciarProd) ? renderProdBotoes(o, prod) : ''}
     <div class="card-footer">
       <div class="card-date">${o.dataentrega?'📅 '+formatDate(o.dataentrega):(o.created_at?'📁 '+new Date(o.created_at).toLocaleDateString('pt-BR'):'')}</div>
       <div class="card-actions">${botoesMain}</div>

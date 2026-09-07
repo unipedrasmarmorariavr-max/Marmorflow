@@ -1508,7 +1508,9 @@ function renderProdBotoes(order, prod) {
   try {
     var meuNome = currentUser === 'acabador' ? getNomeAcabador() : 'Serrador';
     var estagio = currentUser === 'serrador' ? 'corte' : 'acabamento';
-    if (order.stage !== estagio) return '';
+    // Gerentes veem em qualquer etapa de produção
+    var podeGerenciar = currentUser === 'producao' || currentUser === 'dono' || currentUser === 'comercial' || currentUser === 'financeiro';
+    if (!podeGerenciar && order.stage !== estagio) return '';
 
     var html = '';
 

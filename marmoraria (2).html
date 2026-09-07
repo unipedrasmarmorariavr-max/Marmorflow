@@ -1508,8 +1508,9 @@ function renderProdBotoes(order, prod) {
   try {
     var meuNome = currentUser === 'acabador' ? getNomeAcabador() : 'Serrador';
     var estagio = currentUser === 'serrador' ? 'corte' : 'acabamento';
-    // Gerentes veem em qualquer etapa de produção
     var podeGerenciar = currentUser === 'producao' || currentUser === 'dono' || currentUser === 'comercial' || currentUser === 'financeiro';
+    // Só mostra botões de produção em corte e acabamento
+    if (order.stage !== 'corte' && order.stage !== 'acabamento') return '';
     if (!podeGerenciar && order.stage !== estagio) return '';
 
     var html = '';
@@ -2641,6 +2642,13 @@ function createCard(o) {
   if (p.canDelete) menuItens += `<div class="card-menu-item danger" onclick="deleteOrder('${o.id}');event.stopPropagation()">🗑 Excluir</div>`;
 
   div.style.borderTop = `3px solid ${stageCor}`;
+  // Botões extras para "Pronto para Entrega"
+  const btnsPronto = o.stage === 'pronto' ? `
+    <div style="display:flex;gap:6px;margin-bottom:6px;">
+      ${tel ? `<a href="https://wa.me/55${tel}" target="_blank" onclick="event.stopPropagation()" style="flex:1;background:#25D366;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:4px;">📱 WhatsApp</a>` : ''}
+      ${enderecoMaps ? `<a href="https://www.google.com/maps/search/?api=1&query=${enderecoMaps}" target="_blank" onclick="event.stopPropagation()" style="flex:1;background:#4285F4;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:4px;">🗺️ Navegar</a>` : ''}
+    </div>` : '';
+
   div.innerHTML = `
     <div class="card-menu">
       <button class="card-menu-btn" onclick="toggleCardMenu('${o.id}',event)" title="Mais opções">···</button>
@@ -2652,11 +2660,11 @@ function createCard(o) {
     <div class="card-id">${o.ref_fechado || o.id}</div>
     <div class="card-client">${o.cliente}</div>
     <div class="card-desc">${o.peca||''}${o.material?' · '+o.material:''}</div>
-    <div class="card-desc">${o.peca||''}${o.material?' · '+o.material:''}</div>
     ${showValor?`<div class="card-valor">R$ ${o.valor}</div>`:''}
     ${(podeGerenciarProd && prod && prod.nome) ? `<div style="background:#e8f4f7;border-radius:8px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px;"><span>${prod.log&&prod.log[prod.log.length-1]&&prod.log[prod.log.length-1].tipo==='pausa'?'⏸':'▶'}</span><div><div style="font-size:12px;font-weight:700;color:#1a2332;">${prod.nome}</div><div id="tempo-${o.id}" style="font-size:11px;color:#888;">⏱ ${fmtCronometro(calcTempoUtil(prod.log))}</div></div></div>` : ''}
     ${(!podeGerenciarProd && prodInfo && prodInfo.nome) ? `<div style="background:#e8f4f7;border-radius:6px;padding:5px 8px;margin-bottom:4px;display:flex;align-items:center;gap:6px;font-size:12px;"><span>${prodInfo.log&&prodInfo.log[prodInfo.log.length-1]&&prodInfo.log[prodInfo.log.length-1].tipo==='pausa'?'⏸':'▶'}</span><span style="font-weight:700;color:#1a2332;">${prodInfo.nome}</span><span id="tempo-${o.id}" style="color:#888;">⏱ ${fmtCronometro(calcTempoUtil(prodInfo.log))}</span></div>` : ''}
     ${(isProdUser || podeGerenciarProd) ? renderProdBotoes(o, prod) : ''}
+    ${btnsPronto}
     <div class="card-footer">
       <div class="card-date">${o.dataentrega?'📅 '+formatDate(o.dataentrega):(o.created_at?'📁 '+new Date(o.created_at).toLocaleDateString('pt-BR'):'')}</div>
       <div class="card-actions">${botoesMain}</div>

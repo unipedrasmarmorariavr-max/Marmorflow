@@ -4033,16 +4033,10 @@ function iniciarApp() {
     carregarConfigsDoSupabase();
   }
   // Restaura sessão salva (evita login ao recarregar)
-  var sessaoSalva = localStorage.getItem('mf_sessao');
-  if (sessaoSalva && PROFILES[sessaoSalva]) {
-    ativarSessao(sessaoSalva);
-    // Restaura a aba que estava ativa
-    var abaSalva = localStorage.getItem('mf_aba');
-    if (abaSalva && abaSalva !== 'kanban') {
-      setTimeout(function() { showTab(abaSalva); }, 100);
-    }
-    return;
-  }
+  // Sempre mostra tela de login — não restaura sessão automaticamente
+  // Isso garante que cada funcionário escolhe seu perfil ao abrir
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
   var pinEl = document.getElementById('pin-input');
   if (pinEl) pinEl.addEventListener('keydown', function(e){ if(e.key==='Enter') entrar(); });
 }

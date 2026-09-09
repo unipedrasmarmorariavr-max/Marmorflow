@@ -13713,7 +13713,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
             } else { currentVal = '00:00'; }
           }
           if (isAutoPessoas) {
-            const tipoEnt = item.tipoEntrega || 'instalacao';
+            const tipoEnt = item.tipoEntrega || '';
             let defaultPessoas;
             if (tipoEnt === 'retirada') defaultPessoas = 0;
             else if (tipoEnt === 'entrega') defaultPessoas = cfg.pessoasEntrega||1;
@@ -14058,7 +14058,7 @@ function atualizarResumoHeader() {
 
 function adicionarItemTelaOrc(orderId) {
   orcamentoAtual.itens.push({
-    nome:'', ambiente:'', pedraId:'', tipoEntrega:'instalacao',
+    nome:'', ambiente:'', pedraId:'', tipoEntrega:'',
     pecas:[{nome:'', medidas:'', qtd:'1'}],
     areaBipolida:0, horasAdicionais:'00:00', m2ChapaNaoComercial:0,
     compCorte45:0, compCorte45Interno:0, compMontagem45:0, compPolimentoManual:0, compPolimentoAuto:0,
@@ -14425,7 +14425,7 @@ function adicionarMaterialItem(idx, orderId) {
     custoM2Override: 0,
     margemOverride: 0,
     quebraOverride: 0,
-    tipoEntrega: itemAtual.tipoEntrega || 'instalacao',
+    tipoEntrega: itemAtual.tipoEntrega || '',
     pecas: [{nome:'', medidas:'', qtd:'1'}],
     areaBipolida:0, horasAdicionais:0, m2ChapaNaoComercial:0,
     compCorte45:0, compMontagem45:0, compPolimentoManual:0, compPolimentoAuto:0,

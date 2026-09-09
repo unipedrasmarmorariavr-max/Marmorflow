@@ -13066,18 +13066,26 @@ async function abrirTelaOrcamentoPedido(id) {
   let orc = null;
   try {
     const { data } = await getSB().from('orcamentos')
-      .select('dados')
+      .select('id,pedido_id,dados')
       .eq('pedido_id', id)
       .maybeSingle();
-    if (data && data.dados) {
-      orc = typeof data.dados === 'string' ? JSON.parse(data.dados) : data.dados;
-      if (orc) {
-        const orcsLocal = getOrcamentos();
-        const idx = orcsLocal.findIndex(o => o.pedidoId === id);
-        if (idx >= 0) orcsLocal[idx] = orc;
-        else orcsLocal.unshift(orc);
-        salvarOrcamentos(orcsLocal);
+    console.log('Supabase orcamento raw:', data);
+    if (data) {
+      if (data.dados) {
+        orc = typeof data.dados === 'string' ? JSON.parse(data.dados) : data.dados;
       }
+      // Se dados veio null mas tem registro, cria estrutura mínima
+      if (!orc && data.id) {
+        console.warn('dados está null no Supabase para pedido:', id);
+      }
+    }
+    if (orc) {
+      if (!orc.pedidoId) orc.pedidoId = id;
+      const orcsLocal = getOrcamentos();
+      const idx2 = orcsLocal.findIndex(o => o.pedidoId === id);
+      if (idx2 >= 0) orcsLocal[idx2] = orc;
+      else orcsLocal.unshift(orc);
+      salvarOrcamentos(orcsLocal);
     }
   } catch(e) {
     console.warn('Erro Supabase, usando localStorage:', e);
@@ -13087,6 +13095,7 @@ async function abrirTelaOrcamentoPedido(id) {
   if (!orc) {
     const orcsLocal = getOrcamentos();
     orc = orcsLocal.find(o => o.pedidoId === id) || null;
+    console.log('Fallback localStorage:', orc ? 'encontrado' : 'não encontrado');
   }
 
 

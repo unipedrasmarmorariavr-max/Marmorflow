@@ -13039,7 +13039,7 @@ function salvarOrcamentoAtual() {
 // ─── TELA CHEIA DE ORÇAMENTO POR PEDIDO ──────────────────────────────────
 let pedidoOrcAtual = null;
 
-function abrirTelaOrcamentoPedido(id) {
+async function abrirTelaOrcamentoPedido(id) {
   try {
   const order = orders.find(o => o.id === id);
   if (!order) return;
@@ -13054,33 +13054,29 @@ function abrirTelaOrcamentoPedido(id) {
 
   let orcs = getOrcamentos();
 
-  // Busca orçamento salvo para este pedido (se existir)
+  // Busca orçamento salvo para este pedido
   let orc = orcs.find(o => o.pedidoId === id) || null;
 
-  // Descarta se o orçamento é de outro cliente (segurança extra)
-  if (orc && order.cliente && orc.cliente && orc.cliente !== order.cliente) {
-    console.warn('Orçamento descartado: cliente diferente', orc.cliente, '!=', order.cliente);
-    orc = null;
-  }
-
-  // Se o pedido veio de medição — descarta orçamento anterior ao último stage negociacao
-  if (orc && order.history && order.history.length > 0) {
-    const histNeg = [...order.history].reverse().find(h => h.stage === 'negociacao');
-    const dataNeg = histNeg ? new Date(histNeg.date) : null;
-    const dataOrc = orc.criadoEm ? new Date(orc.criadoEm) : null;
-    if (dataNeg && dataOrc && dataOrc < dataNeg) {
-      orc = null;
-    }
-  }
-
-  // Se pedido foi criado há menos de 1 minuto, descarta qualquer orçamento antigo
-  if (orc && order.created_at) {
-    const criado = new Date(order.created_at);
-    const agora = new Date();
-    const diffMin = (agora - criado) / 60000;
-    if (diffMin < 2 && orc.criadoEm) {
-      const orcCriado = new Date(orc.criadoEm);
-      if (orcCriado < criado) { orc = null; }
+  // Se não achou no localStorage, tenta carregar do Supabase
+  if (!orc) {
+    try {
+      const { data } = await getSB().from('orcamentos')
+        .select('dados')
+        .eq('pedido_id', id)
+        .maybeSingle();
+      if (data && data.dados) {
+        orc = typeof data.dados === 'string' ? JSON.parse(data.dados) : data.dados;
+        // Salva no localStorage para próximas vezes
+        if (orc) {
+          orcs = getOrcamentos();
+          const existing = orcs.findIndex(o => o.pedidoId === id);
+          if (existing >= 0) orcs[existing] = orc;
+          else orcs.unshift(orc);
+          salvarOrcamentos(orcs);
+        }
+      }
+    } catch(e) {
+      console.warn('Erro ao buscar orçamento do Supabase:', e);
     }
   }
 

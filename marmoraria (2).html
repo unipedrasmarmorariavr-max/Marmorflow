@@ -13569,10 +13569,17 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
   </div>` : `<div style="padding:20px;text-align:center;color:#999;font-size:13px;">⚠️ Selecione o material e preencha as medidas para calcular.</div>`;
 
   return `
-  <div style="background:white;border-radius:8px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
-    <!-- Cabeçalho do item -->
+  ${idx > 0 ? `<div style="height:2px;background:linear-gradient(to right,#1a2332,#006382,#1a2332);margin:20px 0 0;border-radius:2px;"></div>` : ''}
+  <div style="background:white;border-radius:${idx>0?'0 0 8px 8px':'8px'};margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+    <!-- Título do item como seção -->
+    ${idx > 0 ? `<div style="background:#1a2332;color:white;padding:10px 16px;border-radius:0;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">ITEM ${idx+1}</span>
+      <button onclick="removerItemTelaOrc(${idx},'${orderId}')" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;">🗑 Remover</button>
+    </div>` : `<div style="background:#f8f8f8;border-bottom:1px solid #e0e0e0;padding:8px 16px;">
+      <span style="font-size:12px;font-weight:700;color:#1e5f74;text-transform:uppercase;letter-spacing:.5px;">ITEM ${idx+1}</span>
+    </div>`}
+    <!-- Campos do item -->
     <div style="background:#f8f8f8;border-bottom:1px solid #e0e0e0;padding:12px 16px;display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
-      <div style="font-size:13px;font-weight:700;color:#1e5f74;min-width:60px;padding-top:18px;">ITEM ${idx+1}</div>
       <div class="item-orcamento-grid" style="flex:1;display:grid;gap:8px;align-items:end;">
         <div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:#1e5f74;font-weight:600;text-transform:uppercase;letter-spacing:.3px;">Nome do Item *</label>
           <input class="form-input" style="padding:7px 10px;" value="${item.nome||''}" placeholder="bancada, pia..."
@@ -13592,7 +13599,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
           <input class="form-input" style="padding:7px 10px;" value="${item.obsItem||''}"
             oninput="orcamentoAtual.itens[${idx}].obsItem=this.value"></div>
       </div>
-      ${idx>0?`<button onclick="removerItemTelaOrc(${idx},'${orderId}')" style="background:#dc3545;border:none;color:white;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;">🗑 ITEM</button>`:''}
+      ${idx>0?'':''}
     </div>
 
     <div style="padding:12px 8px;">

@@ -12013,7 +12013,13 @@ async function carregarOrcamentosDoSupabase() {
   try {
     const { data, error } = await getSB().from('orcamentos').select('*').order('updated_at', { ascending: false });
     if (error || !data || !data.length) return;
-    const orcs = data.map(r => r.dados || {});
+    const orcs = data.map(r => {
+      const orc = r.dados || {};
+      // Garante que pedidoId está preenchido (pode ter sido salvo só em pedido_id)
+      if (!orc.pedidoId && r.pedido_id) orc.pedidoId = r.pedido_id;
+      if (!orc.id && r.id) orc.id = r.id;
+      return orc;
+    }).filter(o => o.id); // remove entradas vazias
     localStorage.setItem('orcamentos_marmorflow', JSON.stringify(orcs));
     console.log('Orçamentos carregados do Supabase:', orcs.length);
   } catch(e) { console.error('Erro ao carregar orçamentos:', e); }

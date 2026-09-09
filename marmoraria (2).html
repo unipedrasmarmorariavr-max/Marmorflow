@@ -1354,16 +1354,8 @@ function selecionarAcabador(nome) {
 }
 function mudarTipoEntregaItem(item, tipo, orderId) {
   item.tipoEntrega = tipo;
-  var cfg = getConfigOrc();
-  if (tipo === 'instalacao') {
-    item.nPessoasInstal = cfg.nPessoasInstalacao || 2;
-  } else if (tipo === 'entrega') {
-    item.nPessoasInstal = 1; // Somente entrega = sempre 1 pessoa
-  } else if (tipo === 'retirada') {
-    item.nPessoasInstal = 0;
-  } else {
-    item.nPessoasInstal = null;
-  }
+  // Reseta para null para que o default do tipo seja aplicado
+  item.nPessoasInstal = null;
   if (orderId) {
     recalcularTelaOrc(orderId);
   } else {
@@ -13715,11 +13707,13 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
           if (isAutoPessoas) {
             const tipoEnt = item.tipoEntrega || '';
             let defaultPessoas;
-            if (!tipoEnt) defaultPessoas = '';          // sem tipo = vazio
+            if (!tipoEnt) defaultPessoas = '';
             else if (tipoEnt === 'retirada') defaultPessoas = 0;
             else if (tipoEnt === 'entrega') defaultPessoas = 1;
-            else defaultPessoas = cfg.pessoasInstalacao||2; // instalacao
-            currentVal = (item.nPessoasInstal !== null && item.nPessoasInstal !== undefined && item.nPessoasInstal !== '') ? parseInt(item.nPessoasInstal) : defaultPessoas;
+            else defaultPessoas = cfg.pessoasInstalacao||2;
+            // Usa o valor salvo só se foi definido manualmente (não null/undefined)
+            const temValorManual = item.nPessoasInstal !== null && item.nPessoasInstal !== undefined && item.nPessoasInstal !== '';
+            currentVal = temValorManual ? parseInt(item.nPessoasInstal) : defaultPessoas;
           }
           return `<div>
             <label style="font-size:10px;color:#1e5f74;font-weight:600;display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.3px;">${label}${autoLabel}</label>
@@ -13887,6 +13881,16 @@ function recalcularTelaOrc(orderId) {
     const elMargem = document.getElementById('mat-margem-' + idx);
     if (elMargem && document.activeElement !== elMargem && item.calc && item.calc.margemLiquida) {
       elMargem.value = (item.calc.margemLiquida * 100).toFixed(1);
+    }
+
+    // Atualiza número de pessoas automaticamente ao mudar tipo
+    const elPessoas = document.getElementById('campo-pessoas-' + idx);
+    if (elPessoas && (item.nPessoasInstal === null || item.nPessoasInstal === undefined || item.nPessoasInstal === '')) {
+      const tipoEnt = item.tipoEntrega || '';
+      if (!tipoEnt) elPessoas.value = '';
+      else if (tipoEnt === 'retirada') elPessoas.value = '0';
+      else if (tipoEnt === 'entrega') elPessoas.value = '1';
+      else if (tipoEnt === 'instalacao') elPessoas.value = String(cfg.pessoasInstalacao||2);
     }
 
     // Atualiza tempo instalação (se não editado manualmente)

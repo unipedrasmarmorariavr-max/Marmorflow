@@ -13053,20 +13053,24 @@ async function abrirTelaOrcamentoPedido(id) {
   const orcKey = 'ORC_' + id;
 
   let orcs = getOrcamentos();
+  console.log('Orçamentos no localStorage:', orcs.length, orcs.map(o=>o.pedidoId));
 
   // Busca orçamento salvo para este pedido
   let orc = orcs.find(o => o.pedidoId === id) || null;
+  console.log('Orçamento encontrado no localStorage:', orc ? 'SIM' : 'NÃO');
 
   // Se não achou no localStorage, tenta carregar do Supabase
   if (!orc) {
+    console.log('Buscando no Supabase para pedido_id:', id);
     try {
-      const { data } = await getSB().from('orcamentos')
+      const { data, error } = await getSB().from('orcamentos')
         .select('dados')
         .eq('pedido_id', id)
         .maybeSingle();
+      console.log('Supabase resultado:', data, error);
       if (data && data.dados) {
         orc = typeof data.dados === 'string' ? JSON.parse(data.dados) : data.dados;
-        // Salva no localStorage para próximas vezes
+        console.log('Orçamento carregado do Supabase:', orc ? 'SIM' : 'NÃO');
         if (orc) {
           orcs = getOrcamentos();
           const existing = orcs.findIndex(o => o.pedidoId === id);

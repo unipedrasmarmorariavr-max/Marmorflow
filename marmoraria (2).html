@@ -13412,56 +13412,6 @@ function renderTelaOrcamentoPedido(order) {
         <button onclick="adicionarItemTelaOrc('${order.id}')" style="background:#006382;color:white;border:none;padding:10px 28px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">+ ITEM</button>
       </div>
 
-      <!-- DESCONTO GERAL / SIMULADOR -->
-      ${totalGeral > 0 ? `
-      <div style="background:white;border-radius:8px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,0.08);margin-bottom:16px;">
-        <div style="font-size:14px;font-weight:700;color:#333;margin-bottom:16px;">🧮 Desconto Geral — Simulador de Preço</div>
-        <div style="display:flex;gap:10px;margin-bottom:16px;">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 16px;border-radius:6px;border:2px solid #006382;background:#e8f5f8;font-size:13px;font-weight:600;">
-            <input type="radio" name="sim-modo" value="total" checked onchange="simularPreco(${custoTotal})" style="accent-color:#006382;"> Pelo Total
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 16px;border-radius:6px;border:2px solid #ddd;font-size:13px;">
-            <input type="radio" name="sim-modo" value="margem" onchange="simularPreco(${custoTotal})" style="accent-color:#006382;"> Pela Margem
-          </label>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,45%),1fr));gap:12px;margin-bottom:14px;">
-          <div><div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600;">CUSTO TOTAL</div>
-            <input class="form-input" id="sim-custo-edit" value="${custoTotal.toFixed(2).replace('.',',')}" 
-              style="font-weight:700;border-color:#8B6914;border-width:2px;" 
-              oninput="simularPrecoComCustoEdit()" 
-              title="Você pode editar este valor para arredondar"></div>
-          <div><div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600;" id="sim-label-valor">VALOR DO CONCORRENTE</div>
-            <input class="form-input" id="sim-valor" type="text" placeholder="R$ 0,00" oninput="simularPrecoComCustoEdit()" style="font-weight:700;border-color:#006382;border-width:2px;"></div>
-          <div><div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600;" id="sim-label-margem">MARGEM LUCRO (%)</div>
-            <input class="form-input" id="sim-margem" type="text" placeholder="0,000" oninput="simularPrecoComCustoEdit()" style="font-weight:700;"></div>
-          <div><div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600;">LUCRO LÍQUIDO</div>
-            <input class="form-input" id="sim-lucro" placeholder="—" readonly style="background:#f5f5f5;font-weight:700;"></div>
-          <div><div style="font-size:11px;color:#666;margin-bottom:4px;font-weight:600;">LLH (R$/hora)</div>
-            <input class="form-input" id="sim-llh" placeholder="—" readonly style="background:#f5f5f5;font-weight:700;"></div>
-        </div>
-        <div id="sim-resultado" style="display:none;border-radius:8px;padding:14px;border-left:4px solid #ccc;">
-          <div style="font-size:13px;font-weight:700;margin-bottom:8px;" id="sim-titulo"></div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(130px,45%),1fr));gap:8px;">
-            <div><div style="font-size:10px;color:#666;">MEU CUSTO</div><div style="font-size:15px;font-weight:700;" id="sim-r-custo"></div></div>
-            <div><div style="font-size:10px;color:#666;">VALOR COBRADO</div><div style="font-size:15px;font-weight:700;" id="sim-r-valor"></div></div>
-            <div><div style="font-size:10px;color:#666;">LUCRO / PREJUÍZO</div><div style="font-size:17px;font-weight:900;" id="sim-r-lucro"></div></div>
-            <div><div style="font-size:10px;color:#666;">MARGEM REAL</div><div style="font-size:17px;font-weight:900;" id="sim-r-margem"></div></div>
-            <div><div style="font-size:10px;color:#666;">LUCRO/HORA</div><div style="font-size:15px;font-weight:700;" id="sim-r-llh"></div></div>
-          </div>
-          <div style="margin-top:8px;font-size:13px;font-weight:600;" id="sim-r-conclusao"></div>
-          <div style="margin-top:14px;border-top:1px solid rgba(0,0,0,0.1);padding-top:12px;">
-            <button id="sim-btn-salvar" onclick="salvarValorSimulado()"
-              style="background:#2E7D32;color:white;border:none;padding:10px 24px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700;width:100%;">
-              💾 Fechar com este valor
-            </button>
-            <div id="sim-salvo-msg" style="display:none;margin-top:8px;text-align:center;font-size:13px;color:#2E7D32;font-weight:600;">
-              ✅ Valor salvo no orçamento!
-            </div>
-          </div>
-        </div>
-      </div>` : ''}
-
-    </div>
 
     <!-- RODAPÉ FIXO (igual Marmoprice) -->
     <div class="orc-rodape-fixo" style="position:fixed;bottom:0;left:0;right:0;background:white;border-top:1px solid #ddd;padding:10px 16px;display:flex;gap:8px;align-items:center;z-index:99;box-shadow:0 -2px 8px rgba(0,0,0,0.08);flex-wrap:wrap;">

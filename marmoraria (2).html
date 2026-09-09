@@ -1902,7 +1902,8 @@ function showTab(tab, addHistory = true) {
   // Update sidebar active state
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
   document.getElementById('nav-'+tab)?.classList.add('active');
-  localStorage.setItem('mf_aba', tab);
+  // Não salva 'orcamento' — ao recarregar vai para kanban
+  if (tab !== 'orcamento') localStorage.setItem('mf_aba', tab);
   // Fecha sidebar após navegação
   const sb = document.getElementById('sidebar');
   const bd = document.getElementById('sidebar-backdrop');
@@ -4046,10 +4047,15 @@ function iniciarApp() {
       }
     }
     ativarSessao(sessaoSalva);
-    var abaSalva = localStorage.getItem('mf_aba');
-    if (abaSalva) {
-      setTimeout(function() { showTab(abaSalva); }, 200);
-    }
+    var abaSalva = localStorage.getItem('mf_aba') || 'kanban';
+    setTimeout(function() {
+      // Garante que o painel de orçamento está fechado
+      var tabsEl = document.querySelector('.tabs');
+      if (tabsEl) tabsEl.style.display = '';
+      var orcPanel = document.getElementById('panel-orcamento-pedido');
+      if (orcPanel) orcPanel.classList.remove('active');
+      showTab(abaSalva);
+    }, 200);
     return;
   }
 

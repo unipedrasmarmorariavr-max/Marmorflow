@@ -13044,45 +13044,36 @@ async function abrirTelaOrcamentoPedido(id) {
   const order = orders.find(o => o.id === id);
   if (!order) return;
   pedidoOrcAtual = id;
-  localStorage.setItem('mf_orc_aberto', id); // salva para restaurar após reload
-
-  // Chave estável baseada só no ID do pedido (MRM-XXX já é único por si só) —
-  // NÃO usa mais timestamp/created_at, que era frágil e podia gerar uma chave
-  // diferente a cada abertura, fazendo o sistema "perder" o orçamento salvo
-  // (e até apagá-lo, achando que era lixo de uma chave antiga).
+  localStorage.setItem('mf_orc_aberto', id);
   const orcKey = 'ORC_' + id;
 
-  let orcs = getOrcamentos();
-  console.log('Orçamentos no localStorage:', orcs.length, orcs.map(o=>o.pedidoId));
-
-  // Busca orçamento salvo para este pedido
-  let orc = orcs.find(o => o.pedidoId === id) || null;
-  console.log('Orçamento encontrado no localStorage:', orc ? 'SIM' : 'NÃO');
-
-  // Se não achou no localStorage, tenta carregar do Supabase
-  if (!orc) {
-    console.log('Buscando no Supabase para pedido_id:', id);
-    try {
-      const { data, error } = await getSB().from('orcamentos')
-        .select('dados')
-        .eq('pedido_id', id)
-        .maybeSingle();
-      console.log('Supabase resultado:', data, error);
-      if (data && data.dados) {
-        orc = typeof data.dados === 'string' ? JSON.parse(data.dados) : data.dados;
-        console.log('Orçamento carregado do Supabase:', orc ? 'SIM' : 'NÃO');
-        if (orc) {
-          orcs = getOrcamentos();
-          const existing = orcs.findIndex(o => o.pedidoId === id);
-          if (existing >= 0) orcs[existing] = orc;
-          else orcs.unshift(orc);
-          salvarOrcamentos(orcs);
-        }
+  // Busca direto do Supabase para garantir versão mais recente
+  let orc = null;
+  try {
+    const { data } = await getSB().from('orcamentos')
+      .select('dados')
+      .eq('pedido_id', id)
+      .maybeSingle();
+    if (data && data.dados) {
+      orc = typeof data.dados === 'string' ? JSON.parse(data.dados) : data.dados;
+      if (orc) {
+        const orcsLocal = getOrcamentos();
+        const idx = orcsLocal.findIndex(o => o.pedidoId === id);
+        if (idx >= 0) orcsLocal[idx] = orc;
+        else orcsLocal.unshift(orc);
+        salvarOrcamentos(orcsLocal);
       }
-    } catch(e) {
-      console.warn('Erro ao buscar orçamento do Supabase:', e);
     }
+  } catch(e) {
+    console.warn('Erro Supabase, usando localStorage:', e);
   }
+
+  // Fallback: localStorage
+  if (!orc) {
+    const orcsLocal = getOrcamentos();
+    orc = orcsLocal.find(o => o.pedidoId === id) || null;
+  }
+
 
   if (!orc) {
     // Novo orçamento — começa do zero

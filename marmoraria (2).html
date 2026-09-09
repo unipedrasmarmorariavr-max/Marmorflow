@@ -12852,6 +12852,7 @@ function renderItemOrcamento(item, idx, pedras, cfg) {
       `}
       <div class="form-group"><label class="form-label">Tipo de Entrega</label>
         <select class="form-select" onchange="mudarTipoEntregaItem(orcamentoAtual.itens[${idx}], this.value, null)">
+          <option value="" ${!item.tipoEntrega?'selected':''}>Selecione...</option>
           <option value="instalacao" ${item.tipoEntrega==='instalacao'?'selected':''}>Com Instalação</option>
           <option value="entrega" ${item.tipoEntrega==='entrega'?'selected':''}>Só Entrega</option>
           <option value="retirada" ${item.tipoEntrega==='retirada'?'selected':''}>Retirada</option>
@@ -14272,7 +14273,7 @@ function adicionarPecaItem(idx, orderId) {
   var iMed = document.createElement('input');
   iMed.className = 'form-input';
   iMed.style.cssText = 'padding:5px 8px;font-variant-numeric:tabular-nums;font-weight:700;font-size:12px;min-width:0;';
-  iMed.placeholder = '1,20x0,60';
+  iMed.placeholder = '';
   iMed.onfocus = function(){ this.select(); };
   iMed.oninput = (function(i){ return function(){
     orcamentoAtual.itens[idx].pecas[i].medidas = this.value;

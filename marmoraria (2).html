@@ -1902,6 +1902,7 @@ function showTab(tab, addHistory = true) {
   // Update sidebar active state
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
   document.getElementById('nav-'+tab)?.classList.add('active');
+  localStorage.setItem('mf_aba', tab);
   // Fecha sidebar após navegação
   const sb = document.getElementById('sidebar');
   const bd = document.getElementById('sidebar-backdrop');
@@ -4026,8 +4027,33 @@ function iniciarApp() {
     carregarConfigsDoSupabase();
   }
   // Restaura sessão salva (evita login ao recarregar)
-  // Sempre mostra tela de login — não restaura sessão automaticamente
-  // Isso garante que cada funcionário escolhe seu perfil ao abrir
+  // sessionStorage dura só enquanto a aba está aberta
+  // Se tem '_reloaded' = é um F5/Ctrl+Shift+R → restaura sessão
+  // Se não tem = é acesso novo (link, nova aba) → mostra login
+  var isReload = sessionStorage.getItem('mf_loaded');
+  sessionStorage.setItem('mf_loaded', '1');
+
+  var sessaoSalva = localStorage.getItem('mf_sessao');
+  if (isReload && sessaoSalva && PROFILES[sessaoSalva]) {
+    // É reload — mantém na mesma página
+    if (sessaoSalva === 'acabador') {
+      var nomeAcabador = localStorage.getItem('mf_acabador_nome');
+      if (!nomeAcabador) {
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('app').style.display = 'none';
+        ativarSessao('acabador');
+        return;
+      }
+    }
+    ativarSessao(sessaoSalva);
+    var abaSalva = localStorage.getItem('mf_aba');
+    if (abaSalva) {
+      setTimeout(function() { showTab(abaSalva); }, 200);
+    }
+    return;
+  }
+
+  // Acesso novo — mostra tela de login
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
   var pinEl = document.getElementById('pin-input');

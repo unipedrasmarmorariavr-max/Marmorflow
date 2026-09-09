@@ -13151,6 +13151,7 @@ async function abrirTelaOrcamentoPedido(id) {
   document.querySelector('.tabs').style.display = 'none';
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-orcamento-pedido').classList.add('active');
+  console.log('Renderizando orçamento:', orcamentoAtual.id, 'itens:', orcamentoAtual.itens?.length);
   renderTelaOrcamentoPedido(order);
   } catch(err) {
     console.error('Erro ao abrir orçamento:', err);
@@ -13224,9 +13225,10 @@ function fecharTelaOrcamentoPedido() {
 
 function renderTelaOrcamentoPedido(order) {
   const el = document.getElementById('orcamento-pedido-content');
-  if (!el) return;
+  if (!el) { console.error('orcamento-pedido-content não encontrado!'); return; }
   const cfg = getConfigOrc();
   const pedras = getPedrasCadastradas();
+  console.log('renderTelaOrc - pedras:', pedras.length, 'itens:', orcamentoAtual?.itens?.length);
   const orc = orcamentoAtual;
   const { custoHoraEmpresa } = calcularCustoHora();
 

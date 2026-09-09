@@ -13715,8 +13715,9 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
           if (isAutoPessoas) {
             const tipoEnt = item.tipoEntrega || '';
             let defaultPessoas;
-            if (tipoEnt === 'retirada') defaultPessoas = 0;
-            else if (tipoEnt === 'entrega') defaultPessoas = cfg.pessoasEntrega||1;
+            if (!tipoEnt) defaultPessoas = '';          // sem tipo = vazio
+            else if (tipoEnt === 'retirada') defaultPessoas = 0;
+            else if (tipoEnt === 'entrega') defaultPessoas = 1;
             else defaultPessoas = cfg.pessoasInstalacao||2; // instalacao
             currentVal = (item.nPessoasInstal !== null && item.nPessoasInstal !== undefined && item.nPessoasInstal !== '') ? parseInt(item.nPessoasInstal) : defaultPessoas;
           }

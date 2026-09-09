@@ -13615,7 +13615,6 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
           <input class="form-input" style="padding:7px 10px;" value="${item.obsItem||''}"
             oninput="orcamentoAtual.itens[${idx}].obsItem=this.value"></div>
       </div>
-      ${calc ? `<div style="background:#1e5f74;color:white;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:700;margin-top:16px;">${fmt(calc.precoFinal)}</div>` : ''}
       ${idx>0?`<button onclick="removerItemTelaOrc(${idx},'${orderId}')" style="background:#dc3545;border:none;color:white;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;">🗑 ITEM</button>`:''}
     </div>
 

@@ -12027,6 +12027,18 @@ async function carregarOrcamentosDoSupabase() {
   } catch(e) { console.error('Erro ao carregar orçamentos:', e); }
 }
 
+// ─── CÁLCULO DO CUSTO/HORA ───────────────────────────────────────────────────
+function calcularCustoHora() {
+  const cfg = getConfigOrc();
+  const horasMes = cfg.horasProdMes || 176;
+  const horasTotaisMes = horasMes * (cfg.qtdFuncionarios || 5);
+  const depreciacaoMensal = (cfg.valorMaquinas * (1 - (cfg.valorResidual||70)/100)) / ((cfg.anosDepreciacao||10) * 12);
+  const custoTotal = (cfg.custoEstrutura || 0) + depreciacaoMensal;
+  const custoHoraEmpresa = custoTotal / horasTotaisMes;
+  const custoHoraHomem = custoTotal / horasMes;
+  return { custoHoraEmpresa, custoHoraHomem, custoEstrutura: custoTotal, horasMes };
+}
+
 // ─── VALOR DE VENDA MANUAL → RECALCULA MARGEM AUTOMATICAMENTE ────────────────
 // A fórmula tem os Insumos (%) calculados sobre o preço já com margem embutida,
 // então "voltar" de um valor de venda para a margem exige resolver uma equação

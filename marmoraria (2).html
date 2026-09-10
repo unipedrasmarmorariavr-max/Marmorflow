@@ -13047,10 +13047,18 @@ let pedidoOrcAtual = null;
 
 async function diagnosticarOrcamentos() {
   try {
-    const { data, error } = await getSB().from('orcamentos').select('id,pedido_id,cliente,updated_at').order('updated_at', {ascending:false}).limit(10);
-    if (error) { alert('Erro: ' + error.message); return; }
-    const linhas = data.map(r => r.pedido_id + ' | ' + r.cliente + ' | ' + (r.updated_at||'').substring(0,10)).join('\n');
-    alert('Últimos 10 orçamentos no Supabase:\n\n' + linhas);
+    // Busca específica pelos pedidos problemáticos
+    const ids = ['MRM-092', 'MRM-093'];
+    let msg = 'Diagnóstico MRM-092 e MRM-093:\n\n';
+    for (const id of ids) {
+      const { data } = await getSB().from('orcamentos').select('id,pedido_id,cliente,dados').eq('pedido_id', id);
+      msg += id + ': ' + (data?.length ? data.length + ' registro(s) - dados: ' + (data[0]?.dados ? 'OK' : 'NULL') : 'NÃO ENCONTRADO') + '\n';
+      // Busca no localStorage
+      const orcs = getOrcamentos();
+      const local = orcs.find(o => o.pedidoId === id);
+      msg += '  localStorage: ' + (local ? 'encontrado - itens: ' + local.itens?.length : 'não encontrado') + '\n\n';
+    }
+    alert(msg);
   } catch(e) { alert('Erro: ' + e.message); }
 }
 
@@ -13062,25 +13070,25 @@ async function abrirTelaOrcamentoPedido(id) {
   localStorage.setItem('mf_orc_aberto', id);
   const orcKey = 'ORC_' + id;
 
-  // Busca direto do Supabase para garantir versão mais recente
+  // Busca do Supabase — lista todos e filtra pelo pedido_id
   let orc = null;
   try {
     const { data } = await getSB().from('orcamentos')
-      .select('id,pedido_id,dados')
+      .select('*')
       .eq('pedido_id', id)
-      .maybeSingle();
-    console.log('Supabase orcamento raw:', data);
-    if (data) {
-      if (data.dados) {
-        orc = typeof data.dados === 'string' ? JSON.parse(data.dados) : data.dados;
+      .limit(1);
+    console.log('Supabase query resultado:', JSON.stringify(data).substring(0,200));
+    if (data && data.length > 0) {
+      const row = data[0];
+      orc = row.dados ? (typeof row.dados === 'string' ? JSON.parse(row.dados) : row.dados) : null;
+      if (!orc) {
+        // tenta outros campos
+        orc = row;
+        delete orc.dados;
       }
-      // Se dados veio null mas tem registro, cria estrutura mínima
-      if (!orc && data.id) {
-        console.warn('dados está null no Supabase para pedido:', id);
-      }
+      if (orc && !orc.pedidoId) orc.pedidoId = id;
     }
     if (orc) {
-      if (!orc.pedidoId) orc.pedidoId = id;
       const orcsLocal = getOrcamentos();
       const idx2 = orcsLocal.findIndex(o => o.pedidoId === id);
       if (idx2 >= 0) orcsLocal[idx2] = orc;
@@ -13088,14 +13096,14 @@ async function abrirTelaOrcamentoPedido(id) {
       salvarOrcamentos(orcsLocal);
     }
   } catch(e) {
-    console.warn('Erro Supabase, usando localStorage:', e);
+    console.warn('Erro Supabase:', e.message);
   }
 
   // Fallback: localStorage
   if (!orc) {
     const orcsLocal = getOrcamentos();
     orc = orcsLocal.find(o => o.pedidoId === id) || null;
-    console.log('Fallback localStorage:', orc ? 'encontrado' : 'não encontrado');
+    console.log('localStorage:', orc ? 'encontrado itens:' + orc.itens?.length : 'não encontrado');
   }
 
 

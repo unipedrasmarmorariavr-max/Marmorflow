@@ -13126,8 +13126,7 @@ async function abrirTelaOrcamentoPedido(id) {
         apoioMovel: false, calc: null
       }]
     };
-    orcs.push(orc);
-    salvarOrcamentos(orcs);
+    salvarOrcamento(orc);
   }
   orcamentoAtual = JSON.parse(JSON.stringify(orc));
 

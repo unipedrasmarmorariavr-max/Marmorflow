@@ -11968,46 +11968,48 @@ function inicializarPedrasPadrao() {
 let orcamentos = [];
 let orcamentoAtual = null;
 
+// ─── ORÇAMENTOS — Supabase é a fonte da verdade ─────────────────────────────
 function getOrcamentos() {
   try {
     const s = localStorage.getItem('orcamentos_marmorflow');
-    const orcs = s ? JSON.parse(s) : [];
-    // Filtra orçamentos órfãos — só mantém se o pedido ainda existe
-    if (orders && orders.length > 0) {
-      const idsValidos = new Set(orders.map(o => o.id));
-      return orcs.filter(o => !o.pedidoId || idsValidos.has(o.pedidoId));
-    }
-    return orcs;
+    return s ? JSON.parse(s) : [];
   } catch(e) { return []; }
 }
+
+function _atualizarCacheLocal(orcs) {
+  try { localStorage.setItem('orcamentos_marmorflow', JSON.stringify(orcs)); } catch(e) {}
+}
+
+async function salvarOrcamento(orc) {
+  if (!orc || !orc.id) return false;
+  const row = {
+    id: orc.id,
+    pedido_id: orc.pedidoId || null,
+    pedido_key: orc.pedidoKey || null,
+    cliente: orc.cliente || '',
+    status: orc.status || '',
+    dados: orc,
+    updated_at: new Date().toISOString()
+  };
+  try {
+    const { error } = await getSB().from('orcamentos').upsert(row, { onConflict: 'id' });
+    if (error) { console.error('Erro ao salvar orçamento:', error.message); return false; }
+    const orcs = getOrcamentos();
+    const idx = orcs.findIndex(o => o.id === orc.id);
+    if (idx >= 0) orcs[idx] = orc; else orcs.unshift(orc);
+    _atualizarCacheLocal(orcs);
+    return true;
+  } catch(e) { console.error('Erro ao salvar orçamento:', e); return false; }
+}
+
 function salvarOrcamentos(orcs) {
-  if (orcs.length > 50) orcs = orcs.slice(-50);
-  localStorage.setItem('orcamentos_marmorflow', JSON.stringify(orcs));
-  // Sincroniza com Supabase em background
-  sincronizarOrcamentosSupabase(orcs);
+  _atualizarCacheLocal(orcs);
+  orcs.forEach(orc => { if (orc.id) salvarOrcamento(orc); });
 }
 
 let _syncOrcTimeout = null;
 function sincronizarOrcamentosSupabase(orcs) {
-  clearTimeout(_syncOrcTimeout);
-  _syncOrcTimeout = setTimeout(async () => {
-    try {
-      for (const orc of orcs) {
-        if (!orc.id) continue;
-        const row = {
-          id: orc.id,
-          pedido_id: orc.pedidoId || null,
-          pedido_key: orc.pedidoKey || null,
-          cliente: orc.cliente || '',
-          status: orc.status || '',
-          dados: orc,
-          updated_at: new Date().toISOString()
-        };
-        const { error } = await getSB().from('orcamentos').upsert(row, { onConflict: 'id' });
-        if (error) console.error('Erro ao salvar orçamento', orc.id, ':', error.message);
-      }
-    } catch(e) { console.error('Erro ao sincronizar orçamentos:', e); }
-  }, 1000);
+  salvarOrcamentos(orcs);
 }
 
 async function carregarOrcamentosDoSupabase() {
@@ -12016,35 +12018,13 @@ async function carregarOrcamentosDoSupabase() {
     if (error || !data || !data.length) return;
     const orcs = data.map(r => {
       const orc = r.dados || {};
-      // Garante que pedidoId está preenchido (pode ter sido salvo só em pedido_id)
       if (!orc.pedidoId && r.pedido_id) orc.pedidoId = r.pedido_id;
       if (!orc.id && r.id) orc.id = r.id;
       return orc;
-    }).filter(o => o.id); // remove entradas vazias
-    localStorage.setItem('orcamentos_marmorflow', JSON.stringify(orcs));
+    }).filter(o => o.id);
+    _atualizarCacheLocal(orcs);
     console.log('Orçamentos carregados do Supabase:', orcs.length);
   } catch(e) { console.error('Erro ao carregar orçamentos:', e); }
-}
-
-// ─── CÁLCULO DO ORÇAMENTO ────────────────────────────────────────────────
-function calcularCustoHora() {
-  const cfg = getConfigOrc();
-  const horasMes = cfg.horasProdMes; // horas produtivas por mês (ex: 176h)
-  const horasTotaisMes = horasMes * cfg.qtdFuncionarios; // total de horas de todos os funcionários
-  // Depreciação mensal
-  const depreciacaoMensal = (cfg.valorMaquinas * (1 - cfg.valorResidual/100)) / (cfg.anosDepreciacao * 12);
-  const custoTotal = cfg.custoEstrutura + depreciacaoMensal;
-  // Custo Hora Empresa = custo total ÷ total de horas de todos os funcionários
-  const custoHoraEmpresa = custoTotal / horasTotaisMes;
-  // Custo Hora Homem = custo hora empresa × qtd funcionários (= custo por hora por funcionário)
-  // Na prática: operações usam custo hora homem que já embute o custo da empresa por operário
-  const custoHoraHomem = custoTotal / horasMes; // = custo hora empresa × nFuncionarios
-  return {
-    custoHoraEmpresa,   // R$ 62,66 — usado nas operações de produção
-    custoHoraHomem,     // R$ 313,28 — custo total da empresa por hora produtiva
-    custoEstrutura: custoTotal,
-    horasMes
-  };
 }
 
 // ─── VALOR DE VENDA MANUAL → RECALCULA MARGEM AUTOMATICAMENTE ────────────────
@@ -14107,11 +14087,14 @@ function removerItemTelaOrc(idx, orderId) {
 
 async function salvarOrcamentoPedido(silencioso) {
   if (!orcamentoAtual) return;
-  let orcs = getOrcamentos();
+  // Atualiza cache local imediatamente
+  const orcs = getOrcamentos();
   const idx = orcs.findIndex(o => o.id === orcamentoAtual.id);
-  if (idx >= 0) orcs[idx] = orcamentoAtual;
-  else orcs.unshift(orcamentoAtual);
-  salvarOrcamentos(orcs);
+  if (idx >= 0) orcs[idx] = orcamentoAtual; else orcs.unshift(orcamentoAtual);
+  _atualizarCacheLocal(orcs);
+  // Salva no Supabase e aguarda confirmação
+  const ok = await salvarOrcamento(orcamentoAtual);
+  if (!ok && !silencioso) { showNotif('Erro ao salvar no banco!', 'error'); return; }
 
   // Salva tempos previstos direto no pedido
   if (orcamentoAtual.pedidoId && orcamentoAtual.itens) {

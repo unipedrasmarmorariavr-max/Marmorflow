@@ -13047,16 +13047,19 @@ let pedidoOrcAtual = null;
 
 async function diagnosticarOrcamentos() {
   try {
-    // Busca específica pelos pedidos problemáticos
     const ids = ['MRM-092', 'MRM-093'];
-    let msg = 'Diagnóstico MRM-092 e MRM-093:\n\n';
+    let msg = 'Diagnóstico:\n\n';
     for (const id of ids) {
-      const { data } = await getSB().from('orcamentos').select('id,pedido_id,cliente,dados').eq('pedido_id', id);
-      msg += id + ': ' + (data?.length ? data.length + ' registro(s) - dados: ' + (data[0]?.dados ? 'OK' : 'NULL') : 'NÃO ENCONTRADO') + '\n';
-      // Busca no localStorage
       const orcs = getOrcamentos();
-      const local = orcs.find(o => o.pedidoId === id);
-      msg += '  localStorage: ' + (local ? 'encontrado - itens: ' + local.itens?.length : 'não encontrado') + '\n\n';
+      const orc = orcs.find(o => o.pedidoId === id);
+      if (orc && orc.itens && orc.itens[0]) {
+        const it = orc.itens[0];
+        msg += id + ':\n';
+        msg += '  pedraId: ' + (it.pedraId||'vazio') + '\n';
+        msg += '  pecas: ' + JSON.stringify(it.pecas) + '\n';
+        msg += '  m2Override: ' + (it.m2Override||0) + '\n';
+        msg += '  tipoEntrega: ' + (it.tipoEntrega||'vazio') + '\n\n';
+      }
     }
     alert(msg);
   } catch(e) { alert('Erro: ' + e.message); }

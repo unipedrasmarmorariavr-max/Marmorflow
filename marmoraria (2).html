@@ -12003,7 +12003,8 @@ function sincronizarOrcamentosSupabase(orcs) {
           dados: orc,
           updated_at: new Date().toISOString()
         };
-        await getSB().from('orcamentos').upsert(row, { onConflict: 'id' });
+        const { error } = await getSB().from('orcamentos').upsert(row, { onConflict: 'id' });
+        if (error) console.error('Erro ao salvar orçamento', orc.id, ':', error.message);
       }
     } catch(e) { console.error('Erro ao sincronizar orçamentos:', e); }
   }, 1000);
@@ -14129,16 +14130,18 @@ async function salvarOrcamentoPedido(silencioso) {
                  +(parseFloat(c.tBoleadoDuplo)||0)+(parseFloat(c.tChanfroAlongado)||0)
                  +(parseFloat(c.tColagem)||0)+(parseFloat(c.horasAdicionais)||0);
     });
+    // Tempos de produção — só salva se as colunas existirem no banco
+    // (desabilitado até criar as colunas no Supabase)
+    /*
     if (tSerrador > 0 || tAcabador > 0) {
-      // Salva em segundos no pedido
       getSB().from('pedidos').update({
         tempo_serrador: Math.round(tSerrador * 3600),
         tempo_acabador: Math.round(tAcabador * 3600)
       }).eq('id', orcamentoAtual.pedidoId).then(function(){});
-      // Atualiza em memória
       var ordRef = orders ? orders.find(function(o){return o.id===orcamentoAtual.pedidoId;}) : null;
       if (ordRef) { ordRef.tempo_serrador = Math.round(tSerrador*3600); ordRef.tempo_acabador = Math.round(tAcabador*3600); }
     }
+    */
   }
 
   // Se tiver valor negociado na calculadora, usa ele; senão usa o calculado

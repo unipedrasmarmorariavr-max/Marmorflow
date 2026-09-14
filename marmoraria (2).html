@@ -12064,34 +12064,41 @@ function resolverMargemPorValor(valorAlvo, custosOp, insumoFrac) {
 
 function ajustarValorVendaManual(idx, orderId, valorDigitado) {
   const item = orcamentoAtual?.itens?.[idx];
-  if (!item || !item.calc) { recalcularTelaOrc(orderId); return; }
+  if (!item) return;
 
-  // Aceita formatos "R$ 3.121,35", "3121,35" ou "3121.35"
-  let s = String(valorDigitado).replace('R$', '').trim();
-  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  // Parse valor — aceita "R$ 3.121,35", "3121,35" ou "3121.35"
+  let s = String(valorDigitado).replace('R$','').replace(/\s/g,'');
+  if (s === '—' || s === '') { recalcularTelaOrc(orderId); return; }
+  if (s.includes(',')) s = s.replace(/\./g,'').replace(',','.');
   const valorNum = parseFloat(s) || 0;
-
   if (valorNum <= 0) { recalcularTelaOrc(orderId); return; }
+
+  // Se não tem calc ainda, só salva o valor e recalcula
+  if (!item.calc) {
+    item.margemOverride = 30; // margem padrão até calcular
+    recalcularTelaOrc(orderId);
+    return;
+  }
 
   const custosOp = item.calc.custoTotal - item.calc.custoInsumos;
   const cfg = getConfigOrc();
   const insumoFrac = (cfg.custoInsumo || 5) / 100;
 
+  // Calcula nova margem a partir do valor desejado
   const novaMargem = resolverMargemPorValor(valorNum, custosOp, insumoFrac);
   item.margemOverride = Math.round(novaMargem * 1000) / 1000;
 
-  // Recalcula para atualizar calc.precoFinal do item
+  // Recalcula tudo
   recalcularTelaOrc(orderId);
 
-  // Depois do recalculo, soma todos os itens e atualiza valorNegociado
+  // Atualiza valorNegociado no cabeçalho
   setTimeout(function() {
     const novoTotal = orcamentoAtual.itens.reduce(function(s,it){ return s + (it.calc?.precoFinal||0); }, 0);
     orcamentoAtual.valorNegociado = novoTotal;
     orcamentoAtual.usandoValorNegociado = true;
-    // Atualiza cabeçalho
     const elHdrValor = document.getElementById('hdr-valor');
     if (elHdrValor) elHdrValor.textContent = fmt(novoTotal);
-  }, 100);
+  }, 150);
 }
 
 function calcularItem(item, pedra, cfg, propArea) {

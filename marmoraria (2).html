@@ -12083,13 +12083,13 @@ function ajustarValorVendaManual(idx, orderId, valorDigitado) {
   const cfg = getConfigOrc();
   const insumoFrac = (cfg.custoInsumo || 5) / 100;
   const novaMargem = resolverMargemPorValor(valorNum, item.calc.custoTotal - item.calc.custoInsumos, insumoFrac);
-  item.margemOverride = Math.round(novaMargem * 1000) / 1000;
+  item.margemOverride = Math.round(novaMargem * 10) / 10; // percentual ex: 27.0
 
   // Atualiza campos visuais sem recriar o DOM
   const elValor = document.getElementById('mat-valor-' + idx);
   if (elValor && document.activeElement !== elValor) elValor.value = fmt(valorNum);
   const elMargem = document.getElementById('mat-margem-' + idx);
-  if (elMargem) elMargem.value = (item.margemOverride * 100).toFixed(1);
+  if (elMargem) elMargem.value = novaMargem.toFixed(1);
   const elLLH = document.getElementById('mat-llh-' + idx);
   if (elLLH && item.calc.tempoProdInterno > 0) elLLH.value = fmt(item.calc.lucroLiquido / item.calc.tempoProdInterno);
 

@@ -2632,6 +2632,10 @@ function createCard(o) {
     menuItens += `<div class="card-menu-item" onclick="definirResponsavelInstalacao('${o.id}','${o.dataentrega||''}','pedido');event.stopPropagation()">🔧 ${o.responsavel_instalacao || 'Definir Responsável'}</div>`;
   }
   if (showFechar) menuItens += `<div class="card-menu-item" onclick="abrirFecharPedido('${o.id}');event.stopPropagation()">💼 Dados Comerciais</div>`;
+  // Ver orçamento — disponível em todos os estágios quando há orçamento salvo
+  if (currentUser === 'dono' || currentUser === 'comercial') {
+    menuItens += `<div class="card-menu-item" onclick="abrirTelaOrcamentoPedido('${o.id}');event.stopPropagation()">📋 Ver Orçamento</div>`;
+  }
   if (p.canEdit && o.stage === 'medicao') menuItens += `<div class="card-menu-item" onclick="openEditMedidor('${o.id}');event.stopPropagation()">✏️ Editar</div>`;
   if (_canDrag) menuItens += `<div class="card-menu-item" onclick="abrirMenuMoverPedido('${o.id}','${o.stage}');event.stopPropagation()">➡️ Mover para...</div>`;
   if (p.canDelete) menuItens += `<div class="card-menu-item danger" onclick="deleteOrder('${o.id}');event.stopPropagation()">🗑 Excluir</div>`;

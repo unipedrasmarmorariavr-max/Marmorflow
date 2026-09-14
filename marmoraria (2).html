@@ -12066,39 +12066,39 @@ function ajustarValorVendaManual(idx, orderId, valorDigitado) {
   const item = orcamentoAtual?.itens?.[idx];
   if (!item) return;
 
-  // Parse valor — aceita "R$ 3.121,35", "3121,35" ou "3121.35"
+  // Parse valor
   let s = String(valorDigitado).replace('R$','').replace(/\s/g,'');
   if (s === '—' || s === '') { recalcularTelaOrc(orderId); return; }
   if (s.includes(',')) s = s.replace(/\./g,'').replace(',','.');
   const valorNum = parseFloat(s) || 0;
   if (valorNum <= 0) { recalcularTelaOrc(orderId); return; }
 
-  // Se não tem calc ainda, só salva o valor e recalcula
-  if (!item.calc) {
-    item.margemOverride = 30; // margem padrão até calcular
-    recalcularTelaOrc(orderId);
-    return;
-  }
+  if (!item.calc) { recalcularTelaOrc(orderId); return; }
 
-  const custosOp = item.calc.custoTotal - item.calc.custoInsumos;
+  // Salva o valor final diretamente — não recalcula a partir da margem
+  item.calc.precoFinal = valorNum;
+  item.calc.lucroLiquido = valorNum - item.calc.custoTotal;
+
+  // Calcula margem real resultante (só para mostrar)
   const cfg = getConfigOrc();
   const insumoFrac = (cfg.custoInsumo || 5) / 100;
-
-  // Calcula nova margem a partir do valor desejado
-  const novaMargem = resolverMargemPorValor(valorNum, custosOp, insumoFrac);
+  const novaMargem = resolverMargemPorValor(valorNum, item.calc.custoTotal - item.calc.custoInsumos, insumoFrac);
   item.margemOverride = Math.round(novaMargem * 1000) / 1000;
 
-  // Recalcula tudo
-  recalcularTelaOrc(orderId);
+  // Atualiza campos visuais sem recriar o DOM
+  const elValor = document.getElementById('mat-valor-' + idx);
+  if (elValor && document.activeElement !== elValor) elValor.value = fmt(valorNum);
+  const elMargem = document.getElementById('mat-margem-' + idx);
+  if (elMargem) elMargem.value = (item.margemOverride * 100).toFixed(1);
+  const elLLH = document.getElementById('mat-llh-' + idx);
+  if (elLLH && item.calc.tempoProdInterno > 0) elLLH.value = fmt(item.calc.lucroLiquido / item.calc.tempoProdInterno);
 
-  // Atualiza valorNegociado no cabeçalho
-  setTimeout(function() {
-    const novoTotal = orcamentoAtual.itens.reduce(function(s,it){ return s + (it.calc?.precoFinal||0); }, 0);
-    orcamentoAtual.valorNegociado = novoTotal;
-    orcamentoAtual.usandoValorNegociado = true;
-    const elHdrValor = document.getElementById('hdr-valor');
-    if (elHdrValor) elHdrValor.textContent = fmt(novoTotal);
-  }, 150);
+  // Atualiza cabeçalho
+  const novoTotal = orcamentoAtual.itens.reduce(function(s,it){ return s + (it.calc?.precoFinal||0); }, 0);
+  orcamentoAtual.valorNegociado = novoTotal;
+  orcamentoAtual.usandoValorNegociado = true;
+  const elHdrValor = document.getElementById('hdr-valor');
+  if (elHdrValor) elHdrValor.textContent = fmt(novoTotal);
 }
 
 function calcularItem(item, pedra, cfg, propArea) {

@@ -6030,6 +6030,19 @@ function selecionarTodosReceber() {
   chks.forEach(c => c.checked = !todosChecked);
 }
 
+function filtrarReceberPedidos(valor) {
+  const termo = (valor || '').toLowerCase().trim();
+  const cards = document.querySelectorAll('.receber-card');
+  let visiveis = 0;
+  cards.forEach(card => {
+    const combina = !termo || (card.dataset.busca || '').includes(termo);
+    card.style.display = combina ? '' : 'none';
+    if (combina) visiveis++;
+  });
+  const avisoVazio = document.getElementById('receber-nenhum-resultado');
+  if (avisoVazio) avisoVazio.style.display = (termo && visiveis === 0) ? 'block' : 'none';
+}
+
 async function removerSelecionadosReceber() {
   const selecionados = [...document.querySelectorAll('.chk-receber:checked')].map(c => c.dataset.id);
   if (selecionados.length === 0) { showNotif('Selecione pelo menos um pedido', 'error'); return; }
@@ -8582,6 +8595,12 @@ async function renderFinanceiro() {
             <button onclick="removerSelecionadosReceber()" style="background:#FDEAEA;color:#B85A4A;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">🗑 Remover</button>
           </div>
         </div>
+        <div style="padding:10px 16px;border-bottom:1px solid var(--cream-dark);background:#fdfaf3;">
+          <input id="receber-busca" type="text" placeholder="🔍 Buscar por cliente ou nº do pedido..."
+            oninput="filtrarReceberPedidos(this.value)"
+            style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;">
+        </div>
+        <div id="receber-nenhum-resultado" style="display:none;padding:30px;text-align:center;color:#888;">Nenhum pedido encontrado para essa busca</div>
         ${aReceber.length === 0 ? `<div style="padding:30px;text-align:center;color:#888;">Nenhum pedido aguardando recebimento</div>` :
         aReceber.map(o => {
           const valor = parseValor(o);
@@ -8594,7 +8613,7 @@ async function renderFinanceiro() {
           const statusCor = totalRecebido===0?'#8B6914':saldoPedido<=0?'#2E7D32':'#006382';
           const statusLabel = totalRecebido===0?'Pendente':saldoPedido<=0?'Recebido ✅':'Parcial';
           return `
-          <div style="padding:16px 20px;border-bottom:1px solid var(--cream-dark);">
+          <div class="receber-card" data-busca="${(o.cliente||'').toLowerCase()} ${(o.id||'').toLowerCase()}" style="padding:16px 20px;border-bottom:1px solid var(--cream-dark);">
             <!-- Linha 1: Cliente + valor + status -->
             <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
               <input type="checkbox" class="chk-receber" data-id="${o.id}" style="width:18px;height:18px;cursor:pointer;accent-color:var(--gold);flex-shrink:0;margin-top:3px;">

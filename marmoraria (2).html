@@ -6098,9 +6098,9 @@ async function apagarSelecionadasContas() {
   renderFinanceiro();
 }
 
-function editarTransacao(id) {
-  const t = transacoes.find(x => x.id === id);
-  if (!t) return;
+async function editarTransacao(id) {
+  const { data: t, error } = await getSB().from('transacoes').select('*').eq('id', id).single();
+  if (error || !t) { showNotif('Erro ao carregar lançamento.', 'error'); return; }
 
   const bancos = getBancos();
   let modal = document.getElementById('modal-editar-transacao');

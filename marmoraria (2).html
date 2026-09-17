@@ -13203,11 +13203,14 @@ async function abrirTelaOrcamentoPedido(id) {
 
   // Busca do Supabase — lista todos e filtra pelo pedido_id
   let orc = null;
+  let supabaseRespondeu = false; // true = Supabase respondeu normalmente (achando ou não algo); só cai no fallback local se Supabase falhar de verdade
   try {
-    const { data } = await getSB().from('orcamentos')
+    const { data, error } = await getSB().from('orcamentos')
       .select('*')
       .eq('pedido_id', id)
       .limit(1);
+    if (error) throw error;
+    supabaseRespondeu = true;
     console.log('Supabase query resultado:', JSON.stringify(data).substring(0,200));
     if (data && data.length > 0) {
       const row = data[0];
@@ -13230,11 +13233,13 @@ async function abrirTelaOrcamentoPedido(id) {
     console.warn('Erro Supabase:', e.message);
   }
 
-  // Fallback: localStorage
-  if (!orc) {
+  // Fallback: localStorage — SÓ quando o Supabase realmente falhou (ex: sem internet).
+  // Se o Supabase respondeu e simplesmente não achou nada, o pedido é novo mesmo —
+  // usar uma cópia local antiga aqui causaria orçamentos novos puxando dados de pedidos antigos.
+  if (!orc && !supabaseRespondeu) {
     const orcsLocal = getOrcamentos();
     orc = orcsLocal.find(o => o.pedidoId === id) || null;
-    console.log('localStorage:', orc ? 'encontrado itens:' + orc.itens?.length : 'não encontrado');
+    console.log('localStorage (fallback offline):', orc ? 'encontrado itens:' + orc.itens?.length : 'não encontrado');
   }
 
 

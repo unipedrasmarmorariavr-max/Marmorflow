@@ -1309,7 +1309,17 @@ async function loadOrders(silencioso = false) {
   } catch(e) { _medicoes = []; }
 }
 async function nextId() {
-  // Usa os pedidos já carregados em memória — evita query extra ao Supabase
+  // Consulta direto no banco o maior número já usado — evita repetir um ID que já existe
+  // (a lista 'orders' em memória pode estar filtrada ou incompleta, causando colisão)
+  try {
+    const { data, error } = await getSB().from('pedidos').select('id');
+    if (!error && data && data.length) {
+      const nums = data.map(o=>parseInt((o.id||'').replace('MRM-',''))).filter(n=>!isNaN(n));
+      if (nums.length) return 'MRM-'+String(Math.max(...nums)+1).padStart(3,'0');
+    }
+  } catch(e) { console.warn('nextId: falha ao consultar Supabase, usando fallback em memória', e); }
+
+  // Fallback: usa os pedidos já carregados em memória (comportamento anterior)
   if (!orders||!orders.length) return 'MRM-001';
   const nums = orders.map(o=>parseInt((o.id||'').replace('MRM-',''))).filter(n=>!isNaN(n));
   return 'MRM-'+String((nums.length?Math.max(...nums):0)+1).padStart(3,'0');

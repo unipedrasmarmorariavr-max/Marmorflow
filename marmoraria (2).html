@@ -13317,12 +13317,22 @@ async function abrirTelaOrcamentoPedido(id) {
   }
 }
 
-function limparOrcamentoAtual() {
+async function limparOrcamentoAtual() {
   if (!pedidoOrcAtual) return;
   if (!confirm('Tem certeza? Todo o orçamento será apagado e você começará do zero.')) return;
 
   const order = orders.find(o => o.id === pedidoOrcAtual);
   if (!order) return;
+
+  showLoading('Limpando orçamento...');
+
+  // Apaga de vez qualquer registro antigo desse pedido no BANCO DE DADOS — não só localStorage.
+  // Isso evita que um registro antigo/errado continue lá e volte a aparecer ao reabrir.
+  try {
+    await getSB().from('orcamentos').delete().eq('pedido_id', pedidoOrcAtual);
+  } catch(e) {
+    console.warn('Erro ao apagar orçamento antigo no Supabase:', e.message);
+  }
 
   // Remove do localStorage (todos os orçamentos ligados a esse pedido)
   const orcKey = 'ORC_' + pedidoOrcAtual;
@@ -13365,6 +13375,10 @@ function limparOrcamentoAtual() {
       apoioMovel: false, calc: null
     }]
   };
+
+  // Salva o estado zerado no banco IMEDIATAMENTE — não deixa só na memória até um "Salvar" manual
+  await salvarOrcamento(orcamentoAtual);
+  hideLoading();
 
   renderTelaOrcamentoPedido(order);
   showNotif('Orçamento limpo! Começando do zero.', 'success');

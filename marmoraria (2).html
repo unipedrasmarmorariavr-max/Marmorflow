@@ -9475,40 +9475,44 @@ function montarParcelas(saldo) {
     listaWrap.style.display = 'none';
 
   } else if (tipo === 'entrada+antecipado') {
+    const antecipadoSugerido = (saldo - (parseFloat(document.getElementById('cond-entrada-val')?.value)||0));
     campos.innerHTML = `
       <div style="background:#fff8e7;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:12px;color:#8B6914;">
-        ⚡ Entrada registrada agora + parcelas antecipadas sem data definida
+        ⚡ Entrada registrada agora + o restante entra via antecipação bancária. Coloque só o valor único que efetivamente caiu na conta — não precisa detalhar parcela por parcela.
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div><label class="form-label">VALOR DA ENTRADA (R$)</label>
         <input class="form-input" type="number" id="cond-entrada-val" placeholder="Ex: 300" step="0.01"
-          style="font-size:15px;font-weight:700;" oninput="previewEntradaParcelas(window._condSaldo)"></div>
-        <div><label class="form-label">Nº PARCELAS ANTECIPADAS</label>
-        <input class="form-input" type="number" id="cond-n-parcelas" value="9" min="1" max="48"
-          style="font-size:15px;font-weight:700;" oninput="previewEntradaParcelas(window._condSaldo)"></div>
+          style="font-size:15px;font-weight:700;" oninput="previewEntradaAntecipado(window._condSaldo)"></div>
+        <div><label class="form-label">VALOR ANTECIPADO — restante (R$)</label>
+        <input class="form-input" type="number" id="cond-antecipado-val" step="0.01" value="${antecipadoSugerido.toFixed(2)}"
+          style="font-size:15px;font-weight:700;" oninput="this.dataset.editado='1';previewEntradaAntecipado(window._condSaldo)"></div>
       </div>
       <div id="cond-preview-ep" style="margin-top:8px;padding:8px 10px;background:#fff8e7;border-radius:8px;font-size:13px;color:#8B6914;font-weight:600;display:none;"></div>
       <button onclick="gerarLinhasEntradaAntecipado(window._condSaldo)"
         style="background:#8B6914;color:white;border:none;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;margin-top:10px;">
-        ✅ Gerar parcelas
+        ✅ Gerar
       </button>`;
     listaWrap.style.display = 'none';
 
   } else if (tipo === 'antecipado') {
     campos.innerHTML = `
       <div style="background:#fff8e7;border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;color:#8B6914;">
-        ⚡ Antecipado — pagamento sem data definida (ex: recebido antes da entrega via Pix/cartão)
+        ⚡ Antecipado — coloque só o valor único que caiu na conta após a antecipação do banco, sem detalhar parcela por parcela.
       </div>
-      <div><label class="form-label">Nº PARCELAS (opcional)</label>
-        <input class="form-input" type="number" id="cond-n-parcelas" value="1" min="1" max="48"
-          style="font-size:15px;font-weight:700;width:100px;" oninput="previewSoParcelado(window._condSaldo)">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div><label class="form-label">VALOR RECEBIDO (R$)</label>
+          <input class="form-input" type="number" id="cond-antecipado-total" step="0.01" value="${saldo.toFixed(2)}"
+            style="font-size:15px;font-weight:700;" oninput="previewAntecipadoTotal()"></div>
+        <div><label class="form-label">DATA <span style="color:#888;font-weight:400;">(opcional)</span></label>
+          <input class="form-input" type="date" id="cond-data-entrada" value="${fmtData(hoje)}"></div>
       </div>
       <div id="cond-preview-sp" style="margin-top:8px;padding:8px 10px;background:#fff8e7;border-radius:8px;font-size:13px;color:#8B6914;font-weight:600;"></div>
-      <button onclick="gerarLinhasSoParcelado(window._condSaldo)"
+      <button onclick="gerarLinhaAntecipadoUnico(window._condSaldo)"
         style="background:#8B6914;color:white;border:none;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;margin-top:10px;">
-        ✅ Gerar parcelas sem data
+        ✅ Gerar
       </button>`;
-    previewSoParcelado(saldo);
+    previewAntecipadoTotal();
     listaWrap.style.display = 'none';
 
   } else if (tipo === 'boleto1') {
@@ -9580,23 +9584,52 @@ function gerarLinhas5050(saldo) {
   document.getElementById('parc-lista-wrap').style.display = 'block';
 }
 
+function previewEntradaAntecipado(saldo) {
+  const entrada = parseFloat(document.getElementById('cond-entrada-val')?.value)||0;
+  const antEl = document.getElementById('cond-antecipado-val');
+  if (antEl && !antEl.dataset.editado) {
+    antEl.value = Math.max(0, saldo - entrada).toFixed(2);
+  }
+  const antecipado = parseFloat(antEl?.value)||0;
+  const prev = document.getElementById('cond-preview-ep');
+  if (!prev) return;
+  if (entrada > 0 || antecipado > 0) {
+    prev.style.display = 'block';
+    prev.textContent = `📱 Entrada: R$ ${entrada.toFixed(2).replace('.',',')} + ⚡ Antecipação: R$ ${antecipado.toFixed(2).replace('.',',')} = Total R$ ${(entrada+antecipado).toFixed(2).replace('.',',')}`;
+  }
+}
+
+function previewAntecipadoTotal() {
+  const v = parseFloat(document.getElementById('cond-antecipado-total')?.value)||0;
+  const prev = document.getElementById('cond-preview-sp');
+  if (prev) prev.textContent = `⚡ Valor único recebido: R$ ${v.toFixed(2).replace('.',',')}`;
+}
+
 function gerarLinhasEntradaAntecipado(saldo) {
   const entrada = parseFloat(document.getElementById('cond-entrada-val')?.value)||0;
-  const n = parseInt(document.getElementById('cond-n-parcelas')?.value)||1;
-  if (entrada <= 0) { showNotif('Informe o valor da entrada!','error'); return; }
-  const restante = saldo - entrada;
-  const parcela = restante/n;
+  const antecipado = parseFloat(document.getElementById('cond-antecipado-val')?.value)||0;
+  if (entrada <= 0 && antecipado <= 0) { showNotif('Informe ao menos um dos valores!','error'); return; }
   const lista = document.getElementById('parc-lista');
   if (!lista) return;
   lista.innerHTML = '';
   const hoje = new Date();
   const fmtData = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  adicionarLinhaParcela(saldo, 'Entrada', entrada.toFixed(2).replace('.',','), fmtData(hoje));
-  for (let i=1; i<=n; i++) {
-    adicionarLinhaParcela(saldo, `Antecipado ${i}/${n}`, parcela.toFixed(2).replace('.',','), '');
-  }
+  if (entrada > 0) adicionarLinhaParcela(saldo, 'Entrada', entrada.toFixed(2).replace('.',','), fmtData(hoje));
+  if (antecipado > 0) adicionarLinhaParcela(saldo, 'Antecipação bancária', antecipado.toFixed(2).replace('.',','), '');
   document.getElementById('parc-lista-wrap').style.display = 'block';
 }
+
+function gerarLinhaAntecipadoUnico(saldo) {
+  const v = parseFloat(document.getElementById('cond-antecipado-total')?.value)||0;
+  const data = document.getElementById('cond-data-entrada')?.value || '';
+  if (v <= 0) { showNotif('Informe o valor recebido!','error'); return; }
+  const lista = document.getElementById('parc-lista');
+  if (!lista) return;
+  lista.innerHTML = '';
+  adicionarLinhaParcela(saldo, 'Antecipação bancária', v.toFixed(2).replace('.',','), data);
+  document.getElementById('parc-lista-wrap').style.display = 'block';
+}
+
 
 function gerarLinhasEntradaParcelas(saldo) {
   const entrada = parseFloat(document.getElementById('cond-entrada-val')?.value)||0;

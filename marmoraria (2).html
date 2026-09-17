@@ -16559,18 +16559,31 @@ function toggleOrigemOrc() {
   if (!('serviceWorker' in navigator)) return;
   try {
     const swCode = `
-      const CACHE_NAME = 'marmorflow-v1';
+      const CACHE_NAME = 'marmorflow-v2';
       self.addEventListener('install', e => { self.skipWaiting(); });
-      self.addEventListener('activate', e => { self.clients.claim(); });
+      self.addEventListener('activate', e => {
+        self.clients.claim();
+        // Limpa caches de versões antigas (evita lixo acumulado de versões anteriores)
+        e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))));
+      });
       self.addEventListener('fetch', e => {
+        const req = e.request;
+        // Só intercepta GET de arquivos do PRÓPRIO site (ex: o HTML principal).
+        // Chamadas ao Supabase, qualquer POST/PATCH/DELETE e qualquer domínio externo
+        // passam direto pelo navegador, sem passar pelo cache — evita telas em branco
+        // quando uma dessas chamadas falha e o cache não tem nada pra devolver.
+        if (req.method !== 'GET') return;
+        let mesmaOrigem = false;
+        try { mesmaOrigem = new URL(req.url).origin === self.location.origin; } catch(_) {}
+        if (!mesmaOrigem) return;
         // Estratégia network-first: sempre tenta buscar online primeiro (dados sempre atualizados),
         // só usa cache como fallback se a rede falhar (ex: sem internet por 1 segundo)
         e.respondWith(
-          fetch(e.request).then(res => {
+          fetch(req).then(res => {
             const resClone = res.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(e.request, resClone)).catch(()=>{});
+            caches.open(CACHE_NAME).then(cache => cache.put(req, resClone)).catch(()=>{});
             return res;
-          }).catch(() => caches.match(e.request))
+          }).catch(() => caches.match(req).then(cached => cached || Response.error()))
         );
       });
     `;

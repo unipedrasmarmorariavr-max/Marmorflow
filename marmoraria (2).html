@@ -12263,6 +12263,7 @@ function ajustarValorVendaManual(idx, orderId, valorDigitado) {
   const novoTotal = orcamentoAtual.itens.reduce(function(s,it){ return s + (it.calc?.precoFinal||0); }, 0);
   orcamentoAtual.valorNegociado = novoTotal;
   orcamentoAtual.usandoValorNegociado = true;
+  orcamentoAtual._baseTotalNegociado = novoTotal; // referência p/ detectar quando itens mudarem depois
   const elHdrValor = document.getElementById('hdr-valor');
   if (elHdrValor) elHdrValor.textContent = fmt(novoTotal);
 }
@@ -14242,9 +14243,20 @@ function atualizarResumoHeader() {
 
   // Se tem valor negociado salvo E o total calculado condiz com o orçamento atual, usa ele
   // Evita mostrar valor negociado de outro orçamento
+  // Se tem valor negociado salvo, só usa se ainda "bater" com os itens atuais —
+  // nunca abaixo do custo, e nunca se os itens mudaram desde que o valor foi negociado
+  // (ex: você editou margem/custo de um item depois de já ter fixado um valor manual;
+  // nesse caso o valor negociado fica desatualizado e a tela volta a mostrar o calculado).
+  const baseNegociado = orcamentoAtual._baseTotalNegociado ?? orcamentoAtual.valorNegociado;
+  const aindaBate = Math.abs(totalCalculado - baseNegociado) < 0.5;
   const usandoNeg  = orcamentoAtual.usandoValorNegociado && 
                      orcamentoAtual.valorNegociado > 0 && 
-                     orcamentoAtual.valorNegociado >= custoTotal; // nunca abaixo do custo
+                     orcamentoAtual.valorNegociado >= custoTotal && // nunca abaixo do custo
+                     aindaBate;
+  if (orcamentoAtual.usandoValorNegociado && !usandoNeg) {
+    // Valor negociado ficou desatualizado (itens mudaram) — descarta e volta a calcular
+    orcamentoAtual.usandoValorNegociado = false;
+  }
   const totalGeral = usandoNeg ? orcamentoAtual.valorNegociado : totalCalculado;
   const lucroTotal = totalGeral - custoTotal;
   const margem     = totalGeral > 0 ? (lucroTotal / totalGeral * 100) : 0;
@@ -14702,9 +14714,13 @@ function imprimirOrcamento() {
   if (!orc) return;
 
   // Se há valor negociado pelo Desconto Geral, distribui proporcionalmente nos itens
-  // (mesma trava: só aplica se o valor negociado ainda for coerente com o custo atual)
+  // (mesma trava: só aplica se o valor negociado ainda for coerente com o custo atual e
+  // ainda bater com os itens de quando foi negociado)
   const custoTotalCheck = orc.itens.reduce((s,it) => s + (it.calc?.custoTotal||0), 0);
-  if (orc.usandoValorNegociado && orc.valorNegociado > 0 && orc.valorNegociado >= custoTotalCheck) {
+  const totalCalcCheck = orc.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
+  const baseNegociadoCheck = orc._baseTotalNegociado ?? orc.valorNegociado;
+  const aindaBateCheck = Math.abs(totalCalcCheck - baseNegociadoCheck) < 0.5;
+  if (orc.usandoValorNegociado && orc.valorNegociado > 0 && orc.valorNegociado >= custoTotalCheck && aindaBateCheck) {
     const totalCalc = orc.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
     if (totalCalc > 0) {
       const fator = orc.valorNegociado / totalCalc;
@@ -14741,9 +14757,12 @@ function imprimirOrcamento() {
   const custoTotalPdf = orc.itens.reduce((s,it) => s + (it.calc?.custoTotal||0), 0);
   const totalCalculadoPdf = orc.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
   // Mesma trava de segurança usada no resto do app: só usa valorNegociado se ele
-  // ainda for coerente com os itens atuais (nunca abaixo do custo total). Evita usar
-  // um valor negociado antigo, travado de antes de o orçamento ganhar mais itens.
-  const usandoNegPdf = orc.usandoValorNegociado && orc.valorNegociado > 0 && orc.valorNegociado >= custoTotalPdf;
+  // ainda for coerente com os itens atuais — nunca abaixo do custo total, E nunca se
+  // os itens mudaram desde que o valor foi negociado (evita PDF mostrar total diferente
+  // da soma dos ambientes, que é exatamente o problema que não pode acontecer).
+  const baseNegociadoPdf = orc._baseTotalNegociado ?? orc.valorNegociado;
+  const aindaBatePdf = Math.abs(totalCalculadoPdf - baseNegociadoPdf) < 0.5;
+  const usandoNegPdf = orc.usandoValorNegociado && orc.valorNegociado > 0 && orc.valorNegociado >= custoTotalPdf && aindaBatePdf;
   const totalGeral = usandoNegPdf ? orc.valorNegociado : totalCalculadoPdf;
   const dataHoje = new Date().toLocaleDateString('pt-BR');
   // Número do orçamento = número do pedido no kanban (MRM-071, etc.)
@@ -15133,6 +15152,7 @@ function salvarValorSimulado() {
   orcamentoAtual.margemNegociada      = margemFinal;
   orcamentoAtual.lucroNegociado       = lucroFinal;
   orcamentoAtual.usandoValorNegociado = true;
+  orcamentoAtual._baseTotalNegociado  = valorFinal; // referência p/ detectar quando itens mudarem depois
 
   // Distribui o novo valor total proporcionalmente em cada item
   // atualizando margemOverride para que precoFinal = mesmo valor do cabeçalho

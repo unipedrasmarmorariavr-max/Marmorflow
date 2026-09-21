@@ -12230,26 +12230,21 @@ function resolverTotalOrcamento(orc) {
 }
 
 // ─── VALOR DE VENDA MANUAL → RECALCULA MARGEM AUTOMATICAMENTE ────────────────
-// A fórmula tem os Insumos (%) calculados sobre o preço já com margem embutida,
-// então "voltar" de um valor de venda para a margem exige resolver uma equação
-// (não é uma regra de três simples). Resolvemos como uma equação quadrática em
-// x = 1/(1-margem):
-//   precoFinal = custosOp*x + custosOp*insumoFrac*x²
-function resolverMargemPorValor(valorAlvo, custosOp, insumoFrac) {
-  if (!custosOp || custosOp <= 0) return 30;
+// Relação real (confirmada em calcularItem): o Custo de Insumos é um valor FIXO
+// (percentual sobre os custos de produção, não sobre o preço final) — não escala
+// com a margem. Então a relação entre margem e preço final é linear, não quadrática:
+//   precoFinal = custoAdicionais + custoSemAdicional / (1 - margem - comissões)
+// Resolvendo para margem:
+//   margem = 1 - comissões - custoSemAdicional / (precoFinal - custoAdicionais)
+function resolverMargemPorValor(valorAlvo, custoSemAdicional, custoAdicionais, pctComissoes) {
+  custoAdicionais = custoAdicionais || 0;
+  pctComissoes = pctComissoes || 0;
+  if (!custoSemAdicional || custoSemAdicional <= 0) return 30;
   if (!valorAlvo || valorAlvo <= 0) return 30;
-  if (!insumoFrac || insumoFrac <= 0) {
-    // Sem insumo percentual: relação linear direta
-    return (1 - (custosOp / valorAlvo)) * 100;
-  }
-  const a = custosOp * insumoFrac;
-  const b = custosOp;
-  const c = -valorAlvo;
-  const disc = b * b - 4 * a * c;
-  if (disc < 0) return 30;
-  const x = (-b + Math.sqrt(disc)) / (2 * a);
-  if (x <= 0) return 30;
-  return (1 - (1 / x)) * 100;
+  const precoFinalBase = valorAlvo - custoAdicionais;
+  if (precoFinalBase <= 0) return 30;
+  const margemFrac = 1 - pctComissoes - (custoSemAdicional / precoFinalBase);
+  return margemFrac * 100;
 }
 
 function ajustarValorVendaManual(idx, orderId, valorDigitado) {
@@ -12270,9 +12265,9 @@ function ajustarValorVendaManual(idx, orderId, valorDigitado) {
   item.calc.lucroLiquido = valorNum - item.calc.custoTotal;
 
   // Calcula margem real resultante (só para mostrar)
-  const cfg = getConfigOrc();
-  const insumoFrac = (cfg.custoInsumo || 5) / 100;
-  const novaMargem = resolverMargemPorValor(valorNum, item.calc.custoTotal - item.calc.custoInsumos, insumoFrac);
+  const custoSemAdicional = item.calc.custoTotal - (item.calc.custoAdicionais||0);
+  const pctComissoesItem = ((parseFloat(item.comissaoVendedor)||0)+(parseFloat(item.comissaoTerceiros)||0)+(parseFloat(item.comissaoInterna)||0))/100;
+  const novaMargem = resolverMargemPorValor(valorNum, custoSemAdicional, item.calc.custoAdicionais, pctComissoesItem);
   item.margemOverride = Math.round(novaMargem * 10) / 10; // percentual ex: 27.0
 
   // Atualiza campos visuais sem recriar o DOM
@@ -15152,13 +15147,12 @@ function salvarValorSimulado() {
   const totalCalculado = orcamentoAtual.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
   if (totalCalculado > 0 && valorFinal > 0) {
     const fator = valorFinal / totalCalculado;
-    const cfg = getConfigOrc();
-    const insumoFrac = (cfg.custoInsumo || 5) / 100;
     orcamentoAtual.itens.forEach(function(item) {
       if (!item.calc) return;
       const novoPreco = item.calc.precoFinal * fator;
-      const custosOp = item.calc.custoTotal - item.calc.custoInsumos;
-      const novaMargem = resolverMargemPorValor(novoPreco, custosOp, insumoFrac);
+      const custoSemAdicional = item.calc.custoTotal - (item.calc.custoAdicionais||0);
+      const pctComissoesItem = ((parseFloat(item.comissaoVendedor)||0)+(parseFloat(item.comissaoTerceiros)||0)+(parseFloat(item.comissaoInterna)||0))/100;
+      const novaMargem = resolverMargemPorValor(novoPreco, custoSemAdicional, item.calc.custoAdicionais, pctComissoesItem);
       item.margemOverride = Math.round(novaMargem * 10000) / 10000;
     });
   }

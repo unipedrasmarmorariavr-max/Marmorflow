@@ -12205,6 +12205,30 @@ function calcularCustoHora() {
   return { custoHoraEmpresa, custoHoraHomem, custoEstrutura: custoTotal, horasMes };
 }
 
+// ─── TOTAL DO ORÇAMENTO — FONTE ÚNICA DE VERDADE ─────────────────────────────
+// Usada na tela ao abrir, na tela ao recalcular após edição, E no PDF — pra nunca
+// mais os três lugares mostrarem números diferentes entre si.
+// Decide: usa o valor negociado (Desconto Geral / edição manual) só se ele ainda
+// bater com os itens de quando foi negociado; senão, descarta e usa o calculado.
+function resolverTotalOrcamento(orc) {
+  const itens = orc.itens || [];
+  const totalCalculado = itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
+  const custoTotal     = itens.reduce((s,it) => s + (it.calc?.custoTotal||0), 0);
+  const lucroCalculado = itens.reduce((s,it) => s + (it.calc?.lucroLiquido||0), 0);
+  const baseNegociado  = orc._baseTotalNegociado ?? orc.valorNegociado;
+  const aindaBate      = Math.abs(totalCalculado - baseNegociado) < 0.5;
+  const usandoNeg      = !!orc.usandoValorNegociado &&
+                         orc.valorNegociado > 0 &&
+                         orc.valorNegociado >= custoTotal && // nunca abaixo do custo
+                         aindaBate; // nunca se os itens mudaram desde a negociação
+  if (orc.usandoValorNegociado && !usandoNeg) {
+    orc.usandoValorNegociado = false; // descarta valor negociado desatualizado
+  }
+  const totalGeral = usandoNeg ? orc.valorNegociado : totalCalculado;
+  const lucroTotal = usandoNeg ? (totalGeral - custoTotal) : lucroCalculado;
+  return { totalGeral, custoTotal, lucroTotal, usandoNeg, totalCalculado };
+}
+
 // ─── VALOR DE VENDA MANUAL → RECALCULA MARGEM AUTOMATICAMENTE ────────────────
 // A fórmula tem os Insumos (%) calculados sobre o preço já com margem embutida,
 // então "voltar" de um valor de venda para a margem exige resolver uma equação
@@ -13462,9 +13486,10 @@ function renderTelaOrcamentoPedido(order) {
     item.calc = (pedra && areaTotal > 0) ? calcularItem(item, pedra, {...cfg, transito: orc.transito}) : null;
   });
 
-  const totalGeral = orc.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
-  const custoTotal = orc.itens.reduce((s,it) => s + (it.calc?.custoTotal||0), 0);
-  const lucroTotal = orc.itens.reduce((s,it) => s + (it.calc?.lucroLiquido||0), 0);
+  const totalRes = resolverTotalOrcamento(orc);
+  const totalGeral = totalRes.totalGeral;
+  const custoTotal = totalRes.custoTotal;
+  const lucroTotal = totalRes.lucroTotal;
   const margem = totalGeral > 0 ? (lucroTotal/totalGeral*100) : 0;
   const margemCor = margem >= 30 ? '#2E7D32' : margem >= 15 ? '#B8760A' : '#B85A4A';
   const tempoProdTotal = orc.itens.reduce((s,it) => s+(it.calc?.tempoProdTotal||0), 0);
@@ -14237,28 +14262,13 @@ function recalcularTelaOrc(orderId) {
 }
 
 function atualizarResumoHeader() {
-  const totalCalculado = orcamentoAtual.itens.reduce((s,it) => s+(it.calc?.precoFinal||0), 0);
-  const custoTotal     = orcamentoAtual.itens.reduce((s,it) => s+(it.calc?.custoTotal||0), 0);
-  const tpp            = orcamentoAtual.itens.reduce((s,it) => s+(it.calc?.tempoProdTotal||0), 0);
+  const tpp = orcamentoAtual.itens.reduce((s,it) => s+(it.calc?.tempoProdTotal||0), 0);
 
-  // Se tem valor negociado salvo E o total calculado condiz com o orçamento atual, usa ele
-  // Evita mostrar valor negociado de outro orçamento
-  // Se tem valor negociado salvo, só usa se ainda "bater" com os itens atuais —
-  // nunca abaixo do custo, e nunca se os itens mudaram desde que o valor foi negociado
-  // (ex: você editou margem/custo de um item depois de já ter fixado um valor manual;
-  // nesse caso o valor negociado fica desatualizado e a tela volta a mostrar o calculado).
-  const baseNegociado = orcamentoAtual._baseTotalNegociado ?? orcamentoAtual.valorNegociado;
-  const aindaBate = Math.abs(totalCalculado - baseNegociado) < 0.5;
-  const usandoNeg  = orcamentoAtual.usandoValorNegociado && 
-                     orcamentoAtual.valorNegociado > 0 && 
-                     orcamentoAtual.valorNegociado >= custoTotal && // nunca abaixo do custo
-                     aindaBate;
-  if (orcamentoAtual.usandoValorNegociado && !usandoNeg) {
-    // Valor negociado ficou desatualizado (itens mudaram) — descarta e volta a calcular
-    orcamentoAtual.usandoValorNegociado = false;
-  }
-  const totalGeral = usandoNeg ? orcamentoAtual.valorNegociado : totalCalculado;
-  const lucroTotal = totalGeral - custoTotal;
+  const totalRes   = resolverTotalOrcamento(orcamentoAtual);
+  const totalGeral = totalRes.totalGeral;
+  const custoTotal = totalRes.custoTotal;
+  const usandoNeg  = totalRes.usandoNeg;
+  const lucroTotal = totalRes.lucroTotal;
   const margem     = totalGeral > 0 ? (lucroTotal / totalGeral * 100) : 0;
   const llh        = tpp > 0 ? lucroTotal / tpp : 0;
   const margemCor  = margem >= 30 ? '#2E7D32' : margem >= 15 ? '#B8760A' : '#B85A4A';
@@ -14273,7 +14283,7 @@ function atualizarResumoHeader() {
     elV.textContent = fmt(totalGeral);
     elV.style.color = '#FFD700';
     if (usandoNeg) {
-      elV.title = '⚠️ Valor negociado. Calculado: ' + fmt(totalCalculado) + '. Clique em Limpar para resetar.';
+      elV.title = '⚠️ Valor negociado. Calculado: ' + fmt(totalRes.totalCalculado) + '. Clique em Limpar para resetar.';
       elV.style.textDecoration = 'underline dotted';
       elV.style.cursor = 'help';
     } else {
@@ -14713,21 +14723,13 @@ function imprimirOrcamento() {
   const orc = orcamentoAtual;
   if (!orc) return;
 
-  // Se há valor negociado pelo Desconto Geral, distribui proporcionalmente nos itens
-  // (mesma trava: só aplica se o valor negociado ainda for coerente com o custo atual e
-  // ainda bater com os itens de quando foi negociado)
-  const custoTotalCheck = orc.itens.reduce((s,it) => s + (it.calc?.custoTotal||0), 0);
-  const totalCalcCheck = orc.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
-  const baseNegociadoCheck = orc._baseTotalNegociado ?? orc.valorNegociado;
-  const aindaBateCheck = Math.abs(totalCalcCheck - baseNegociadoCheck) < 0.5;
-  if (orc.usandoValorNegociado && orc.valorNegociado > 0 && orc.valorNegociado >= custoTotalCheck && aindaBateCheck) {
-    const totalCalc = orc.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
-    if (totalCalc > 0) {
-      const fator = orc.valorNegociado / totalCalc;
-      orc.itens.forEach(function(item) {
-        if (item.calc) item.calc.precoFinal = item.calc.precoFinal * fator;
-      });
-    }
+  // Se há valor negociado pelo Desconto Geral (ainda válido), distribui proporcionalmente nos itens
+  const resCheck = resolverTotalOrcamento(orc);
+  if (resCheck.usandoNeg && resCheck.totalCalculado > 0) {
+    const fator = orc.valorNegociado / resCheck.totalCalculado;
+    orc.itens.forEach(function(item) {
+      if (item.calc) item.calc.precoFinal = item.calc.precoFinal * fator;
+    });
   }
   const elObsRodape = document.getElementById('orc-obs-rodape');
   if (elObsRodape && elObsRodape.value) orcamentoAtual.obsGeral = elObsRodape.value;
@@ -14754,16 +14756,7 @@ function imprimirOrcamento() {
     item.calc = (pedra && calcAreaTotalItem(item) > 0) ? calcularItem(item, pedra, {...cfg, transito: orc.transito}) : null;
   });
 
-  const custoTotalPdf = orc.itens.reduce((s,it) => s + (it.calc?.custoTotal||0), 0);
-  const totalCalculadoPdf = orc.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
-  // Mesma trava de segurança usada no resto do app: só usa valorNegociado se ele
-  // ainda for coerente com os itens atuais — nunca abaixo do custo total, E nunca se
-  // os itens mudaram desde que o valor foi negociado (evita PDF mostrar total diferente
-  // da soma dos ambientes, que é exatamente o problema que não pode acontecer).
-  const baseNegociadoPdf = orc._baseTotalNegociado ?? orc.valorNegociado;
-  const aindaBatePdf = Math.abs(totalCalculadoPdf - baseNegociadoPdf) < 0.5;
-  const usandoNegPdf = orc.usandoValorNegociado && orc.valorNegociado > 0 && orc.valorNegociado >= custoTotalPdf && aindaBatePdf;
-  const totalGeral = usandoNegPdf ? orc.valorNegociado : totalCalculadoPdf;
+  const totalGeral = resolverTotalOrcamento(orc).totalGeral;
   const dataHoje = new Date().toLocaleDateString('pt-BR');
   // Número do orçamento = número do pedido no kanban (MRM-071, etc.)
   const numOrc = orc.pedidoId || orc.pedidoKey || orc.numPedido || orc.id.replace('ORC-','').substring(0,10);

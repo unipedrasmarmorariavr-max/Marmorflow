@@ -2670,7 +2670,7 @@ function createCard(o) {
   if (currentUser === 'dono' || currentUser === 'comercial') {
     menuItens += `<div class="card-menu-item" onclick="abrirTelaOrcamentoPedido('${o.id}');event.stopPropagation()">📋 Ver Orçamento</div>`;
   }
-  if (p.canEdit && o.stage === 'medicao') menuItens += `<div class="card-menu-item" onclick="openEditMedidor('${o.id}');event.stopPropagation()">✏️ Editar</div>`;
+  if (p.canEdit && ['medicao','aguardando','negociacao','fechado'].includes(o.stage)) menuItens += `<div class="card-menu-item" onclick="openEditMedidor('${o.id}');event.stopPropagation()">✏️ Editar</div>`;
   if (_canDrag) menuItens += `<div class="card-menu-item" onclick="abrirMenuMoverPedido('${o.id}','${o.stage}');event.stopPropagation()">➡️ Mover para...</div>`;
   if (p.canDelete) menuItens += `<div class="card-menu-item danger" onclick="deleteOrder('${o.id}');event.stopPropagation()">🗑 Excluir</div>`;
 
@@ -3078,10 +3078,10 @@ async function abrirVerProjeto(id) {
   const o = orders.find(x => x.id === id);
   if (!o) return;
 
-  const podeEditar = ['corte'].includes(o.stage) && 
-    (currentUser === 'dono' || currentUser === 'comercial' || currentUser === 'producao');
-  const podeCroqui = ['corte'].includes(o.stage) && 
-    (currentUser === 'dono' || currentUser === 'medidor' || currentUser === 'producao');
+  const podeEditar = ['fechado'].includes(o.stage) && 
+    (currentUser === 'dono' || currentUser === 'comercial');
+  const podeCroqui = ['fechado'].includes(o.stage) && 
+    (currentUser === 'dono' || currentUser === 'comercial' || currentUser === 'medidor');
 
   const itensCliente = ['Cuba','Lixeira','Dispenser','Torneira','Tomada de Torre','Calha Úmida','Válvula'];
   const itensSelecionados = o.itensCliente || [];
@@ -3268,6 +3268,19 @@ function imprimirCroqui(id) {
   win.document.close();
 }
 
+// Se esse pedido já tem uma cópia "-P" em produção (Em Corte/Acabamento), sincroniza os
+// mesmos campos nela — produção sempre vê os dados atualizados, sem poder editar nada.
+async function sincronizarCopiaProducao(id, campos) {
+  const idCopia = id + '-P';
+  const existeCopia = orders.find(o => o.id === idCopia);
+  if (!existeCopia) return;
+  const { error } = await getSB().from('pedidos').update(campos).eq('id', idCopia);
+  if (!error) {
+    const idxCopia = orders.findIndex(o => o.id === idCopia);
+    if (idxCopia >= 0) orders[idxCopia] = { ...orders[idxCopia], ...campos };
+  }
+}
+
 async function excluirCroqui(pedidoId, idx) {
   if (!confirm('Excluir esta imagem do croqui?')) return;
   const order = orders.find(o => o.id === pedidoId);
@@ -3277,6 +3290,7 @@ async function excluirCroqui(pedidoId, idx) {
   const { error } = await getSB().from('pedidos').update({ croqui: croquiImgs }).eq('id', pedidoId);
   if (error) { showNotif('Erro ao excluir imagem.', 'error'); return; }
   order.croqui = croquiImgs;
+  await sincronizarCopiaProducao(pedidoId, { croqui: croquiImgs });
   showNotif('✅ Imagem excluída!', 'success');
   abrirVerProjeto(pedidoId);
 }
@@ -3347,6 +3361,7 @@ async function salvarNovoCroqui(id) {
   hideLoading();
   if (error) { showNotif('Erro: ' + error.message, 'error'); return; }
   if (o) o.croqui = todasFotos;
+  await sincronizarCopiaProducao(id, { croqui: todasFotos });
   showNotif('✅ Croqui atualizado!', 'success');
   abrirVerProjeto(id); // recarrega o modal
 }
@@ -3376,6 +3391,7 @@ async function salvarItensCliente(id) {
   if (error) { showNotif('Erro: ' + error.message, 'error'); return; }
   const o = orders.find(x => x.id === id);
   if (o) { o.itensCliente = selecionados; o.itensObs = obs; }
+  await sincronizarCopiaProducao(id, { itensCliente: selecionados, itensObs: obs });
   showNotif('✅ Itens salvos!', 'success');
 }
 
@@ -3559,6 +3575,17 @@ async function saveMedidor() {
   if (result.error){showNotif('Erro: '+result.error.message,'error');return;}
   if (editingId){const idx=orders.findIndex(o=>o.id===editingId);if(idx>=0)orders[idx]=result.data;}
   else orders.unshift(result.data);
+
+  // Se esse pedido já tem uma cópia "-P" em produção, sincroniza as informações nela também
+  if (editingId) {
+    await sincronizarCopiaProducao(editingId, {
+      cliente, telefone: data.telefone, endereco: data.endereco, peca: data.peca,
+      material: data.material, tipoentrega: data.tipoentrega, obs: data.obs,
+      acesso: data.acesso, andar: data.andar, obsAcesso: data.obsAcesso,
+      croqui: data.croqui, local: data.local
+    });
+  }
+
   // Salva/atualiza cliente automaticamente
   salvarOuAtualizarCliente(cliente, data.telefone, data.endereco);
   renderKanban(document.getElementById('search-kanban').value);
@@ -3766,7 +3793,8 @@ function openDetail(id) {
   if (o.telefone){const wb=document.createElement('button');wb.className='btn-whatsapp';wb.innerHTML='📱 WhatsApp';wb.onclick=()=>sendWhatsApp(o);footer.appendChild(wb);}
   const lb=document.createElement('button');lb.className='btn-copy';lb.textContent='🔗 Link Cliente';lb.onclick=()=>copiarLinkCliente(o.id);footer.appendChild(lb);
   if (p.canFechar&&(o.stage==='medicao'||o.stage==='negociacao')){const fb=document.createElement('button');fb.className='btn-primary';fb.style.cssText='width:auto;padding:10px 18px;background:var(--green);';fb.textContent='💼 Dados Comerciais';fb.onclick=()=>abrirFecharPedido(o.id);footer.appendChild(fb);}
-  if (p.canEdit&&o.stage==='medicao'){const eb=document.createElement('button');eb.className='btn-secondary';eb.textContent='✏️ Editar';eb.onclick=()=>openEditMedidor(o.id);footer.appendChild(eb);}
+  const pb=document.createElement('button');pb.className='btn-secondary';pb.textContent='📐 Fotos / Croqui';pb.onclick=()=>abrirVerProjeto(o.id);footer.appendChild(pb);
+  if (p.canEdit&&['medicao','aguardando','negociacao','fechado'].includes(o.stage)){const eb=document.createElement('button');eb.className='btn-secondary';eb.textContent='✏️ Editar';eb.onclick=()=>openEditMedidor(o.id);footer.appendChild(eb);}
   const cb=document.createElement('button');cb.className='btn-secondary';cb.textContent='Fechar';cb.onclick=()=>closeModal('modal-detail');footer.appendChild(cb);
   openModal('modal-detail');
 }

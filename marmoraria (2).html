@@ -14399,11 +14399,9 @@ async function salvarOrcamentoPedido(silencioso) {
     */
   }
 
-  // Se tiver valor negociado na calculadora, usa ele; senão usa o calculado
-  const totalCalculado = orcamentoAtual.itens.reduce((s,it) => s + (it.calc?.precoFinal||0), 0);
-  const totalFinal = (orcamentoAtual.usandoValorNegociado && orcamentoAtual.valorNegociado > 0)
-    ? orcamentoAtual.valorNegociado
-    : totalCalculado;
+  // Usa a mesma fonte única de verdade dos outros 3 lugares (tela, recálculo, PDF) —
+  // nunca usa um valor negociado desatualizado ou abaixo do custo.
+  const totalFinal = resolverTotalOrcamento(orcamentoAtual).totalGeral;
 
   if (pedidoOrcAtual) {
     const order = orders.find(o => o.id === pedidoOrcAtual);

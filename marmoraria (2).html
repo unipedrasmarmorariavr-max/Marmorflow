@@ -503,7 +503,7 @@
   .sidebar-logo-text span{color:#D4AF6E;}
   .sidebar-user{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.08);font-size:11px;color:rgba(255,255,255,0.5);}
   .sidebar-user strong{display:block;color:rgba(255,255,255,0.85);font-size:12px;margin-bottom:1px;}
-  .nav-item{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;color:rgba(255,255,255,0.6);font-size:13px;font-weight:500;transition:all 0.15s;border-left:3px solid transparent;background:none;border-top:none;border-right:none;border-bottom:none;width:100%;text-align:left;font-family:inherit;white-space:nowrap;overflow:hidden;}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;color:rgba(255,255,255,0.6);font-size:13px;font-weight:500;transition:all 0.15s;border-left:3px solid transparent;background:none;border-top:none;border-right:none;border-bottom:none;width:100%;text-align:left;font-family:inherit;white-space:nowrap;overflow:hidden;text-decoration:none;box-sizing:border-box;}
   .nav-item:hover{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.9);}
   .nav-item.active{background:rgba(184,150,90,0.15);color:#D4AF6E;border-left-color:#D4AF6E;font-weight:700;}
   .nav-icon{font-size:18px;flex-shrink:0;width:24px;text-align:center;min-width:24px;}
@@ -622,15 +622,15 @@
     </div>
   </div>
   <div class="tabs">
-    <button class="tab-btn active" onclick="showTab('kanban')" id="tab-kanban">📋 Pedidos</button>
-    <button class="tab-btn" onclick="showTab('agenda')" id="tab-agenda">📅 Agenda</button>
-    <button class="tab-btn" onclick="showTab('materiais')" id="tab-materiais">🪨 Materiais</button>
-    <button class="tab-btn" onclick="showTab('produtos')" id="tab-produtos" style="display:none;">🪨 Produtos</button>
-    <button class="tab-btn" onclick="showTab('financeiro')" id="tab-financeiro">💰 Financeiro</button>
-    <button class="tab-btn" onclick="showTab('crm')" id="tab-crm">🤝 CRM</button>
-    <button class="tab-btn" onclick="showTab('ia')" id="tab-ia" style="display:none;">🤖 IA</button>
-    <button class="tab-btn" onclick="showTab('dashboard')" id="tab-dashboard" style="display:none;">📊 Dashboard</button>
-    <button class="tab-btn" onclick="showTab('configuracoes')" id="tab-configuracoes" style="display:none;">⚙️ Configurações</button>
+    <a class="tab-btn active" href="#kanban" onclick="showTab('kanban');return false;" id="tab-kanban">📋 Pedidos</a>
+    <a class="tab-btn" href="#agenda" onclick="showTab('agenda');return false;" id="tab-agenda">📅 Agenda</a>
+    <a class="tab-btn" href="#materiais" onclick="showTab('materiais');return false;" id="tab-materiais">🪨 Materiais</a>
+    <a class="tab-btn" href="#produtos" onclick="showTab('produtos');return false;" id="tab-produtos" style="display:none;">🪨 Produtos</a>
+    <a class="tab-btn" href="#financeiro" onclick="showTab('financeiro');return false;" id="tab-financeiro">💰 Financeiro</a>
+    <a class="tab-btn" href="#crm" onclick="showTab('crm');return false;" id="tab-crm">🤝 CRM</a>
+    <a class="tab-btn" href="#ia" onclick="showTab('ia');return false;" id="tab-ia" style="display:none;">🤖 IA</a>
+    <a class="tab-btn" href="#dashboard" onclick="showTab('dashboard');return false;" id="tab-dashboard" style="display:none;">📊 Dashboard</a>
+    <a class="tab-btn" href="#configuracoes" onclick="showTab('configuracoes');return false;" id="tab-configuracoes" style="display:none;">⚙️ Configurações</a>
   </div>
   <div class="content">
     <div class="panel active" id="panel-kanban">
@@ -1895,7 +1895,7 @@ function renderSidebar(perfil) {
   const nav = document.getElementById('sidebar-nav');
   if (nav) {
     nav.innerHTML = itens.map(i =>
-      '<button class="nav-item" id="nav-'+i.id+'" onclick="showTab(\'' + i.id + '\')"><span class="nav-icon">'+i.icon+'</span> '+i.label+'</button>'
+      '<a class="nav-item" href="#'+i.id+'" id="nav-'+i.id+'" onclick="showTab(\'' + i.id + '\');return false;"><span class="nav-icon">'+i.icon+'</span> '+i.label+'</a>'
     ).join('');
   }
 
@@ -4036,7 +4036,9 @@ function ativarSessao(perfil) {
   if (tabCrm) tabCrm.style.display = (isDono||isComercial) ? 'block' : 'none';
   var tabIa = document.getElementById('tab-ia');
   if (tabIa) tabIa.style.display = (isDono||isComercial) ? 'block' : 'none';
-  // Sempre abre no Kanban ao fazer login — exceto Medidor que abre na Agenda
+  // Sempre abre no Kanban ao fazer login — exceto Medidor que abre na Agenda —
+  // A MENOS que o link tenha uma aba específica no final (ex: #financeiro), abrindo
+  // direto nela (permite abrir links em nova aba, como "Abrir link em nova guia").
   loadOrders().then(function() {
     carregarClientes(); // carrega clientes em paralelo
     if (isProducao || currentUser === 'serrador' || currentUser === 'acabador') {
@@ -4058,17 +4060,25 @@ function ativarSessao(perfil) {
     } else {
       renderKanban();
     }
+    const abasValidas = ['kanban','agenda','materiais','financeiro','crm','ia','dashboard','configuracoes'];
+    const hashTab = location.hash ? location.hash.replace('#','') : '';
+    const abaDoLink = abasValidas.includes(hashTab) ? hashTab : null;
     if (isMedidor) {
       localStorage.setItem('agenda_aba','medicao');
-      showTab('agenda');
-      // Restaura a aba onde o usuário estava antes de recarregar
-      const abaSalva = localStorage.getItem('mf_aba') || (isDono ? 'dashboard' : 'kanban');
-      const abasValidas = ['kanban','agenda','materiais','financeiro','crm','ia','dashboard','configuracoes'];
-      const abaRestaurar = abasValidas.includes(abaSalva) ? abaSalva : (isDono ? 'dashboard' : 'kanban');
-      showTab(abaRestaurar);
+      if (abaDoLink) {
+        showTab(abaDoLink);
+      } else {
+        showTab('agenda');
+        // Restaura a aba onde o usuário estava antes de recarregar
+        const abaSalva = localStorage.getItem('mf_aba') || (isDono ? 'dashboard' : 'kanban');
+        const abaRestaurar = abasValidas.includes(abaSalva) ? abaSalva : (isDono ? 'dashboard' : 'kanban');
+        showTab(abaRestaurar);
+      }
+    } else if (abaDoLink) {
+      showTab(abaDoLink);
     }
     // Estado inicial no histórico do navegador (para ← não sair imediatamente)
-    const abaAtual = localStorage.getItem('mf_aba') || (isMedidor ? 'agenda' : 'kanban');
+    const abaAtual = abaDoLink || localStorage.getItem('mf_aba') || (isMedidor ? 'agenda' : 'kanban');
     history.replaceState({ tab: abaAtual }, '', window.location.pathname + window.location.search + '#' + abaAtual);
     // Restaura orçamento se estava aberto antes do reload
     const orcAberto = localStorage.getItem('mf_orc_aberto');

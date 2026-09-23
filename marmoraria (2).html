@@ -8251,15 +8251,39 @@ async function salvarSaldoInicial() {
   if (!data) { alert('Preencha a data!'); return; }
 
   const salvar = async (chave, valor, data_ref) => {
-    const { data: existe } = await getSB().from('configuracoes').select('id').eq('chave', chave).maybeSingle();
-    if (existe) await getSB().from('configuracoes').update({ valor, data_referencia: data_ref }).eq('chave', chave);
-    else await getSB().from('configuracoes').insert({ chave, valor, data_referencia: data_ref });
+    const { data: existentes, error: errBusca } = await getSB().from('configuracoes').select('id').eq('chave', chave);
+    if (errBusca) return { error: errBusca };
+    if (existentes && existentes.length > 0) {
+      // Se por algum motivo existir mais de um registro com essa chave, atualiza o primeiro
+      // e remove os duplicados (evita ficar lendo um valor antigo aleatório depois).
+      const { error: errUpdate } = await getSB().from('configuracoes').update({ valor, data_referencia: data_ref }).eq('id', existentes[0].id);
+      if (errUpdate) return { error: errUpdate };
+      if (existentes.length > 1) {
+        const idsExtras = existentes.slice(1).map(r => r.id);
+        await getSB().from('configuracoes').delete().in('id', idsExtras);
+      }
+    } else {
+      const { error: errInsert } = await getSB().from('configuracoes').insert({ chave, valor, data_referencia: data_ref });
+      if (errInsert) return { error: errInsert };
+    }
+    return { error: null };
   };
 
-  await salvar('saldo_sicredi', sicredi, data);
-  await salvar('saldo_caixa', caixa, data);
-  await salvar('saldo_mp', mp, data);
-  await salvar('saldo_data', sicredi + caixa + mp, data); // total para compatibilidade
+  showLoading('Salvando saldos iniciais...');
+  const resultados = await Promise.all([
+    salvar('saldo_sicredi', sicredi, data),
+    salvar('saldo_caixa', caixa, data),
+    salvar('saldo_mp', mp, data),
+    salvar('saldo_data', 0, data), // só carrega a data de referência
+  ]);
+  hideLoading();
+
+  const comErro = resultados.find(r => r.error);
+  if (comErro) {
+    console.error('Erro ao salvar saldo inicial:', comErro.error);
+    alert('❌ Erro ao salvar: ' + (comErro.error.message || JSON.stringify(comErro.error)));
+    return; // não fecha o modal nem mostra sucesso — permite tentar de novo
+  }
 
   document.getElementById('modal-saldo-inicial').remove();
   showNotif('✅ Saldos iniciais salvos!', 'success');

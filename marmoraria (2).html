@@ -4828,7 +4828,7 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
     }
   } catch(e) {}
   const saldoInicialDash = saldoInicialSicrediD + saldoInicialCaixaD + saldoInicialMPD;
-  const txDesdeSaldo = dataSaldoInicialDash ? transacoes.filter(t => (t.data||'') >= dataSaldoInicialDash && t.categoria !== 'Transferência entre Bancos') : transacoes.filter(t => t.categoria !== 'Transferência entre Bancos');
+  const txDesdeSaldo = dataSaldoInicialDash ? transacoes.filter(t => (t.data||'') > dataSaldoInicialDash && t.categoria !== 'Transferência entre Bancos') : transacoes.filter(t => t.categoria !== 'Transferência entre Bancos');
   const entSicrediD = txDesdeSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Sicredi').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const saiSicrediD = txDesdeSaldo.filter(t=>t.tipo==='saida'&&(t.banco==='Sicredi'||!t.banco)).reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const entCaixaD = txDesdeSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Caixa').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
@@ -8447,7 +8447,7 @@ async function renderFinanceiro() {
     }
   } catch(e) {}
 
-  const txParaSaldo = dataSaldoInicial ? transacoes.filter(t => (t.data||'') >= dataSaldoInicial) : transacoes;
+  const txParaSaldo = dataSaldoInicial ? transacoes.filter(t => (t.data||'') > dataSaldoInicial) : transacoes;
 
   // Saldo por banco = inicial + entradas - saídas de cada banco
   const entSicredi = txParaSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Sicredi').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);

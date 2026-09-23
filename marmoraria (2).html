@@ -4817,18 +4817,26 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
   const transacoes = txAll || [];
 
   // Saldo por Banco — mesmo cálculo do Financeiro
-  let saldoInicialSicrediD = 0, saldoInicialCaixaD = 0, saldoInicialMPD = 0, dataSaldoInicialDash = '';
+  let saldoInicialSicrediD = 0, saldoInicialCaixaD = 0, saldoInicialMPD = 0, dataSaldoInicialDash = '', saldoCutoffMsDash = 0;
   try {
-    const { data: cfgs } = await getSB().from('configuracoes').select('*').in('chave', ['saldo_sicredi','saldo_caixa','saldo_mp']);
+    const { data: cfgs } = await getSB().from('configuracoes').select('*').in('chave', ['saldo_sicredi','saldo_caixa','saldo_mp','saldo_cutoff_ms']);
     if (cfgs) {
       const get = (chave) => cfgs.find(c=>c.chave===chave);
       const cS = get('saldo_sicredi'); if (cS) { saldoInicialSicrediD = parseFloat(cS.valor)||0; dataSaldoInicialDash = cS.data_referencia||''; }
       const cC = get('saldo_caixa'); if (cC) saldoInicialCaixaD = parseFloat(cC.valor)||0;
       const cM = get('saldo_mp'); if (cM) saldoInicialMPD = parseFloat(cM.valor)||0;
+      const cCutoff = get('saldo_cutoff_ms'); if (cCutoff) saldoCutoffMsDash = parseFloat(cCutoff.valor)||0;
     }
   } catch(e) {}
   const saldoInicialDash = saldoInicialSicrediD + saldoInicialCaixaD + saldoInicialMPD;
-  const txDesdeSaldo = dataSaldoInicialDash ? transacoes.filter(t => (t.data||'') > dataSaldoInicialDash && t.categoria !== 'Transferência entre Bancos') : transacoes.filter(t => t.categoria !== 'Transferência entre Bancos');
+  const txDesdeSaldo = dataSaldoInicialDash ? transacoes.filter(t => {
+    if (t.categoria === 'Transferência entre Bancos') return false;
+    if (saldoCutoffMsDash && t.created_at) {
+      const tMs = new Date(t.created_at).getTime();
+      return !isNaN(tMs) && tMs > saldoCutoffMsDash;
+    }
+    return (t.data||'') > dataSaldoInicialDash;
+  }) : transacoes.filter(t => t.categoria !== 'Transferência entre Bancos');
   const entSicrediD = txDesdeSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Sicredi').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const saiSicrediD = txDesdeSaldo.filter(t=>t.tipo==='saida'&&(t.banco==='Sicredi'||!t.banco)).reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const entCaixaD = txDesdeSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Caixa').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
@@ -8270,11 +8278,14 @@ async function salvarSaldoInicial() {
   };
 
   showLoading('Salvando saldos iniciais...');
+  const agoraMs = Date.now(); // momento exato do salvamento — usado pra não contar de novo
+                               // lançamentos do mesmo dia que já estavam refletidos no saldo informado
   const resultados = await Promise.all([
     salvar('saldo_sicredi', sicredi, data),
     salvar('saldo_caixa', caixa, data),
     salvar('saldo_mp', mp, data),
     salvar('saldo_data', 0, data), // só carrega a data de referência
+    salvar('saldo_cutoff_ms', agoraMs, data), // momento exato (data + hora) do salvamento
   ]);
   hideLoading();
 
@@ -8436,18 +8447,29 @@ async function renderFinanceiro() {
   // Saídas com "(Caixa)" na descrição devem estar salvas com banco='Caixa'
   // Saldo total = todas entradas - todas saídas (independente do banco)
   // SALDO INICIAL POR BANCO
-  let saldoInicialSicredi = 0, saldoInicialCaixa = 0, saldoInicialMP = 0, dataSaldoInicial = '';
+  let saldoInicialSicredi = 0, saldoInicialCaixa = 0, saldoInicialMP = 0, dataSaldoInicial = '', saldoCutoffMs = 0;
   try {
-    const { data: cfgs } = await getSB().from('configuracoes').select('*').in('chave', ['saldo_sicredi','saldo_caixa','saldo_mp','saldo_data']);
+    const { data: cfgs } = await getSB().from('configuracoes').select('*').in('chave', ['saldo_sicredi','saldo_caixa','saldo_mp','saldo_data','saldo_cutoff_ms']);
     if (cfgs) {
       const get = (chave) => cfgs.find(c=>c.chave===chave);
       const cSicredi = get('saldo_sicredi'); if (cSicredi) { saldoInicialSicredi = parseFloat(cSicredi.valor)||0; dataSaldoInicial = cSicredi.data_referencia||''; }
       const cCaixa = get('saldo_caixa'); if (cCaixa) saldoInicialCaixa = parseFloat(cCaixa.valor)||0;
       const cMP = get('saldo_mp'); if (cMP) saldoInicialMP = parseFloat(cMP.valor)||0;
+      const cCutoff = get('saldo_cutoff_ms'); if (cCutoff) saldoCutoffMs = parseFloat(cCutoff.valor)||0;
     }
   } catch(e) {}
 
-  const txParaSaldo = dataSaldoInicial ? transacoes.filter(t => (t.data||'') > dataSaldoInicial) : transacoes;
+  const txParaSaldo = dataSaldoInicial ? transacoes.filter(t => {
+    // Se tem o momento exato do salvamento E o lançamento tem horário de criação, compara
+    // por horário (resolve lançamentos do mesmo dia: antes de salvar não conta, depois conta).
+    if (saldoCutoffMs && t.created_at) {
+      const tMs = new Date(t.created_at).getTime();
+      return !isNaN(tMs) && tMs > saldoCutoffMs;
+    }
+    // Fallback (saldo salvo antes dessa correção, ou sem created_at): compara só por data,
+    // excluindo o próprio dia de referência.
+    return (t.data||'') > dataSaldoInicial;
+  }) : transacoes;
 
   // Saldo por banco = inicial + entradas - saídas de cada banco
   const entSicredi = txParaSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Sicredi').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);

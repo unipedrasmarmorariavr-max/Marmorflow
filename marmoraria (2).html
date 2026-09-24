@@ -12244,6 +12244,13 @@ async function salvarOrcamento(orc) {
   try {
     const { error } = await getSB().from('orcamentos').upsert(row, { onConflict: 'id' });
     if (error) { console.error('Erro ao salvar orçamento:', error.message); return false; }
+    // Confirmação extra: relê o registro pra garantir que realmente ficou gravado
+    // (não só que o upsert não retornou erro) — evita perda de dados silenciosa.
+    const { data: conferido, error: errConf } = await getSB().from('orcamentos').select('id,updated_at').eq('id', orc.id).maybeSingle();
+    if (errConf || !conferido) {
+      console.error('Falha ao confirmar gravação do orçamento após upsert:', errConf || 'registro não encontrado');
+      return false;
+    }
     const orcs = getOrcamentos();
     const idx = orcs.findIndex(o => o.id === orc.id);
     if (idx >= 0) orcs[idx] = orc; else orcs.unshift(orc);
@@ -14412,7 +14419,14 @@ async function salvarOrcamentoPedido(silencioso) {
   _atualizarCacheLocal(orcs);
   // Salva no Supabase e aguarda confirmação
   const ok = await salvarOrcamento(orcamentoAtual);
-  if (!ok && !silencioso) { showNotif('Erro ao salvar no banco!', 'error'); return; }
+  if (!ok) {
+    // NUNCA continua se o orçamento em si não foi salvo de verdade — mesmo em modo
+    // silencioso — senão o card do Kanban e a etapa do pedido são atualizados como se
+    // tivesse dado tudo certo, e os itens/medidas preenchidos se perdem de verdade.
+    console.error('FALHA AO SALVAR ORÇAMENTO NO BANCO — pedido:', orcamentoAtual.pedidoId);
+    alert('❌ ERRO GRAVE: o orçamento NÃO foi salvo no banco de dados!\n\nNão saia desta tela. Tente clicar em Salvar novamente. Se o erro persistir, tire um print e avise antes de continuar — os dados preenchidos podem se perder.');
+    return;
+  }
 
   // Salva tempos previstos direto no pedido
   if (orcamentoAtual.pedidoId && orcamentoAtual.itens) {

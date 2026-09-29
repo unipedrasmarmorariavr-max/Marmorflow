@@ -2053,7 +2053,7 @@ async function enviarMensagemIA() {
   }
   // Todos os lançamentos do mês atual, por banco — cobre perguntas tipo
   // "me manda todas as entradas e saídas do Sicredi"
-  ['Sicredi','Caixa','Mercado Pago'].forEach(function(banco){
+  ['Sicredi','Caixa','Mercado Pago','Dinheiro'].forEach(function(banco){
     var doBancoMes = trns.filter(function(t){return t.banco===banco && (t.data||'').startsWith(mesAtual);});
     if (doBancoMes.length) {
       var entB = doBancoMes.filter(function(t){return t.tipo==='entrada';}).reduce(function(s,t){return s+(parseFloat(t.valor)||0);},0);
@@ -2193,9 +2193,9 @@ async function enviarMensagemIA() {
   // ── SALDO POR BANCO ──────────────────────────────────────────
   var secSaldoBancos = '\n\n=== SALDO POR BANCO (agora) ===';
   try {
-    var cfgsSaldo = (await getSB().from('configuracoes').select('*').in('chave', ['saldo_sicredi','saldo_caixa','saldo_mp','saldo_data','saldo_cutoff_ms'])).data || [];
+    var cfgsSaldo = (await getSB().from('configuracoes').select('*').in('chave', ['saldo_sicredi','saldo_caixa','saldo_mp','saldo_dinheiro','saldo_data','saldo_cutoff_ms'])).data || [];
     var getCfgSaldo = function(chave){ return cfgsSaldo.find(function(c){return c.chave===chave;}); };
-    var cSicrediIA = getCfgSaldo('saldo_sicredi'), cCaixaIA = getCfgSaldo('saldo_caixa'), cMPIA = getCfgSaldo('saldo_mp'), cCutoffIA = getCfgSaldo('saldo_cutoff_ms');
+    var cSicrediIA = getCfgSaldo('saldo_sicredi'), cCaixaIA = getCfgSaldo('saldo_caixa'), cMPIA = getCfgSaldo('saldo_mp'), cDinheiroIA = getCfgSaldo('saldo_dinheiro'), cCutoffIA = getCfgSaldo('saldo_cutoff_ms');
     if (!cSicrediIA) {
       secSaldoBancos += '\nSaldos iniciais ainda não configurados pelo usuário.';
     } else {
@@ -2209,7 +2209,8 @@ async function enviarMensagemIA() {
       var saldoSicrediIA = (parseFloat(cSicrediIA.valor)||0) + somaBanco('Sicredi','entrada') - somaBanco('Sicredi','saida');
       var saldoCaixaIA   = (cCaixaIA?parseFloat(cCaixaIA.valor)||0:0) + somaBanco('Caixa','entrada') - somaBanco('Caixa','saida');
       var saldoMPIA      = (cMPIA?parseFloat(cMPIA.valor)||0:0) + somaBanco('Mercado Pago','entrada') - somaBanco('Mercado Pago','saida');
-      secSaldoBancos += '\nSicredi: '+fmtV(saldoSicrediIA)+' | Caixa: '+fmtV(saldoCaixaIA)+' | Mercado Pago: '+fmtV(saldoMPIA)+' | TOTAL: '+fmtV(saldoSicrediIA+saldoCaixaIA+saldoMPIA);
+      var saldoDinheiroIA = (cDinheiroIA?parseFloat(cDinheiroIA.valor)||0:0) + somaBanco('Dinheiro','entrada') - somaBanco('Dinheiro','saida');
+      secSaldoBancos += '\nSicredi: '+fmtV(saldoSicrediIA)+' | Caixa: '+fmtV(saldoCaixaIA)+' | Mercado Pago: '+fmtV(saldoMPIA)+' | Dinheiro: '+fmtV(saldoDinheiroIA)+' | TOTAL: '+fmtV(saldoSicrediIA+saldoCaixaIA+saldoMPIA+saldoDinheiroIA);
     }
   } catch(e) {
     secSaldoBancos += '\nErro ao consultar saldos: '+e.message;
@@ -4941,18 +4942,19 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
   const transacoes = txAll || [];
 
   // Saldo por Banco — mesmo cálculo do Financeiro
-  let saldoInicialSicrediD = 0, saldoInicialCaixaD = 0, saldoInicialMPD = 0, dataSaldoInicialDash = '', saldoCutoffMsDash = 0;
+  let saldoInicialSicrediD = 0, saldoInicialCaixaD = 0, saldoInicialMPD = 0, saldoInicialDinheiroD = 0, dataSaldoInicialDash = '', saldoCutoffMsDash = 0;
   try {
-    const { data: cfgs } = await getSB().from('configuracoes').select('*').in('chave', ['saldo_sicredi','saldo_caixa','saldo_mp','saldo_cutoff_ms']);
+    const { data: cfgs } = await getSB().from('configuracoes').select('*').in('chave', ['saldo_sicredi','saldo_caixa','saldo_mp','saldo_dinheiro','saldo_cutoff_ms']);
     if (cfgs) {
       const get = (chave) => cfgs.find(c=>c.chave===chave);
       const cS = get('saldo_sicredi'); if (cS) { saldoInicialSicrediD = parseFloat(cS.valor)||0; dataSaldoInicialDash = cS.data_referencia||''; }
       const cC = get('saldo_caixa'); if (cC) saldoInicialCaixaD = parseFloat(cC.valor)||0;
       const cM = get('saldo_mp'); if (cM) saldoInicialMPD = parseFloat(cM.valor)||0;
+      const cD = get('saldo_dinheiro'); if (cD) saldoInicialDinheiroD = parseFloat(cD.valor)||0;
       const cCutoff = get('saldo_cutoff_ms'); if (cCutoff) saldoCutoffMsDash = parseFloat(cCutoff.valor)||0;
     }
   } catch(e) {}
-  const saldoInicialDash = saldoInicialSicrediD + saldoInicialCaixaD + saldoInicialMPD;
+  const saldoInicialDash = saldoInicialSicrediD + saldoInicialCaixaD + saldoInicialMPD + saldoInicialDinheiroD;
   const txDesdeSaldo = dataSaldoInicialDash ? transacoes.filter(t => {
     if (t.categoria === 'Transferência entre Bancos') return false;
     if (saldoCutoffMsDash && t.created_at) {
@@ -4967,9 +4969,11 @@ async function renderDashFinanceiro(filtroMesSelecionado) {
   const saiCaixaD = txDesdeSaldo.filter(t=>t.tipo==='saida'&&t.banco==='Caixa').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const entMPD = txDesdeSaldo.filter(t=>t.tipo==='entrada'&&(t.banco==='Mercado Pago'||t.banco==='MP')).reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const saiMPD = txDesdeSaldo.filter(t=>t.tipo==='saida'&&(t.banco==='Mercado Pago'||t.banco==='MP')).reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
-  const saldoBancarioReal = (saldoInicialSicrediD + entSicrediD - saiSicrediD) + (saldoInicialCaixaD + entCaixaD - saiCaixaD) + (saldoInicialMPD + entMPD - saiMPD);
-  const entDesdeSaldo = entSicrediD + entCaixaD + entMPD;
-  const saiDesdeSaldo = saiSicrediD + saiCaixaD + saiMPD;
+  const entDinheiroD = txDesdeSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Dinheiro').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const saiDinheiroD = txDesdeSaldo.filter(t=>t.tipo==='saida'&&t.banco==='Dinheiro').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const saldoBancarioReal = (saldoInicialSicrediD + entSicrediD - saiSicrediD) + (saldoInicialCaixaD + entCaixaD - saiCaixaD) + (saldoInicialMPD + entMPD - saiMPD) + (saldoInicialDinheiroD + entDinheiroD - saiDinheiroD);
+  const entDesdeSaldo = entSicrediD + entCaixaD + entMPD + entDinheiroD;
+  const saiDesdeSaldo = saiSicrediD + saiCaixaD + saiMPD + saiDinheiroD;
 
   const CATS_DIVIDA = ['Dívida','Despesas Financeiras (Banco)'];
 
@@ -5610,7 +5614,7 @@ function removerChapa(id) {
   showNotif('Chapa removida', 'error');
 }
 
-const BANCOS = ['Sicredi','Caixa','Mercado Pago'];
+const BANCOS = ['Sicredi','Caixa','Mercado Pago','Dinheiro'];
 const CAT_SAIDA = [
   'Folha de Pagamento','Fornecedor','Insumos de Instalação','Insumos de Produção',
   'Aluguel','Combustível','Marketing','Alimentação (Vale/Cesta)','Energia Elétrica',
@@ -5980,7 +5984,7 @@ async function pagarConta(id) {
         <label class="form-label">Banco *</label>
         <select class="form-select" id="pag-banco">
           <option value="">Selecione o banco *</option>
-          ${['Sicredi','Caixa','Mercado Pago'].map(b => `<option value="${b}" ${(c.banco===b)?'selected':''}>${b}</option>`).join('')}
+          ${['Sicredi','Caixa','Mercado Pago','Dinheiro'].map(b => `<option value="${b}" ${(c.banco===b)?'selected':''}>${b}</option>`).join('')}
         </select>
       </div>
     </div>`;
@@ -8278,7 +8282,7 @@ function abrirModalLancamento(t, mesForcado) {
     'Água','Celular','Contabilidade','Software (MarmóPrice)','Manutenção de Máquina','Assistência Saúde',
     'Impostos','Despesas Financeiras (Banco)','Dívida','Financiamento/Refinanciamento',
     'Material de Escritório','A Identificar','Outros'];
-  const bancos = ['Sicredi','Caixa','Mercado Pago'];
+  const bancos = ['Sicredi','Caixa','Mercado Pago','Dinheiro'];
   const formas = ['pix','cartao','boleto','dinheiro','ted','debito'];
   let modal = document.getElementById('modal-lancamento');
   if (!modal) {
@@ -8333,7 +8337,7 @@ async function salvarLancamento(editId) {
 
 async function abrirModalSaldoInicial() {
   // Buscar saldos existentes
-  const { data: saldos } = await getSB().from('configuracoes').select('*').in('chave', ['saldo_sicredi','saldo_caixa','saldo_mp','saldo_data']);
+  const { data: saldos } = await getSB().from('configuracoes').select('*').in('chave', ['saldo_sicredi','saldo_caixa','saldo_mp','saldo_dinheiro','saldo_data']);
   const getSaldo = (chave) => (saldos||[]).find(s=>s.chave===chave)?.valor || 0;
   const getData = () => (saldos||[]).find(s=>s.chave==='saldo_data')?.data_referencia || new Date().toISOString().substring(0,10);
 
@@ -8363,6 +8367,10 @@ async function abrirModalSaldoInicial() {
           <input id="si-mp" type="number" step="0.01" value="${getSaldo('saldo_mp')}" placeholder="0,00" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;">
         </div>
         <div style="margin-bottom:20px;">
+          <label style="font-size:13px;font-weight:600;color:#B8760A;display:block;margin-bottom:6px;">💵 Dinheiro (em espécie)</label>
+          <input id="si-dinheiro" type="number" step="0.01" value="${getSaldo('saldo_dinheiro')}" placeholder="0,00" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:20px;">
           <label style="font-size:13px;font-weight:600;color:#333;display:block;margin-bottom:6px;">Data de Referência *</label>
           <input id="si-data" type="date" value="${getData()}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;">
         </div>
@@ -8379,6 +8387,7 @@ async function salvarSaldoInicial() {
   const sicredi = parseFloat(document.getElementById('si-sicredi').value) || 0;
   const caixa = parseFloat(document.getElementById('si-caixa').value) || 0;
   const mp = parseFloat(document.getElementById('si-mp').value) || 0;
+  const dinheiro = parseFloat(document.getElementById('si-dinheiro').value) || 0;
   const data = document.getElementById('si-data').value;
   if (!data) { alert('Preencha a data!'); return; }
 
@@ -8408,6 +8417,7 @@ async function salvarSaldoInicial() {
     salvar('saldo_sicredi', sicredi, data),
     salvar('saldo_caixa', caixa, data),
     salvar('saldo_mp', mp, data),
+    salvar('saldo_dinheiro', dinheiro, data),
     salvar('saldo_data', 0, data), // só carrega a data de referência
     salvar('saldo_cutoff_ms', agoraMs, data), // momento exato (data + hora) do salvamento
   ]);
@@ -8450,6 +8460,7 @@ function abrirModalTransferencia() {
             <option value="Sicredi">🟢 Sicredi</option>
             <option value="Caixa">🔵 Caixa</option>
             <option value="Mercado Pago">💛 Mercado Pago</option>
+            <option value="Dinheiro">💵 Dinheiro</option>
           </select>
         </div>
         <div>
@@ -8458,6 +8469,7 @@ function abrirModalTransferencia() {
             <option value="Caixa">🔵 Caixa</option>
             <option value="Sicredi">🟢 Sicredi</option>
             <option value="Mercado Pago">💛 Mercado Pago</option>
+            <option value="Dinheiro">💵 Dinheiro</option>
           </select>
         </div>
         <div>
@@ -8571,14 +8583,15 @@ async function renderFinanceiro() {
   // Saídas com "(Caixa)" na descrição devem estar salvas com banco='Caixa'
   // Saldo total = todas entradas - todas saídas (independente do banco)
   // SALDO INICIAL POR BANCO
-  let saldoInicialSicredi = 0, saldoInicialCaixa = 0, saldoInicialMP = 0, dataSaldoInicial = '', saldoCutoffMs = 0;
+  let saldoInicialSicredi = 0, saldoInicialCaixa = 0, saldoInicialMP = 0, saldoInicialDinheiro = 0, dataSaldoInicial = '', saldoCutoffMs = 0;
   try {
-    const { data: cfgs } = await getSB().from('configuracoes').select('*').in('chave', ['saldo_sicredi','saldo_caixa','saldo_mp','saldo_data','saldo_cutoff_ms']);
+    const { data: cfgs } = await getSB().from('configuracoes').select('*').in('chave', ['saldo_sicredi','saldo_caixa','saldo_mp','saldo_dinheiro','saldo_data','saldo_cutoff_ms']);
     if (cfgs) {
       const get = (chave) => cfgs.find(c=>c.chave===chave);
       const cSicredi = get('saldo_sicredi'); if (cSicredi) { saldoInicialSicredi = parseFloat(cSicredi.valor)||0; dataSaldoInicial = cSicredi.data_referencia||''; }
       const cCaixa = get('saldo_caixa'); if (cCaixa) saldoInicialCaixa = parseFloat(cCaixa.valor)||0;
       const cMP = get('saldo_mp'); if (cMP) saldoInicialMP = parseFloat(cMP.valor)||0;
+      const cDinheiro = get('saldo_dinheiro'); if (cDinheiro) saldoInicialDinheiro = parseFloat(cDinheiro.valor)||0;
       const cCutoff = get('saldo_cutoff_ms'); if (cCutoff) saldoCutoffMs = parseFloat(cCutoff.valor)||0;
     }
   } catch(e) {}
@@ -8597,20 +8610,23 @@ async function renderFinanceiro() {
 
   // Saldo por banco = inicial + entradas - saídas de cada banco
   const entSicredi = txParaSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Sicredi').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
-  const saiSicredi = txParaSaldo.filter(t=>t.tipo==='saida'&&t.banco==='Sicredi'||!t.banco).reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const saiSicredi = txParaSaldo.filter(t=>t.tipo==='saida'&&(t.banco==='Sicredi'||!t.banco)).reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const entCaixa = txParaSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Caixa').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const saiCaixa = txParaSaldo.filter(t=>t.tipo==='saida'&&t.banco==='Caixa').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const entMP = txParaSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Mercado Pago').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
   const saiMP = txParaSaldo.filter(t=>t.tipo==='saida'&&t.banco==='Mercado Pago').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const entDinheiro = txParaSaldo.filter(t=>t.tipo==='entrada'&&t.banco==='Dinheiro').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
+  const saiDinheiro = txParaSaldo.filter(t=>t.tipo==='saida'&&t.banco==='Dinheiro').reduce((s,t)=>s+(parseFloat(t.valor)||0),0);
 
   const saldoSicrediAtual = saldoInicialSicredi + entSicredi - saiSicredi;
   const saldoCaixaAtual = saldoInicialCaixa + entCaixa - saiCaixa;
   const saldoMPAtual = saldoInicialMP + entMP - saiMP;
-  const saldoTotal = saldoSicrediAtual + saldoCaixaAtual + saldoMPAtual;
+  const saldoDinheiroAtual = saldoInicialDinheiro + entDinheiro - saiDinheiro;
+  const saldoTotal = saldoSicrediAtual + saldoCaixaAtual + saldoMPAtual + saldoDinheiroAtual;
 
-  const totalEnt = entSicredi + entCaixa + entMP;
-  const totalSai = saiSicredi + saiCaixa + saiMP;
-  const saldoInicial = saldoInicialSicredi + saldoInicialCaixa + saldoInicialMP;
+  const totalEnt = entSicredi + entCaixa + entMP + entDinheiro;
+  const totalSai = saiSicredi + saiCaixa + saiMP + saiDinheiro;
+  const saldoInicial = saldoInicialSicredi + saldoInicialCaixa + saldoInicialMP + saldoInicialDinheiro;
   const saldoMP = 0;
 
   el.innerHTML = `
@@ -8869,6 +8885,10 @@ async function renderFinanceiro() {
           <div style="background:#f8f9fa;border-radius:10px;padding:12px;text-align:center;">
             <div style="font-size:11px;color:#2E7D32;font-weight:700;margin-bottom:4px;">💛 Mercado Pago</div>
             <div style="font-size:16px;font-weight:800;color:${saldoMPAtual>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoMPAtual)}</div>
+          </div>
+          <div style="background:#f8f9fa;border-radius:10px;padding:12px;text-align:center;">
+            <div style="font-size:11px;color:#B8760A;font-weight:700;margin-bottom:4px;">💵 Dinheiro</div>
+            <div style="font-size:16px;font-weight:800;color:${saldoDinheiroAtual>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoDinheiroAtual)}</div>
           </div>
           <div style="background:${saldoTotal>=0?'#e8f5e9':'#ffebee'};border-radius:10px;padding:12px;text-align:center;border:2px solid ${saldoTotal>=0?'#2E7D32':'#B85A4A'};">
             <div style="font-size:11px;color:#555;font-weight:700;margin-bottom:4px;">💰 TOTAL</div>
@@ -16293,6 +16313,7 @@ function getBancos() {
       { id: 'b1', nome: 'Sicredi', tipo: 'conta_corrente', cor: '#006382' },
       { id: 'b2', nome: 'Caixa Econômica', tipo: 'conta_corrente', cor: '#8B6914' },
       { id: 'b3', nome: 'Mercado Pago', tipo: 'digital', cor: '#2E7D32' },
+      { id: 'b4', nome: 'Dinheiro', tipo: 'especie', cor: '#B8760A' },
     ];
   } catch(e) { return []; }
 }

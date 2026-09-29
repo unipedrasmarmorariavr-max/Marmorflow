@@ -2018,7 +2018,8 @@ async function enviarMensagemIA() {
     if (!lista.length) return;
     var nomes = {negociacao:'Negociação',fechado:'Fechado/Aguardando Produção',corte:'Em Corte',acabamento:'Em Acabamento',pronto:'Pronto para Entrega',entregue:'Entregue'};
     secPedidos += '\n'+nomes[s]+' ('+lista.length+'): '+lista.map(function(o){
-      return o.cliente+' ['+o.id+']'+(o.valor?' — '+fmtV(parseFloat(o.valor)):'');
+      var dt = o.created_at ? new Date(o.created_at).toLocaleDateString('pt-BR') : '';
+      return o.cliente+' ['+o.id+']'+(dt?' — criado em '+dt:'')+(o.valor?' — '+fmtV(parseFloat(o.valor)):'');
     }).join(' | ');
   });
 
@@ -2110,9 +2111,104 @@ async function enviarMensagemIA() {
     secMateriais += '\nErro ao carregar estoque: '+e.message;
   }
 
+  // ── COMISSÕES (mês atual) ─────────────────────────────────────
+  var secComissoes = '\n\n=== COMISSÕES (mês atual) ===';
+  try {
+    var cfgComissao = getComissaoConfig();
+    var vendedoresCfg = cfgComissao.vendedores || [];
+    var origensExcluidasComissao = cfgComissao.origensExcluidas || ['arquiteto','construtora'];
+    var pedidosFechadosMes = ords.filter(function(o){
+      return o.stage==='fechado' && !o.ref_fechado && (o.created_at||'').startsWith(mesAtual);
+    });
+    if (!vendedoresCfg.length) {
+      secComissoes += '\nNenhum vendedor cadastrado em Configurações → Comissões.';
+    } else if (!pedidosFechadosMes.length) {
+      secComissoes += '\nNenhum pedido fechado este mês ainda.';
+    } else {
+      var vendasPorVendedor = {};
+      pedidosFechadosMes.forEach(function(o){
+        var origem = (o.origem||'').toLowerCase();
+        if (origensExcluidasComissao.some(function(ex){return origem.includes(ex);})) return;
+        var vend = o.vendedor || o.responsavel || 'Sem vendedor';
+        vendasPorVendedor[vend] = (vendasPorVendedor[vend]||0) + (parseFloat(o.valor)||0);
+      });
+      secComissoes += '\n'+Object.entries(vendasPorVendedor).map(function(e){
+        var cfgV = vendedoresCfg.find(function(v){return v.nome===e[0];});
+        var pct = cfgV ? parseFloat(cfgV.percentual)||0 : 0;
+        var comissao = e[1] * pct / 100;
+        return e[0]+': vendeu '+fmtV(e[1])+' ('+pct+'% = '+fmtV(comissao)+' de comissão)';
+      }).join(' | ');
+    }
+  } catch(e) {
+    secComissoes += '\nErro ao calcular comissões: '+e.message;
+  }
+
+  // ── DÍVIDAS ──────────────────────────────────────────────────
+  var secDividas = '\n\n=== DÍVIDAS ===';
+  try {
+    var CATS_DIVIDA_IA = ['Dívida','Financiamento/Refinanciamento'];
+    var dividasIA = (typeof getContasPagar==='function' ? getContasPagar() : []).filter(function(c){return CATS_DIVIDA_IA.includes(c.categoria);});
+    var dividasAbertas = dividasIA.filter(function(c){return c.status!=='pago';});
+    if (!dividasAbertas.length) {
+      secDividas += '\nNenhuma dívida em aberto.';
+    } else {
+      var totalDividasAberto = dividasAbertas.reduce(function(s,c){return s+(parseFloat(c.valor)||0);},0);
+      secDividas += '\nTotal em aberto: '+fmtV(totalDividasAberto);
+      secDividas += '\n'+dividasAbertas.map(function(c){
+        return c.descricao+' — '+fmtV(c.valor)+(c.vencimento?' — vence '+c.vencimento:'');
+      }).join(' | ');
+    }
+  } catch(e) {
+    secDividas += '\nErro ao carregar dívidas: '+e.message;
+  }
+
+  // ── SALDO POR BANCO ──────────────────────────────────────────
+  var secSaldoBancos = '\n\n=== SALDO POR BANCO (agora) ===';
+  try {
+    var cfgsSaldo = (await getSB().from('configuracoes').select('*').in('chave', ['saldo_sicredi','saldo_caixa','saldo_mp','saldo_data','saldo_cutoff_ms'])).data || [];
+    var getCfgSaldo = function(chave){ return cfgsSaldo.find(function(c){return c.chave===chave;}); };
+    var cSicrediIA = getCfgSaldo('saldo_sicredi'), cCaixaIA = getCfgSaldo('saldo_caixa'), cMPIA = getCfgSaldo('saldo_mp'), cCutoffIA = getCfgSaldo('saldo_cutoff_ms');
+    if (!cSicrediIA) {
+      secSaldoBancos += '\nSaldos iniciais ainda não configurados pelo usuário.';
+    } else {
+      var dataRefIA = cSicrediIA.data_referencia || '';
+      var cutoffMsIA = cCutoffIA ? parseFloat(cCutoffIA.valor)||0 : 0;
+      var txDesdeIA = trns.filter(function(t){
+        if (cutoffMsIA && t.created_at) { var tMs = new Date(t.created_at).getTime(); return !isNaN(tMs) && tMs > cutoffMsIA; }
+        return (t.data||'') > dataRefIA;
+      });
+      var somaBanco = function(banco, tipo){ return txDesdeIA.filter(function(t){return t.banco===banco&&t.tipo===tipo;}).reduce(function(s,t){return s+(parseFloat(t.valor)||0);},0); };
+      var saldoSicrediIA = (parseFloat(cSicrediIA.valor)||0) + somaBanco('Sicredi','entrada') - somaBanco('Sicredi','saida');
+      var saldoCaixaIA   = (cCaixaIA?parseFloat(cCaixaIA.valor)||0:0) + somaBanco('Caixa','entrada') - somaBanco('Caixa','saida');
+      var saldoMPIA      = (cMPIA?parseFloat(cMPIA.valor)||0:0) + somaBanco('Mercado Pago','entrada') - somaBanco('Mercado Pago','saida');
+      secSaldoBancos += '\nSicredi: '+fmtV(saldoSicrediIA)+' | Caixa: '+fmtV(saldoCaixaIA)+' | Mercado Pago: '+fmtV(saldoMPIA)+' | TOTAL: '+fmtV(saldoSicrediIA+saldoCaixaIA+saldoMPIA);
+    }
+  } catch(e) {
+    secSaldoBancos += '\nErro ao consultar saldos: '+e.message;
+  }
+
+  // ── MÉTRICAS GERAIS (todos os tempos) ─────────────────────────
+  var secMetricas = '\n\n=== MÉTRICAS GERAIS ===';
+  try {
+    var todosOrcadosIA = ords.filter(function(o){return !o.ref_fechado && o.valor;});
+    var fechadosIA = ords.filter(function(o){return !o.ref_fechado && ['fechado','corte','acabamento','pronto','entregue'].includes(o.stage);});
+    var taxaConvIA = todosOrcadosIA.length>0 ? (fechadosIA.length/todosOrcadosIA.length*100) : 0;
+    secMetricas += '\nTaxa de conversão geral: '+taxaConvIA.toFixed(1)+'% ('+fechadosIA.length+' de '+todosOrcadosIA.length+' orçamentos fechados)';
+    var cfgGastosIA = JSON.parse(localStorage.getItem('mf_gastos_config')||'{}');
+    var custoFixoIA = Object.values(cfgGastosIA).reduce(function(s,v){return s+(parseFloat(v)||0);},0);
+    var totalFechadoMesIA = fechadosIA.filter(function(o){return (o.created_at||'').startsWith(mesAtual);}).reduce(function(s,o){return s+(parseFloat(o.valor)||0);},0);
+    if (custoFixoIA > 0) {
+      secMetricas += '\nPonto de equilíbrio: custo fixo mensal '+fmtV(custoFixoIA)+' | fechado este mês '+fmtV(totalFechadoMesIA)+' = '+(totalFechadoMesIA/custoFixoIA*100).toFixed(1)+'% da meta';
+    } else {
+      secMetricas += '\nPonto de equilíbrio: custos fixos não configurados em Configurações → Grupo de Gastos.';
+    }
+  } catch(e) {
+    secMetricas += '\nErro ao calcular métricas: '+e.message;
+  }
+
   const contexto = 'Você é o assessor completo da Unipedras Marmoraria (Volta Redonda/RJ). Data hoje: '+hoje+'.'
     +' Responda sempre em português, de forma clara e objetiva. Use APENAS os dados abaixo — não invente nada.'
-    +secPedidos + secFin + secReceber + secPagar + secCRM + secMateriais;
+    +secPedidos + secFin + secReceber + secPagar + secCRM + secMateriais + secComissoes + secDividas + secSaldoBancos + secMetricas;
 
     const historico = msgs._historico || [];
 

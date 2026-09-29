@@ -5802,8 +5802,8 @@ function abrirModalContaPagar(id) {
           <input class="form-input" id="cp-valor" type="number" step="0.01" value="${c?.valor||''}" placeholder="0,00" style="font-size:18px;font-weight:700;">
         </div>
         <div>
-          <label class="form-label">Vencimento *</label>
-          <input class="form-input" id="cp-vencimento" type="date" value="${c?.vencimento||new Date().toISOString().substring(0,10)}">
+          <label class="form-label">Vencimento <span style="color:#888;font-weight:400;">(opcional — deixe em branco pra só registrar a dívida, sem data)</span></label>
+          <input class="form-input" id="cp-vencimento" type="date" value="${c?.vencimento||''}">
         </div>
       </div>
       <div>
@@ -5871,11 +5871,12 @@ function abrirModalContaPagar(id) {
 async function salvarContaPagar() {
   const descricao = document.getElementById('cp-descricao')?.value.trim();
   const valor = parseFloat(document.getElementById('cp-valor')?.value)||0;
-  const vencimento = document.getElementById('cp-vencimento')?.value;
-  if (!descricao || !valor || !vencimento) { showNotif('Preencha descrição, valor e vencimento!', 'error'); return; }
+  const vencimento = document.getElementById('cp-vencimento')?.value || null;
+  const recorrencia = document.getElementById('cp-recorrencia')?.value||'unica';
+  if (!descricao || !valor) { showNotif('Preencha descrição e valor!', 'error'); return; }
+  if (!vencimento && recorrencia !== 'unica') { showNotif('Informe a data — parcelamento/recorrência precisa de uma data inicial!', 'error'); return; }
 
   const editId = document.getElementById('cp-edit-id')?.value;
-  const recorrencia = document.getElementById('cp-recorrencia')?.value||'unica';
   const nParcelas = parseInt(document.getElementById('cp-n-parcelas')?.value)||1;
   const valParcela = parseFloat(document.getElementById('cp-valor-parcela')?.value)||valor;
 
@@ -5968,7 +5969,7 @@ async function pagarConta(id) {
     <input type="hidden" id="pag-conta-id" value="${id}">
     <div style="background:#fff5f5;border-radius:8px;padding:12px 16px;margin-bottom:16px;">
       <div style="font-weight:700;color:var(--stone);">${c.descricao}</div>
-      <div style="font-size:13px;color:#888;">Vencimento: ${c.vencimento?.substring(8,10)+'/'+c.vencimento?.substring(5,7)+'/'+c.vencimento?.substring(0,4)}</div>
+      <div style="font-size:13px;color:#888;">${c.vencimento ? 'Vencimento: '+c.vencimento.substring(8,10)+'/'+c.vencimento.substring(5,7)+'/'+c.vencimento.substring(0,4) : 'Sem data definida'}</div>
     </div>
     <div style="display:grid;gap:14px;">
       <div>
@@ -9115,11 +9116,12 @@ async function renderFinanceiro() {
           </div>
         </div>
         ${contasPendentes.length===0?`<div style="padding:40px;text-align:center;color:#888;"><div style="font-size:32px;margin-bottom:12px;">✅</div><div>Nenhuma conta pendente!</div></div>`:
-        contasPendentes.sort((a,b)=>a.vencimento.localeCompare(b.vencimento)).map(c => {
+        contasPendentes.slice().sort((a,b)=>(a.vencimento||'9999-99-99').localeCompare(b.vencimento||'9999-99-99')).map(c => {
           const hoje = new Date().toISOString().substring(0,10);
-          const vencida = c.vencimento < hoje;
-          const hojeVence = c.vencimento === hoje;
-          const diasVenc = Math.ceil((new Date(c.vencimento+'T12:00:00')-new Date())/(1000*60*60*24));
+          const semData = !c.vencimento;
+          const vencida = !semData && c.vencimento < hoje;
+          const hojeVence = !semData && c.vencimento === hoje;
+          const diasVenc = semData ? 0 : Math.ceil((new Date(c.vencimento+'T12:00:00')-new Date())/(1000*60*60*24));
           return `
           <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--cream-dark);
             background:${vencida?'#fff8f8':hojeVence?'#fffde7':'white'};
@@ -9129,15 +9131,15 @@ async function renderFinanceiro() {
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
                 <span style="font-size:14px;font-weight:700;color:var(--stone);">${c.descricao}</span>
                 ${c.categoria?`<span style="font-size:11px;background:#f0f0f0;padding:2px 8px;border-radius:10px;color:#666;">${c.categoria}</span>`:''}
+                ${semData?`<span style="font-size:11px;background:#e0e0e0;color:#666;padding:2px 8px;border-radius:10px;font-weight:600;">📌 SEM DATA</span>`:''}
                 ${hojeVence?`<span style="font-size:11px;background:#F59E0B;color:white;padding:2px 8px;border-radius:10px;font-weight:700;animation:pulse 1s infinite;">🔔 VENCE HOJE</span>`:''}
                 ${vencida?`<span style="font-size:11px;background:#B85A4A;color:white;padding:2px 8px;border-radius:10px;font-weight:700;">⚠️ VENCIDA</span>`:''}
                 ${c.recorrencia==='mensal'?`<span style="font-size:10px;color:#006382;">🔄 Mensal</span>`:''}
                 ${c.recorrencia==='semanal'?`<span style="font-size:10px;color:#006382;">🔄 Semanal</span>`:''}
               </div>
               <div style="font-size:12px;color:${vencida?'#B85A4A':hojeVence?'#8B6914':'#888'};">
-                ${vencida?'⚠️ Venceu em ':hojeVence?'⏰ Vence hoje! ':'📅 Vence em '}
-                ${fmtDt(c.vencimento)}
-                ${!vencida&&!hojeVence&&diasVenc>0?` (${diasVenc} dias)`:''}
+                ${semData?'📌 Sem data definida — só pra constar':vencida?'⚠️ Venceu em '+fmtDt(c.vencimento):hojeVence?'⏰ Vence hoje!':'📅 Vence em '+fmtDt(c.vencimento)}
+                ${!semData&&!vencida&&!hojeVence&&diasVenc>0?` (${diasVenc} dias)`:''}
                 ${c.banco?' · '+c.banco:''}
               </div>
               ${c.obs?`<div style="font-size:11px;color:#888;margin-top:2px;">💬 ${c.obs}</div>`:''}

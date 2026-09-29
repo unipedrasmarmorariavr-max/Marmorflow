@@ -2007,7 +2007,21 @@ async function enviarMensagemIA() {
     const hoje = new Date().toISOString().substring(0,10);
     const fmtV = function(v){ return 'R$ '+(parseFloat(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2}); };
     const ords = (typeof orders!=='undefined' ? orders : []) || [];
-    const trns = (typeof transacoes!=='undefined' ? transacoes : []) || [];
+    // 'transacoes' é uma variável local da tela do Financeiro — não existe fora dali.
+    // Busca direto no banco (paginado, todas as páginas) pra garantir dados reais aqui.
+    var trns = [];
+    try {
+      var _allTx = [], _from = 0; var _pageSize = 1000;
+      while (true) {
+        var _pageRes = await getSB().from('transacoes').select('*').order('data', { ascending: false }).range(_from, _from + _pageSize - 1);
+        var _pageData = _pageRes.data;
+        if (!_pageData || _pageData.length === 0) break;
+        _allTx = _allTx.concat(_pageData);
+        if (_pageData.length < _pageSize) break;
+        _from += _pageSize;
+      }
+      trns = _allTx;
+    } catch(e) { console.error('Erro ao buscar transações para IA:', e); }
     const orcs = (typeof orcamentos!=='undefined' ? orcamentos : []) || [];
 
   // ── PEDIDOS POR ETAPA ────────────────────────────────────────
@@ -2030,25 +2044,39 @@ async function enviarMensagemIA() {
   const saidas   = transMes.filter(function(t){return t.tipo==='saida';}).reduce(function(s,t){return s+(parseFloat(t.valor)||0);},0);
   var secFin = '\n\n=== FINANCEIRO ===';
   secFin += '\nMês atual ('+mesAtual+'): Entradas '+fmtV(entradas)+' | Saídas '+fmtV(saidas)+' | Saldo '+fmtV(entradas-saidas);
-  // Últimos 5 lançamentos
-  var ultLanc = trns.slice(-5).reverse();
+  // Últimos 5 lançamentos no geral (trns já vem ordenado do mais recente pro mais antigo)
+  var ultLanc = trns.slice(0, 5);
   if (ultLanc.length) {
-    secFin += '\nÚltimos lançamentos: '+ultLanc.map(function(t){
-      return t.data+' '+t.descricao+' '+(t.tipo==='entrada'?'+':'-')+fmtV(t.valor);
+    secFin += '\nÚltimos lançamentos (geral): '+ultLanc.map(function(t){
+      return t.data+' '+t.descricao+' '+(t.tipo==='entrada'?'+':'-')+fmtV(t.valor)+' ('+(t.banco||'sem banco')+')';
     }).join(' | ');
   }
+  // Todos os lançamentos do mês atual, por banco — cobre perguntas tipo
+  // "me manda todas as entradas e saídas do Sicredi"
+  ['Sicredi','Caixa','Mercado Pago'].forEach(function(banco){
+    var doBancoMes = trns.filter(function(t){return t.banco===banco && (t.data||'').startsWith(mesAtual);});
+    if (doBancoMes.length) {
+      var entB = doBancoMes.filter(function(t){return t.tipo==='entrada';}).reduce(function(s,t){return s+(parseFloat(t.valor)||0);},0);
+      var saiB = doBancoMes.filter(function(t){return t.tipo==='saida';}).reduce(function(s,t){return s+(parseFloat(t.valor)||0);},0);
+      secFin += '\nLançamentos de '+banco+' este mês ('+doBancoMes.length+', entradas '+fmtV(entB)+' / saídas '+fmtV(saiB)+'): '+doBancoMes.map(function(t){
+        return t.data+' '+t.descricao+' '+(t.tipo==='entrada'?'+':'-')+fmtV(t.valor);
+      }).join(' | ');
+    } else {
+      secFin += '\nNenhum lançamento de '+banco+' este mês.';
+    }
+  });
 
   // ── A RECEBER ────────────────────────────────────────────────
   var secReceber = '\n\n=== A RECEBER ===';
   var pedidosPendentes = ords.filter(function(o){
     var valorTotal = parseFloat(o.valor)||0;
-    var recebido = trns.filter(function(t){return t.pedidoId===o.id&&t.tipo==='entrada';}).reduce(function(s,t){return s+(parseFloat(t.valor)||0);},0);
+    var recebido = trns.filter(function(t){return t.pedido_id===o.id&&t.tipo==='entrada';}).reduce(function(s,t){return s+(parseFloat(t.valor)||0);},0);
     return valorTotal > 0 && recebido < valorTotal && (o.stage==='fechado'||o.stage==='corte'||o.stage==='acabamento'||o.stage==='pronto'||o.stage==='entregue');
   });
   if (pedidosPendentes.length) {
     secReceber += '\n'+pedidosPendentes.map(function(o){
       var valorTotal = parseFloat(o.valor)||0;
-      var recebido = trns.filter(function(t){return t.pedidoId===o.id&&t.tipo==='entrada';}).reduce(function(s,t){return s+(parseFloat(t.valor)||0);},0);
+      var recebido = trns.filter(function(t){return t.pedido_id===o.id&&t.tipo==='entrada';}).reduce(function(s,t){return s+(parseFloat(t.valor)||0);},0);
       return o.cliente+' ['+o.id+'] — deve '+fmtV(valorTotal-recebido)+' de '+fmtV(valorTotal);
     }).join('\n');
   } else {

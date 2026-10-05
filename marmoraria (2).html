@@ -12453,9 +12453,13 @@ async function salvarOrcamento(orc) {
   } catch(e) { console.error('Erro ao salvar orçamento:', e); return false; }
 }
 
+// Atualiza SÓ a cópia local do navegador. NUNCA grava no banco.
+// (Antes, esta função mandava TODAS as cópias locais — centenas — pro Supabase a cada
+// orçamento aberto. Uma cópia antiga ou em branco de qualquer aparelho sobrescrevia a
+// versão boa do banco, e isso fazia orçamentos "sumirem". Gravar no banco é função de
+// salvarOrcamento() / salvarOrcamentoPedido(), só do orçamento que realmente foi editado.)
 function salvarOrcamentos(orcs) {
   _atualizarCacheLocal(orcs);
-  orcs.forEach(orc => { if (orc.id) salvarOrcamento(orc); });
 }
 
 let _syncOrcTimeout = null;
@@ -12923,13 +12927,14 @@ async function abrirTelaOrcamentoPedido(id) {
     console.warn('Erro Supabase:', e.message);
   }
 
-  // Fallback: localStorage — SÓ quando o Supabase realmente falhou (ex: sem internet).
-  // Se o Supabase respondeu e simplesmente não achou nada, o pedido é novo mesmo —
-  // usar uma cópia local antiga aqui causaria orçamentos novos puxando dados de pedidos antigos.
-  if (!orc && !supabaseRespondeu) {
-    const orcsLocal = getOrcamentos();
-    orc = orcsLocal.find(o => o.pedidoId === idOrc) || null;
-    console.log('localStorage (fallback offline):', orc ? 'encontrado itens:' + orc.itens?.length : 'não encontrado');
+  // Se o banco NÃO respondeu (sem internet / erro), não abrimos o orçamento. Abrir uma cópia
+  // local possivelmente antiga e depois salvar por cima, ou criar um orçamento em branco
+  // (que viraria um segundo registro do mesmo pedido), é o que faz orçamento sumir.
+  if (!supabaseRespondeu) {
+    pedidoOrcAtual = null;
+    localStorage.removeItem('mf_orc_aberto');
+    alert('Não consegui carregar este orçamento do banco de dados (sem conexão ou erro do servidor).\n\nNada foi alterado. Verifique a internet e tente abrir de novo em instantes.');
+    return;
   }
 
 

@@ -12876,6 +12876,10 @@ async function diagnosticarOrcamentos() {
 
 async function abrirTelaOrcamentoPedido(id) {
   try {
+  // Se havia outro orçamento aberto com alterações pendentes, grava antes de trocar
+  if (orcamentoAtual && orcamentoTemAlteracoesNaoSalvas()) {
+    try { await salvarOrcamento(orcamentoAtual); } catch(e) { console.error('Falha ao gravar orçamento anterior:', e); }
+  }
   const order = orders.find(o => o.id === id);
   if (!order) return;
   // Pedidos "-P" são cópias criadas ao fechar um pedido (aparecem em Em Corte/Acabamento
@@ -12997,6 +13001,7 @@ async function abrirTelaOrcamentoPedido(id) {
   document.getElementById('panel-orcamento-pedido').classList.add('active');
   console.log('Renderizando orçamento:', orcamentoAtual.id, 'itens:', orcamentoAtual.itens?.length);
   renderTelaOrcamentoPedido(order);
+  iniciarProtecaoOrcamento();
   } catch(err) {
     console.error('Erro ao abrir orçamento:', err);
     showNotif('Erro ao abrir orçamento: ' + err.message, 'error');
@@ -13067,10 +13072,92 @@ async function limparOrcamentoAtual() {
   hideLoading();
 
   renderTelaOrcamentoPedido(order);
+  iniciarProtecaoOrcamento();
   showNotif('Orçamento limpo! Começando do zero.', 'success');
 }
 
-function fecharTelaOrcamentoPedido() {
+// ─── PROTEÇÃO CONTRA PERDA DE ORÇAMENTO ──────────────────────────────────────
+// 1) Salvamento automático do orçamento (a cada ~3s, só quando algo mudou)
+// 2) Trava no "Voltar": grava antes de sair; se não conseguir gravar, NÃO sai
+// 3) Aviso do navegador ao fechar/recarregar a aba com alterações não gravadas
+let _orcBaseline = null;   // retrato (JSON) do último estado confirmado como gravado
+let _orcTimer = null;
+let _orcSalvando = false;
+let _orcStatusTexto = '';
+let _orcStatusCor = '#A8D5A2';
+
+function _orcSnapshot() {
+  try { return orcamentoAtual ? JSON.stringify(orcamentoAtual) : null; } catch(e) { return null; }
+}
+function orcamentoTemAlteracoesNaoSalvas() {
+  if (!orcamentoAtual || _orcBaseline === null) return false;
+  const snap = _orcSnapshot();
+  return snap !== null && snap !== _orcBaseline;
+}
+function _orcMostrarStatus(texto, cor) {
+  _orcStatusTexto = texto; _orcStatusCor = cor;
+  const el = document.getElementById('orc-status-salvamento');
+  if (el) { el.textContent = texto; el.style.color = cor; }
+}
+function _orcHora() {
+  return new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
+async function autosalvarOrcamento() {
+  if (_orcSalvando || !orcamentoAtual || !pedidoOrcAtual) return;
+  if (!orcamentoTemAlteracoesNaoSalvas()) return;
+  const idAlvo = orcamentoAtual.id;
+  const snap = _orcSnapshot();
+  // Cópia local do navegador na hora (instantâneo, funciona até sem internet)
+  try {
+    const orcs = getOrcamentos();
+    const i = orcs.findIndex(o => o.id === idAlvo);
+    if (i >= 0) orcs[i] = orcamentoAtual; else orcs.unshift(orcamentoAtual);
+    _atualizarCacheLocal(orcs);
+  } catch(e) {}
+  _orcSalvando = true;
+  _orcMostrarStatus('⏳ Salvando...', '#FFD700');
+  let ok = false;
+  try { ok = await salvarOrcamento(orcamentoAtual); } catch(e) { ok = false; }
+  _orcSalvando = false;
+  if (!orcamentoAtual || orcamentoAtual.id !== idAlvo) return; // saiu/trocou de orçamento durante o salvamento
+  if (ok) {
+    _orcBaseline = snap; // se houve edição durante o salvamento, o próximo ciclo grava a diferença
+    _orcMostrarStatus('💾 Salvo automaticamente às ' + _orcHora(), '#A8D5A2');
+  } else {
+    _orcMostrarStatus('⚠️ NÃO SALVO — verifique a internet. Seus dados estão guardados neste navegador.', '#FF8A80');
+  }
+}
+
+function iniciarProtecaoOrcamento() {
+  pararProtecaoOrcamento();
+  _orcBaseline = _orcSnapshot(); // estado recém-carregado = considerado gravado
+  _orcMostrarStatus('', '#A8D5A2');
+  _orcTimer = setInterval(autosalvarOrcamento, 3000);
+}
+function pararProtecaoOrcamento() {
+  if (_orcTimer) { clearInterval(_orcTimer); _orcTimer = null; }
+  _orcBaseline = null;
+}
+
+// Aviso ao fechar/recarregar a aba com alterações ainda não gravadas
+window.addEventListener('beforeunload', function(e) {
+  if (orcamentoTemAlteracoesNaoSalvas()) { e.preventDefault(); e.returnValue = ''; return ''; }
+});
+// Ao esconder a aba/minimizar (comum no celular), grava na hora
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'hidden') autosalvarOrcamento();
+});
+
+async function fecharTelaOrcamentoPedido() {
+  if (orcamentoAtual && orcamentoTemAlteracoesNaoSalvas()) {
+    if (_orcSalvando) { alert('Estou salvando o orçamento agora. Aguarde um instante e clique em Voltar de novo.'); return; }
+    // Há alterações não gravadas: grava ANTES de sair. Se falhar, NÃO sai da tela.
+    _orcSalvando = true;
+    try { await salvarOrcamentoPedido(true); } finally { _orcSalvando = false; }
+    if (orcamentoTemAlteracoesNaoSalvas()) return; // falhou (o alerta já apareceu) — fica na tela
+  }
+  pararProtecaoOrcamento();
   document.querySelector('.tabs').style.display = '';
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-kanban').classList.add('active');
@@ -13118,6 +13205,7 @@ function renderTelaOrcamentoPedido(order) {
         <div>
           <div style="font-size:16px;font-weight:700;">${order.cliente} — Orçamento</div>
           <div style="font-size:11px;opacity:0.6;">${order.id} · ${order.peca||''} · Custo/h: ${fmt(custoHoraEmpresa)} · Criado em: ${(orcamentoAtual?.criadoEm||orc?.criadoEm) ? new Date(orcamentoAtual?.criadoEm||orc?.criadoEm).toLocaleDateString('pt-BR') : '—'}</div>
+          <div id="orc-status-salvamento" style="font-size:11px;margin-top:2px;font-weight:600;color:${_orcStatusCor};">${_orcStatusTexto}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -13938,7 +14026,7 @@ function removerItemTelaOrc(idx, orderId) {
 }
 
 async function salvarOrcamentoPedido(silencioso) {
-  if (!orcamentoAtual) return;
+  if (!orcamentoAtual) return false;
   // Atualiza cache local imediatamente
   const orcs = getOrcamentos();
   const idx = orcs.findIndex(o => o.id === orcamentoAtual.id);
@@ -13951,9 +14039,12 @@ async function salvarOrcamentoPedido(silencioso) {
     // silencioso — senão o card do Kanban e a etapa do pedido são atualizados como se
     // tivesse dado tudo certo, e os itens/medidas preenchidos se perdem de verdade.
     console.error('FALHA AO SALVAR ORÇAMENTO NO BANCO — pedido:', orcamentoAtual.pedidoId);
+    _orcMostrarStatus('⚠️ NÃO SALVO — verifique a internet. Seus dados estão guardados neste navegador.', '#FF8A80');
     alert('❌ ERRO GRAVE: o orçamento NÃO foi salvo no banco de dados!\n\nNão saia desta tela. Tente clicar em Salvar novamente. Se o erro persistir, tire um print e avise antes de continuar — os dados preenchidos podem se perder.');
-    return;
+    return false;
   }
+  _orcBaseline = _orcSnapshot(); // gravado com sucesso: este é o novo estado de referência
+  _orcMostrarStatus('💾 Salvo às ' + _orcHora(), '#A8D5A2');
 
   // Salva tempos previstos direto no pedido
   if (orcamentoAtual.pedidoId && orcamentoAtual.itens) {
@@ -14022,10 +14113,12 @@ async function salvarOrcamentoPedido(silencioso) {
     }
   }
   if (!silencioso) showNotif('Orçamento salvo! ✓', 'success');
+  return true;
 }
 
 async function salvarEFecharPedido() {
-  await salvarOrcamentoPedido();
+  const salvouOk = await salvarOrcamentoPedido();
+  if (!salvouOk) return; // não segue pro fechamento do pedido se o orçamento não foi gravado
   if (pedidoOrcAtual) {
     abrirModalConfirmarData(pedidoOrcAtual);
     fecharTelaOrcamentoPedido();
@@ -14197,8 +14290,14 @@ function removerLinhaItem(btn, idx, orderId) {
   var pi = rows.indexOf(row);
   if (pi < 0) return;
   orcamentoAtual.itens[idx].pecas.splice(pi, 1);
-  row.remove();
-  recalcularTelaOrc(orderId);
+  // Reconstrói a tela inteira: os campos de cada linha ficam amarrados a uma posição fixa
+  // (pecas[0], pecas[1]...) quando a tela é desenhada. Se só removêssemos a linha da tela,
+  // as de baixo continuariam apontando pras posições antigas — o que você digita nelas
+  // cairia na peça errada ou se perderia.
+  var yRolagem = window.pageYOffset;
+  var ordRef = orders.find(function(o){ return o.id === orderId; });
+  if (ordRef) renderTelaOrcamentoPedido(ordRef); else recalcularTelaOrc(orderId);
+  window.scrollTo(0, yRolagem);
 }
 
 // removerPecaItem: chamado pelo botão 🗑 no template com (btn, idx, orderId)

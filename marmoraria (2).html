@@ -1040,6 +1040,65 @@ function toggleFiltroAv() {
 <div class="notif" id="notif"></div>
 
 <script>
+const MF_VERSAO = '05/10 · salvamento seguro v3'; // conferir em cada aparelho se já está com o arquivo novo
+console.log('MarmorFlow versão:', MF_VERSAO);
+// ─── REGISTRO AUTOMÁTICO DE ERROS ───────────────────────────────────────────
+// Anota na tabela "erros_sistema" do Supabase qualquer erro de tela e falha de salvamento,
+// com aparelho, horário e versão — pra gente enxergar o que acontece sem depender de alguém
+// perceber e avisar. NUNCA atrapalha o sistema: se não conseguir anotar, simplesmente ignora.
+var _errFila = [];
+var _errUltimo = {};
+var _errEnviados = 0;
+var _errDesligado = false;
+function registrarErroSistema(tipo, mensagem, detalhe) {
+  try {
+    if (_errDesligado) return;
+    mensagem = String(mensagem == null ? '' : mensagem).slice(0, 500);
+    var chave = tipo + '|' + mensagem.slice(0, 120);
+    var agora = Date.now();
+    if (_errUltimo[chave] && agora - _errUltimo[chave] < 60000) return; // mesma falha: no máx. 1x por minuto
+    _errUltimo[chave] = agora;
+    if (_errEnviados >= 60) return; // teto por sessão (evita inundar)
+    _errEnviados++;
+    _errFila.push({
+      versao: (typeof MF_VERSAO !== 'undefined' ? MF_VERSAO : ''),
+      perfil: (typeof currentUser !== 'undefined' ? String(currentUser || '') : ''),
+      aba: (function(){ try { return localStorage.getItem('mf_aba') || ''; } catch(e) { return ''; } })(),
+      aparelho: (navigator.userAgent || '').slice(0, 160) + ' | tela ' + (window.innerWidth || 0) + 'x' + (window.innerHeight || 0),
+      tipo: String(tipo).slice(0, 60),
+      mensagem: mensagem,
+      detalhe: String(detalhe == null ? '' : detalhe).slice(0, 1500)
+    });
+    setTimeout(descarregarFilaErros, 1500);
+  } catch(e) {}
+}
+async function descarregarFilaErros() {
+  var lote = [];
+  try {
+    if (_errDesligado || !_errFila.length) return;
+    if (typeof getSB !== 'function') return;
+    var sb = getSB(); if (!sb) return;
+    lote = _errFila.splice(0, 20);
+    var res = await sb.from('erros_sistema').insert(lote);
+    if (res && res.error) {
+      var msg = String(res.error.message || '') + ' ' + String(res.error.code || '');
+      if (/PGRST205|42P01|does not exist|Could not find the table/i.test(msg)) { _errDesligado = true; _errFila = []; return; } // tabela ainda não criada
+      _errFila = lote.concat(_errFila).slice(0, 100); // erro temporário: tenta de novo depois
+    }
+  } catch(e) {
+    _errFila = lote.concat(_errFila).slice(0, 100); // sem internet: tenta de novo depois
+  }
+}
+window.addEventListener('error', function(ev) {
+  registrarErroSistema('js', ev.message, (ev.filename || '') + ':' + ev.lineno + ':' + ev.colno + (ev.error && ev.error.stack ? '\n' + ev.error.stack : ''));
+});
+window.addEventListener('unhandledrejection', function(ev) {
+  var r = ev.reason;
+  registrarErroSistema('promise', r && (r.message || String(r)), r && r.stack);
+});
+window.addEventListener('online', function() { descarregarFilaErros(); });
+setInterval(descarregarFilaErros, 60000);
+
 const SUPABASE_URL = 'https://rentppmumsyttactanwa.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_5LXkt5cn2jlH_OWhKOSycQ_CZGiOLfv';
 var sb = null;
@@ -1898,7 +1957,7 @@ function renderSidebar(perfil) {
   const userEl = document.getElementById('sidebar-user-info');
   if (userEl) {
     const nomes = {dono:'👑 Dono', comercial:'💼 Comercial', producao:'⚙️ Produção', financeiro:'💰 Financeiro', medidor:'📐 Medidor'};
-    userEl.innerHTML = '<strong>'+( nomes[perfil]||perfil)+'</strong>Unipedras Marmoraria';
+    userEl.innerHTML = '<strong>'+( nomes[perfil]||perfil)+'</strong>Unipedras Marmoraria<div style="font-size:9px;opacity:.55;margin-top:3px;">versão '+MF_VERSAO+'</div>';
   }
 
   // Restaura estado do sidebar
@@ -12424,8 +12483,16 @@ function _atualizarCacheLocal(orcs) {
   try { localStorage.setItem('orcamentos_marmorflow', JSON.stringify(orcs)); } catch(e) {}
 }
 
-async function salvarOrcamento(orc) {
+// Versão (updated_at) do registro do orçamento ABERTO no banco, como ESTE aparelho a viu por último
+// (ao abrir ou ao gravar). Serve pra perceber quando OUTRO aparelho/pessoa salvou depois.
+let _orcVersaoBanco = null;
+let _orcConflitoDetectado = false; // a última tentativa de gravar foi barrada por conflito
+let _orcAutosavePausado = false;   // conflito não resolvido: o salvamento automático fica parado
+
+async function salvarOrcamento(orc, forcar) {
   if (!orc || !orc.id) return false;
+  _orcConflitoDetectado = false;
+  const ehOAberto = (typeof orcamentoAtual !== 'undefined' && orcamentoAtual && orcamentoAtual.id === orc.id);
   const row = {
     id: orc.id,
     pedido_id: orc.pedidoId || null,
@@ -12436,21 +12503,46 @@ async function salvarOrcamento(orc) {
     updated_at: new Date().toISOString()
   };
   try {
+    // Antes de gravar: se OUTRO aparelho/pessoa salvou este orçamento DEPOIS que abrimos aqui,
+    // NÃO sobrescrevemos em silêncio (era assim que a versão boa de alguém se perdia).
+    if (ehOAberto && _orcVersaoBanco && !forcar) {
+      const { data: atual, error: errAtual } = await getSB().from('orcamentos').select('updated_at').eq('id', orc.id).maybeSingle();
+      if (errAtual) {
+        console.error('Erro ao conferir versão do orçamento:', errAtual.message);
+        registrarErroSistema('salvar_orcamento', 'Erro ao conferir versão: ' + errAtual.message, 'pedido ' + orc.pedidoId);
+        return false;
+      }
+      if (atual && String(atual.updated_at) !== String(_orcVersaoBanco)) {
+        _orcConflitoDetectado = true;
+        registrarErroSistema('conflito_orcamento', 'Orçamento alterado em outro aparelho antes de salvar', 'pedido ' + orc.pedidoId + ' | visto aqui: ' + _orcVersaoBanco + ' | no banco: ' + atual.updated_at);
+        return false;
+      }
+    }
     const { error } = await getSB().from('orcamentos').upsert(row, { onConflict: 'id' });
-    if (error) { console.error('Erro ao salvar orçamento:', error.message); return false; }
+    if (error) {
+      console.error('Erro ao salvar orçamento:', error.message);
+      registrarErroSistema('salvar_orcamento', 'Falha ao gravar: ' + error.message, 'pedido ' + orc.pedidoId);
+      return false;
+    }
     // Confirmação extra: relê o registro pra garantir que realmente ficou gravado
     // (não só que o upsert não retornou erro) — evita perda de dados silenciosa.
     const { data: conferido, error: errConf } = await getSB().from('orcamentos').select('id,updated_at').eq('id', orc.id).maybeSingle();
     if (errConf || !conferido) {
       console.error('Falha ao confirmar gravação do orçamento após upsert:', errConf || 'registro não encontrado');
+      registrarErroSistema('salvar_orcamento', 'Gravou mas não conseguiu confirmar', 'pedido ' + orc.pedidoId + ' | ' + (errConf ? errConf.message : 'registro não encontrado'));
       return false;
     }
+    if (ehOAberto) _orcVersaoBanco = conferido.updated_at;
     const orcs = getOrcamentos();
     const idx = orcs.findIndex(o => o.id === orc.id);
     if (idx >= 0) orcs[idx] = orc; else orcs.unshift(orc);
     _atualizarCacheLocal(orcs);
     return true;
-  } catch(e) { console.error('Erro ao salvar orçamento:', e); return false; }
+  } catch(e) {
+    console.error('Erro ao salvar orçamento:', e);
+    registrarErroSistema('salvar_orcamento', 'Exceção ao salvar: ' + (e && e.message ? e.message : e), 'pedido ' + orc.pedidoId);
+    return false;
+  }
 }
 
 // Atualiza SÓ a cópia local do navegador. NUNCA grava no banco.
@@ -12884,6 +12976,7 @@ async function abrirTelaOrcamentoPedido(id) {
   if (orcamentoAtual && orcamentoTemAlteracoesNaoSalvas()) {
     try { await salvarOrcamento(orcamentoAtual); } catch(e) { console.error('Falha ao gravar orçamento anterior:', e); }
   }
+  _orcVersaoBanco = null; _orcConflitoDetectado = false; _orcAutosavePausado = false;
   const order = orders.find(o => o.id === id);
   if (!order) return;
   // Pedidos "-P" são cópias criadas ao fechar um pedido (aparecem em Em Corte/Acabamento
@@ -12908,6 +13001,7 @@ async function abrirTelaOrcamentoPedido(id) {
     console.log('Supabase query resultado:', JSON.stringify(data).substring(0,200));
     if (data && data.length > 0) {
       const row = data[0];
+      _orcVersaoBanco = row.updated_at || null; // versão do banco vista por este aparelho (detecta conflito depois)
       orc = row.dados ? (typeof row.dados === 'string' ? JSON.parse(row.dados) : row.dados) : null;
       if (!orc) {
         // tenta outros campos
@@ -12931,6 +13025,7 @@ async function abrirTelaOrcamentoPedido(id) {
   // local possivelmente antiga e depois salvar por cima, ou criar um orçamento em branco
   // (que viraria um segundo registro do mesmo pedido), é o que faz orçamento sumir.
   if (!supabaseRespondeu) {
+    registrarErroSistema('abrir_orcamento', 'Banco não respondeu ao abrir orçamento', 'pedido ' + idOrc);
     pedidoOrcAtual = null;
     localStorage.removeItem('mf_orc_aberto');
     alert('Não consegui carregar este orçamento do banco de dados (sem conexão ou erro do servidor).\n\nNada foi alterado. Verifique a internet e tente abrir de novo em instantes.');
@@ -13109,7 +13204,7 @@ function _orcHora() {
 }
 
 async function autosalvarOrcamento() {
-  if (_orcSalvando || !orcamentoAtual || !pedidoOrcAtual) return;
+  if (_orcSalvando || _orcAutosavePausado || !orcamentoAtual || !pedidoOrcAtual) return;
   if (!orcamentoTemAlteracoesNaoSalvas()) return;
   const idAlvo = orcamentoAtual.id;
   const snap = _orcSnapshot();
@@ -13129,6 +13224,9 @@ async function autosalvarOrcamento() {
   if (ok) {
     _orcBaseline = snap; // se houve edição durante o salvamento, o próximo ciclo grava a diferença
     _orcMostrarStatus('💾 Salvo automaticamente às ' + _orcHora(), '#A8D5A2');
+  } else if (_orcConflitoDetectado) {
+    _orcAutosavePausado = true;
+    _orcMostrarStatus('⚠️ CONFLITO: outro aparelho/pessoa salvou este orçamento depois que você abriu. Salvamento automático PAUSADO — clique em Salvar pra decidir.', '#FF8A80');
   } else {
     _orcMostrarStatus('⚠️ NÃO SALVO — verifique a internet. Seus dados estão guardados neste navegador.', '#FF8A80');
   }
@@ -13137,6 +13235,7 @@ async function autosalvarOrcamento() {
 function iniciarProtecaoOrcamento() {
   pararProtecaoOrcamento();
   _orcBaseline = _orcSnapshot(); // estado recém-carregado = considerado gravado
+  _orcConflitoDetectado = false; _orcAutosavePausado = false;
   _orcMostrarStatus('', '#A8D5A2');
   _orcTimer = setInterval(autosalvarOrcamento, 3000);
 }
@@ -13154,13 +13253,39 @@ document.addEventListener('visibilitychange', function() {
   if (document.visibilityState === 'hidden') autosalvarOrcamento();
 });
 
+// Grava o orçamento aberto. Se OUTRO aparelho/pessoa salvou depois que você abriu, avisa e
+// pergunta antes de sobrescrever (a versão anterior fica guardada no histórico do banco).
+// Retorna: 'ok' (gravou) | 'falha' (não gravou) | 'cancelado' (conflito e você escolheu não sobrescrever)
+async function gravarOrcamentoResolvendoConflito() {
+  let ok = await salvarOrcamento(orcamentoAtual);
+  if (!ok && _orcConflitoDetectado) {
+    const sobrescrever = confirm(
+      '⚠️ ATENÇÃO: este orçamento foi alterado em OUTRO aparelho (ou por outra pessoa) depois que você abriu.\n\n' +
+      'Se você salvar agora, vai SOBRESCREVER o que ela fez com a SUA versão (a anterior fica guardada no histórico).\n\n' +
+      'OK = Sobrescrever com a MINHA versão\nCancelar = NÃO salvar (nada é apagado)');
+    if (!sobrescrever) {
+      _orcAutosavePausado = true;
+      _orcMostrarStatus('⚠️ CONFLITO: nada foi gravado. Salvamento automático PAUSADO.', '#FF8A80');
+      return 'cancelado';
+    }
+    ok = await salvarOrcamento(orcamentoAtual, true);
+    if (ok) _orcAutosavePausado = false;
+  }
+  return ok ? 'ok' : 'falha';
+}
+
 async function fecharTelaOrcamentoPedido() {
   if (orcamentoAtual && orcamentoTemAlteracoesNaoSalvas()) {
     if (_orcSalvando) { alert('Estou salvando o orçamento agora. Aguarde um instante e clique em Voltar de novo.'); return; }
     // Há alterações não gravadas: grava ANTES de sair. Se falhar, NÃO sai da tela.
     _orcSalvando = true;
     try { await salvarOrcamentoPedido(true); } finally { _orcSalvando = false; }
-    if (orcamentoTemAlteracoesNaoSalvas()) return; // falhou (o alerta já apareceu) — fica na tela
+    if (orcamentoTemAlteracoesNaoSalvas()) {
+      if (!_orcAutosavePausado) return; // falhou (o alerta já apareceu) — fica na tela
+      // Conflito não resolvido: só sai se você escolher descartar de propósito
+      if (!confirm('Sair SEM salvar?\n\nO que você alterou nesta tela será DESCARTADO. A versão do outro aparelho continua no banco.')) return;
+      _orcBaseline = _orcSnapshot(); // descarte consciente
+    }
   }
   pararProtecaoOrcamento();
   document.querySelector('.tabs').style.display = '';
@@ -14037,9 +14162,10 @@ async function salvarOrcamentoPedido(silencioso) {
   const idx = orcs.findIndex(o => o.id === orcamentoAtual.id);
   if (idx >= 0) orcs[idx] = orcamentoAtual; else orcs.unshift(orcamentoAtual);
   _atualizarCacheLocal(orcs);
-  // Salva no Supabase e aguarda confirmação
-  const ok = await salvarOrcamento(orcamentoAtual);
-  if (!ok) {
+  // Salva no Supabase e aguarda confirmação (se outro aparelho alterou antes, pergunta)
+  const resGravacao = await gravarOrcamentoResolvendoConflito();
+  if (resGravacao === 'cancelado') return false; // conflito: você escolheu NÃO sobrescrever — nada foi gravado
+  if (resGravacao !== 'ok') {
     // NUNCA continua se o orçamento em si não foi salvo de verdade — mesmo em modo
     // silencioso — senão o card do Kanban e a etapa do pedido são atualizados como se
     // tivesse dado tudo certo, e os itens/medidas preenchidos se perdem de verdade.

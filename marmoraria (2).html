@@ -2182,28 +2182,369 @@ function montarSecVendasPorMaterial(ords, orcs, pedras, hojeStr) {
   return sec;
 }
 
-async function enviarMensagemIA() {
-  const input = document.getElementById('ia-input');
-  const msgs  = document.getElementById('ia-msgs');
-  if (!input || !msgs) { alert('Chat não encontrado'); return; }
+// ═════════════════════════════════════════════════════════════════════════════
+//  IA COM FERRAMENTAS
+//  Em vez de mandar um resumo gigante de tudo a cada pergunta, a IA recebe uma lista de
+//  "consultas" que o sistema sabe fazer e escolhe sozinha quais usar. O sistema executa a
+//  consulta nos dados reais e devolve os números; a IA só redige a resposta.
+//  Se algo falhar logo na 1ª chamada, o sistema volta ao modo antigo (iaResponderLegado).
+// ═════════════════════════════════════════════════════════════════════════════
+function iaNum(v) { return parseFloat((v == null ? '0' : v).toString().replace(',', '.').replace(/[^0-9.]/g, '')) || 0; } // mesmo critério do Kanban/Financeiro
+function iaR2(n) { return Math.round((n || 0) * 100) / 100; }
+function iaNorm(s) { return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim(); }
+function iaDentro(dt, de, ate) { dt = String(dt || '').substring(0, 10); if (!dt) return false; if (de && dt < de) return false; if (ate && dt > ate) return false; return true; }
+function iaHojeLocal() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function iaEhTransferencia(t) { return iaNorm(t.categoria).indexOf('transferencia') >= 0; }
 
-  const texto = input.value.trim();
-  if (!texto) return;
-  input.value = '';
+var IA_ETAPAS_VENDIDO = ['fechado', 'corte', 'acabamento', 'pronto', 'entregue'];
 
-  // Mostra mensagem do usuário IMEDIATAMENTE
-  const userMsg = document.createElement('div');
-  userMsg.style.cssText = 'background:#1a2332;color:white;border-radius:12px;padding:12px 16px;max-width:85%;box-shadow:0 1px 4px rgba(0,0,0,.06);align-self:flex-end;font-size:13px;line-height:1.5;margin-left:auto;';
-  userMsg.textContent = texto;
-  msgs.appendChild(userMsg);
+// Pedidos vendidos (originais; a cópia "-P" de produção é ignorada) com data de venda, valor e m² por material
+function iaVendidos(D) {
+  if (D._vend) return D._vend;
+  var out = [];
+  (D.ords || []).forEach(function (o) {
+    if (o.ref_fechado) return;
+    if (!(o.num_pedido_fechado || IA_ETAPAS_VENDIDO.indexOf(o.stage) >= 0)) return;
+    var itens = o.itens_aprovados;
+    if (typeof itens === 'string') { try { itens = JSON.parse(itens); } catch (e) { itens = null; } }
+    if (!Array.isArray(itens) || !itens.length) {
+      var orc = (D.orcs || []).find(function (r) { return r.pedidoId === o.id; });
+      itens = orc && Array.isArray(orc.itens) ? orc.itens : [];
+    }
+    var mats = {}, m2 = 0;
+    itens.forEach(function (it) {
+      var a = calcAreaTotalItem(it) || 0; if (!(a > 0)) return;
+      var ped = it.pedraId ? resolverPedra(D.pedras || [], it) : null;
+      var nome = (ped && ped.nome) ? ped.nome : (it.pedraId ? 'Material não identificado' : 'Sem material definido');
+      mats[nome] = (mats[nome] || 0) + a; m2 += a;
+    });
+    out.push({ id: o.id, cliente: o.cliente || '', dt: mfDataVendaPedido(o), valor: iaNum(o.valor), vendedor: o.vendedor || o.responsavel || 'Sem vendedor', origem: o.origem || 'não informada', etapa: o.stage, mats: mats, m2: m2, o: o });
+  });
+  D._vend = out; return out;
+}
 
-  const loadMsg = document.createElement('div');
-  loadMsg.style.cssText = 'background:white;border-radius:12px;padding:12px 16px;max-width:85%;box-shadow:0 1px 4px rgba(0,0,0,.06);align-self:flex-start;font-size:13px;color:#888;';
-  loadMsg.textContent = '⏳ Pensando...';
-  msgs.appendChild(loadMsg);
-  msgs.scrollTop = msgs.scrollHeight;
+var IA_EXEC = {};
 
+IA_EXEC.pedidos = function (a, D) {
+  var lista = (D.ords || []).filter(function (o) { return !o.ref_fechado; });
+  var vend = {}; iaVendidos(D).forEach(function (v) { vend[v.id] = v; });
+  var rows = lista.filter(function (o) {
+    if (a.etapa && o.stage !== a.etapa) return false;
+    if (a.cliente && iaNorm(o.cliente).indexOf(iaNorm(a.cliente)) < 0) return false;
+    if (a.so_vendidos) { if (!vend[o.id]) return false; return iaDentro(vend[o.id].dt, a.de, a.ate); }
+    if (a.de || a.ate) return iaDentro(o.created_at, a.de, a.ate);
+    return true;
+  }).map(function (o) {
+    return { id: o.id, cliente: o.cliente, etapa: o.stage, valor: iaNum(o.valor), vendedor: o.vendedor || '', origem: o.origem || '', material: o.material || '',
+      criado_em: (o.created_at || '').substring(0, 10), vendido_em: vend[o.id] ? vend[o.id].dt : null, entrega: o.dataentrega || '', pedido_fechado_n: o.num_pedido_fechado || '' };
+  });
+  var lim = Math.min(parseInt(a.limite) || 60, 150);
+  var total = rows.reduce(function (s, r) { return s + r.valor; }, 0);
+  return { quantidade: rows.length, valor_total: iaR2(total), mostrando: Math.min(lim, rows.length), pedidos: rows.slice(0, lim),
+    nota: 'Cópias de produção (-P) não são listadas. etapas: aguardando, negociacao, fechado, corte, acabamento, pronto, entregue.' };
+};
+
+IA_EXEC.vendas = function (a, D) {
+  var v = iaVendidos(D).filter(function (x) { return iaDentro(x.dt, a.de, a.ate); });
+  var por = a.agrupar_por || 'mes';
+  var g = {};
+  function add(chave, x, matNome, m2) {
+    var r = g[chave] = g[chave] || { grupo: chave, pedidos: {}, valor: 0, m2: 0, por_material: {} };
+    if (!r.pedidos[x.id]) { r.pedidos[x.id] = 1; if (matNome == null) r.valor += x.valor; }
+    if (matNome != null) { r.m2 += m2; r.por_material[matNome] = (r.por_material[matNome] || 0) + m2; }
+  }
+  v.forEach(function (x) {
+    if (por === 'material') { Object.keys(x.mats).forEach(function (n) { add(n, x, n, x.mats[n]); }); return; }
+    var chave = por === 'vendedor' ? x.vendedor : por === 'origem' ? x.origem : x.dt.substring(0, 7);
+    add(chave, x, null, 0); g[chave].m2 += x.m2;
+    Object.keys(x.mats).forEach(function (n) { g[chave].por_material[n] = (g[chave].por_material[n] || 0) + x.mats[n]; });
+  });
+  var grupos = Object.keys(g).sort().map(function (k) {
+    var r = g[k], pm = {};
+    Object.keys(r.por_material).sort(function (p, q) { return r.por_material[q] - r.por_material[p]; }).forEach(function (n) { pm[n] = iaR2(r.por_material[n]); });
+    var o = { grupo: r.grupo, pedidos: Object.keys(r.pedidos).length, m2: iaR2(r.m2), por_material_m2: pm };
+    if (por !== 'material') o.valor_vendido = iaR2(r.valor);
+    return o;
+  });
+  if (por === 'material') grupos.sort(function (p, q) { return q.m2 - p.m2; });
+  var semM2 = v.filter(function (x) { return !(x.m2 > 0); }).map(function (x) { return x.id + ' (' + x.cliente + ')'; });
+  return { periodo: { de: a.de || null, ate: a.ate || null }, agrupado_por: por, pedidos_vendidos: v.length,
+    valor_total: iaR2(v.reduce(function (s, x) { return s + x.valor; }, 0)), m2_total: iaR2(v.reduce(function (s, x) { return s + x.m2; }, 0)),
+    grupos: grupos, pedidos_sem_m2_no_orcamento: semM2,
+    nota: 'Data da venda = dia em que o pedido foi movido para Pedido Fechado. m² vem dos itens aprovados/orçamento do pedido.' };
+};
+
+IA_EXEC.financeiro = function (a, D) {
+  var incluiTransf = a.categoria && /transfer/i.test(a.categoria);
+  var tx = (D.trns || []).filter(function (t) {
+    if (!iaDentro(t.data, a.de, a.ate)) return false;
+    if (a.tipo && t.tipo !== a.tipo) return false;
+    if (a.banco && iaNorm(t.banco) !== iaNorm(a.banco)) return false;
+    if (a.categoria && iaNorm(t.categoria).indexOf(iaNorm(a.categoria)) < 0) return false;
+    if (a.texto && (iaNorm(t.descricao) + ' ' + iaNorm(t.categoria)).indexOf(iaNorm(a.texto)) < 0) return false;
+    return true;
+  });
+  var transf = incluiTransf ? [] : tx.filter(iaEhTransferencia);
+  var reais = incluiTransf ? tx : tx.filter(function (t) { return !iaEhTransferencia(t); });
+  var soma = function (arr, tipo) { return arr.filter(function (t) { return t.tipo === tipo; }).reduce(function (s, t) { return s + (parseFloat(t.valor) || 0); }, 0); };
+  var res = { periodo: { de: a.de || null, ate: a.ate || null }, lancamentos: reais.length, entradas: iaR2(soma(reais, 'entrada')), saidas: iaR2(soma(reais, 'saida')) };
+  res.saldo_periodo = iaR2(res.entradas - res.saidas);
+  if (transf.length) res.transferencias_entre_bancos_ignoradas = transf.length;
+  if (a.agrupar_por) {
+    var g = {};
+    reais.forEach(function (t) {
+      var k = a.agrupar_por === 'mes' ? String(t.data || '').substring(0, 7) : a.agrupar_por === 'banco' ? (t.banco || 'sem banco') : (t.categoria || 'sem categoria');
+      var r = g[k] = g[k] || { grupo: k, entradas: 0, saidas: 0, qtd: 0 };
+      r[t.tipo === 'entrada' ? 'entradas' : 'saidas'] += parseFloat(t.valor) || 0; r.qtd++;
+    });
+    res.grupos = Object.keys(g).sort().map(function (k) { var r = g[k]; return { grupo: r.grupo, entradas: iaR2(r.entradas), saidas: iaR2(r.saidas), qtd: r.qtd }; });
+  }
+  if (a.listar || !a.agrupar_por) {
+    var lim = Math.min(parseInt(a.limite) || 40, 150);
+    var ord = reais.slice().sort(function (p, q) { return String(q.data).localeCompare(String(p.data)) || String(q.created_at || '').localeCompare(String(p.created_at || '')); });
+    res.mostrando = Math.min(lim, ord.length);
+    res.itens = ord.slice(0, lim).map(function (t) { return { data: t.data, tipo: t.tipo, valor: iaR2(parseFloat(t.valor) || 0), descricao: t.descricao, categoria: t.categoria || '', banco: t.banco || '', pedido: t.pedido_id || '' }; });
+  }
+  return res;
+};
+
+IA_EXEC.saldos_bancos = function (a, D) {
+  var cfg = D.cfgSaldo || [];
+  var get = function (k) { return cfg.find(function (c) { return c.chave === k; }); };
+  var s = get('saldo_sicredi');
+  if (!s) return { aviso: 'Saldos iniciais ainda não configurados pelo usuário.' };
+  var dataRef = s.data_referencia || '', cutoff = get('saldo_cutoff_ms') ? parseFloat(get('saldo_cutoff_ms').valor) || 0 : 0;
+  var desde = (D.trns || []).filter(function (t) {
+    if (cutoff && t.created_at) { var ms = new Date(t.created_at).getTime(); return !isNaN(ms) && ms > cutoff; }
+    return (t.data || '') > dataRef;
+  });
+  var som = function (b, tp) { return desde.filter(function (t) { return t.banco === b && t.tipo === tp; }).reduce(function (x, t) { return x + (parseFloat(t.valor) || 0); }, 0); };
+  var ini = function (k) { var c = get(k); return c ? parseFloat(c.valor) || 0 : 0; };
+  var out = { Sicredi: iaR2(ini('saldo_sicredi') + som('Sicredi', 'entrada') - som('Sicredi', 'saida')),
+    Caixa: iaR2(ini('saldo_caixa') + som('Caixa', 'entrada') - som('Caixa', 'saida')),
+    'Mercado Pago': iaR2(ini('saldo_mp') + som('Mercado Pago', 'entrada') - som('Mercado Pago', 'saida')),
+    Dinheiro: iaR2(ini('saldo_dinheiro') + som('Dinheiro', 'entrada') - som('Dinheiro', 'saida')) };
+  out.TOTAL = iaR2(out.Sicredi + out.Caixa + out['Mercado Pago'] + out.Dinheiro);
+  return { saldos_agora: out, saldo_inicial_referente_a: dataRef };
+};
+
+IA_EXEC.contas_pagar = function (a, D) {
+  var st = a.status || 'pendente', hoje = D.hoje;
+  var lista = (D.contasPagar || []).filter(function (c) {
+    if (st !== 'todos' && c.status !== st) return false;
+    if (a.categoria && iaNorm(c.categoria).indexOf(iaNorm(a.categoria)) < 0) return false;
+    if (a.texto && (iaNorm(c.descricao) + ' ' + iaNorm(c.fornecedor)).indexOf(iaNorm(a.texto)) < 0) return false;
+    if (a.vencimento_de || a.vencimento_ate) { if (!c.vencimento) return false; return iaDentro(c.vencimento, a.vencimento_de, a.vencimento_ate); }
+    return true;
+  }).sort(function (p, q) { return String(p.vencimento || '9999').localeCompare(String(q.vencimento || '9999')); });
+  var tot = lista.reduce(function (s, c) { return s + (parseFloat(c.valor) || 0); }, 0);
+  var venc = lista.filter(function (c) { return c.status === 'pendente' && c.vencimento && c.vencimento < hoje; });
+  var lim = Math.min(parseInt(a.limite) || 60, 150);
+  return { quantidade: lista.length, total: iaR2(tot), vencidas_pendentes: venc.length, total_vencidas: iaR2(venc.reduce(function (s, c) { return s + (parseFloat(c.valor) || 0); }, 0)),
+    mostrando: Math.min(lim, lista.length),
+    contas: lista.slice(0, lim).map(function (c) { return { vencimento: c.vencimento || 'sem data', descricao: c.descricao, valor: iaR2(parseFloat(c.valor) || 0), fornecedor: c.fornecedor || '', categoria: c.categoria || '', status: c.status }; }) };
+};
+
+IA_EXEC.a_receber = function (a, D) {
+  var recebido = function (id) { return (D.trns || []).filter(function (t) { return t.pedido_id === id && t.tipo === 'entrada'; }).reduce(function (s, t) { return s + (parseFloat(t.valor) || 0); }, 0); };
+  var ped = (D.ords || []).filter(function (o) { return !o.ref_fechado && IA_ETAPAS_VENDIDO.indexOf(o.stage) >= 0; }).map(function (o) {
+    var v = iaNum(o.valor), r = recebido(o.id); return { id: o.id, cliente: o.cliente, etapa: o.stage, valor: iaR2(v), recebido: iaR2(r), falta: iaR2(v - r) };
+  }).filter(function (p) { return p.valor > 0 && p.falta > 0.5; }).sort(function (p, q) { return q.falta - p.falta; });
+  var man = (D.contasReceber || []).map(function (c) { return { cliente: c.cliente, descricao: c.descricao, valor: iaR2(parseFloat(c.valor) || 0), vencimento: c.vencimento || 'sem data' }; });
+  return { pedidos_com_saldo_a_receber: ped.length, total_pedidos: iaR2(ped.reduce(function (s, p) { return s + p.falta; }, 0)), pedidos: ped.slice(0, 80),
+    contas_a_receber_manuais_pendentes: man.length, total_manuais: iaR2(man.reduce(function (s, c) { return s + c.valor; }, 0)), manuais: man.slice(0, 60) };
+};
+
+IA_EXEC.orcamentos_em_aberto = function (a, D) {
+  var hojeMs = new Date(D.hoje + 'T12:00:00').getTime();
+  var rows = (D.ords || []).filter(function (o) { return !o.ref_fechado && ['aguardando', 'negociacao', 'medicao'].indexOf(o.stage) >= 0; }).map(function (o) {
+    var row = (D.orcRows || []).find(function (r) { return r.pedido_id === o.id; });
+    var valor = iaNum(o.valor);
+    if (row && row.dados && Array.isArray(row.dados.itens) && row.dados.itens.length) { try { var t = resolverTotalOrcamento(JSON.parse(JSON.stringify(row.dados))).totalGeral; if (t > 0) valor = t; } catch (e) {} }
+    var fu = Array.isArray(o.followups) ? o.followups : [], ult = fu[fu.length - 1];
+    var ref = (ult && ult.data) ? ult.data : (row && row.updated_at ? String(row.updated_at).substring(0, 10) : String(o.created_at || '').substring(0, 10));
+    var dias = ref ? Math.max(0, Math.floor((hojeMs - new Date(ref + 'T12:00:00').getTime()) / 86400000)) : null;
+    return { id: o.id, cliente: o.cliente, etapa: o.stage, valor: iaR2(valor), vendedor: o.vendedor || '', criado_em: String(o.created_at || '').substring(0, 10),
+      tem_orcamento_com_itens: !!(row && row.dados && Array.isArray(row.dados.itens) && row.dados.itens.length), followups: fu.length,
+      ultimo_contato: ult ? (ult.data + ' ' + (ult.label || ult.tipo || '') + (ult.obs ? ': ' + ult.obs : '')) : null, dias_sem_contato_ou_alteracao: dias };
+  }).filter(function (r) { return !a.parado_ha_dias || (r.dias_sem_contato_ou_alteracao != null && r.dias_sem_contato_ou_alteracao >= a.parado_ha_dias); })
+    .sort(function (p, q) { return (q.dias_sem_contato_ou_alteracao || 0) - (p.dias_sem_contato_ou_alteracao || 0); });
+  return { quantidade: rows.length, valor_total: iaR2(rows.reduce(function (s, r) { return s + r.valor; }, 0)), orcamentos: rows.slice(0, 80) };
+};
+
+IA_EXEC.estoque = function (a, D) {
+  var chapas = D.estoque || [], pedras = D.pedras || [], g = {};
+  chapas.forEach(function (c) {
+    var p = pedras.find(function (x) { return x.id === c.materialId; }), nome = p ? p.nome : (c.materialId || 'Sem nome');
+    if (a.material && iaNorm(nome).indexOf(iaNorm(a.material)) < 0) return;
+    var r = g[nome] = g[nome] || { material: nome, disponivel: 0, reservada: 0, usada: 0 };
+    if (r[c.status] != null) r[c.status]++;
+  });
+  var semEstoque = pedras.filter(function (p) { return !chapas.some(function (c) { return c.materialId === p.id && c.status === 'disponivel'; }); }).map(function (p) { return p.nome; });
+  return { total_chapas: chapas.length, por_material: Object.keys(g).map(function (k) { return g[k]; }), materiais_cadastrados_sem_chapa_disponivel: a.material ? undefined : semEstoque };
+};
+
+IA_EXEC.comissoes = function (a, D) {
+  var cfg = D.comissaoCfg || {}, vend = cfg.vendedores || [], excl = cfg.origensExcluidas || ['arquiteto', 'construtora'];
+  if (!vend.length) return { aviso: 'Nenhum vendedor cadastrado em Configurações → Comissões.' };
+  var g = {};
+  iaVendidos(D).filter(function (x) { return iaDentro(x.dt, a.de, a.ate); }).forEach(function (x) {
+    var origem = iaNorm(x.origem);
+    if (excl.some(function (e) { return origem.indexOf(iaNorm(e)) >= 0; })) return;
+    g[x.vendedor] = (g[x.vendedor] || 0) + x.valor;
+  });
+  return { periodo: { de: a.de || null, ate: a.ate || null }, comissoes: Object.keys(g).map(function (n) {
+    var c = vend.find(function (v) { return v.nome === n; }), pct = c ? parseFloat(c.percentual) || 0 : 0;
+    return { vendedor: n, vendeu: iaR2(g[n]), percentual: pct, comissao: iaR2(g[n] * pct / 100) };
+  }), nota: 'Vendas de origens excluídas (' + excl.join(', ') + ') não geram comissão.' };
+};
+
+IA_EXEC.agenda = function (a, D) {
+  var med = (D.medicoes || []).filter(function (m) { return iaDentro(m.Data || m.data, a.de, a.ate); })
+    .sort(function (p, q) { return String(p.Data || p.data).localeCompare(String(q.Data || q.data)); })
+    .map(function (m) { return { data: m.Data || m.data, horario: m.Horario || '', cliente: m.Cliente || '', endereco: [m.Endereco, m.Numero, m.Bairro].filter(Boolean).join(', '), status: m.Status || '' }; });
+  var ent = (D.ords || []).filter(function (o) { return !o.ref_fechado && o.dataentrega && iaDentro(o.dataentrega, a.de, a.ate) && ['entregue'].indexOf(o.stage) < 0; })
+    .sort(function (p, q) { return String(p.dataentrega).localeCompare(String(q.dataentrega)); })
+    .map(function (o) { return { data: o.dataentrega, pedido: o.id, cliente: o.cliente, etapa: o.stage, tipo: o.tipoentrega || '' }; });
+  return { periodo: { de: a.de || null, ate: a.ate || null }, medicoes: med.slice(0, 60), entregas_e_instalacoes_previstas: ent.slice(0, 60) };
+};
+
+IA_EXEC.ponto_equilibrio = function (a, D) {
+  var cfg = D.gastosCfg || {}, custo = Object.keys(cfg).reduce(function (s, k) { return s + (parseFloat(cfg[k]) || 0); }, 0);
+  var mes = a.mes || D.hoje.substring(0, 7);
+  var vendas = iaVendidos(D).filter(function (x) { return x.dt.substring(0, 7) === mes; });
+  var vendido = vendas.reduce(function (s, x) { return s + x.valor; }, 0);
+  var tx = (D.trns || []).filter(function (t) { return String(t.data || '').substring(0, 7) === mes && !iaEhTransferencia(t); });
+  var ent = tx.filter(function (t) { return t.tipo === 'entrada'; }).reduce(function (s, t) { return s + (parseFloat(t.valor) || 0); }, 0);
+  var sai = tx.filter(function (t) { return t.tipo === 'saida'; }).reduce(function (s, t) { return s + (parseFloat(t.valor) || 0); }, 0);
+  if (!(custo > 0)) return { mes: mes, aviso: 'Custos fixos não configurados em Configurações → Grupo de Gastos.', vendido_no_mes: iaR2(vendido) };
+  return { mes: mes, custo_fixo_mensal: iaR2(custo), vendido_no_mes: iaR2(vendido), pedidos_vendidos: vendas.length, percentual_da_meta: iaR2(vendido / custo * 100), falta_para_equilibrio: iaR2(Math.max(0, custo - vendido)),
+    recebido_no_mes_entradas: iaR2(ent), saidas_no_mes: iaR2(sai) };
+};
+
+IA_EXEC.clientes = function (a, D) {
+  var nome = iaNorm(a.nome); if (!nome) return { erro: 'informe parte do nome do cliente' };
+  var peds = (D.ords || []).filter(function (o) { return !o.ref_fechado && iaNorm(o.cliente).indexOf(nome) >= 0; });
+  var vend = {}; iaVendidos(D).forEach(function (v) { vend[v.id] = v; });
+  var linhas = peds.map(function (o) {
+    var rec = (D.trns || []).filter(function (t) { return t.pedido_id === o.id && t.tipo === 'entrada'; }).reduce(function (s, t) { return s + (parseFloat(t.valor) || 0); }, 0);
+    return { id: o.id, cliente: o.cliente, etapa: o.stage, valor: iaR2(iaNum(o.valor)), recebido: iaR2(rec), vendido_em: vend[o.id] ? vend[o.id].dt : null, criado_em: String(o.created_at || '').substring(0, 10), m2: vend[o.id] ? iaR2(vend[o.id].m2) : null };
+  });
+  var v = linhas.filter(function (l) { return l.vendido_em; });
+  return { pedidos_encontrados: linhas.length, vendidos: v.length, total_vendido: iaR2(v.reduce(function (s, l) { return s + l.valor; }, 0)), total_recebido: iaR2(v.reduce(function (s, l) { return s + l.recebido; }, 0)), pedidos: linhas.slice(0, 40) };
+};
+
+var IA_DATAS = { type: 'string', description: 'Data no formato AAAA-MM-DD' };
+var IA_TOOLS = [
+  { name: 'pedidos', description: 'Lista pedidos (Kanban) com cliente, etapa, valor, vendedor, origem, datas. Use para "quais pedidos", "pedidos em corte", "pedido do cliente X", pedidos criados ou vendidos num período.',
+    input_schema: { type: 'object', properties: { etapa: { type: 'string', enum: ['aguardando', 'negociacao', 'fechado', 'corte', 'acabamento', 'pronto', 'entregue'] }, cliente: { type: 'string', description: 'parte do nome' }, so_vendidos: { type: 'boolean', description: 'true = só pedidos fechados/vendidos; o período (de/ate) passa a valer pela data da venda' }, de: IA_DATAS, ate: IA_DATAS, limite: { type: 'integer' } } } },
+  { name: 'vendas', description: 'Resumo de VENDAS (pedidos fechados) em R$ e em m², agrupado por mês, material, vendedor ou origem. Use para "quanto vendi", "m² por material", "vendas por vendedor/origem", ticket, comparação entre meses.',
+    input_schema: { type: 'object', properties: { de: IA_DATAS, ate: IA_DATAS, agrupar_por: { type: 'string', enum: ['mes', 'material', 'vendedor', 'origem'] } } } },
+  { name: 'financeiro', description: 'Entradas e saídas do caixa (transações), com totais, agrupamento por mês/categoria/banco e lista de lançamentos. Filtra por período, tipo, banco, categoria ou texto da descrição. Transferências entre bancos são ignoradas nos totais.',
+    input_schema: { type: 'object', properties: { de: IA_DATAS, ate: IA_DATAS, tipo: { type: 'string', enum: ['entrada', 'saida'] }, banco: { type: 'string', description: 'Sicredi, Caixa, Mercado Pago ou Dinheiro' }, categoria: { type: 'string' }, texto: { type: 'string', description: 'palavra na descrição' }, agrupar_por: { type: 'string', enum: ['mes', 'categoria', 'banco'] }, listar: { type: 'boolean', description: 'true para também listar os lançamentos' }, limite: { type: 'integer' } } } },
+  { name: 'saldos_bancos', description: 'Saldo atual de cada banco (Sicredi, Caixa, Mercado Pago, Dinheiro) e o total.', input_schema: { type: 'object', properties: {} } },
+  { name: 'contas_pagar', description: 'Contas a pagar e dívidas (inclui as sem data de vencimento). Filtra por status, categoria, texto e vencimento.',
+    input_schema: { type: 'object', properties: { status: { type: 'string', enum: ['pendente', 'pago', 'todos'] }, categoria: { type: 'string' }, texto: { type: 'string' }, vencimento_de: IA_DATAS, vencimento_ate: IA_DATAS, limite: { type: 'integer' } } } },
+  { name: 'a_receber', description: 'Quanto os clientes ainda devem: pedidos fechados com saldo a receber (valor menos o já recebido) e contas a receber manuais/parcelas.', input_schema: { type: 'object', properties: {} } },
+  { name: 'orcamentos_em_aberto', description: 'Orçamentos/pedidos ainda não fechados (aguardando, negociação, medição) com valor, follow-ups e há quantos dias estão sem contato. Use para CRM, "quem preciso cobrar", orçamentos parados.',
+    input_schema: { type: 'object', properties: { parado_ha_dias: { type: 'integer', description: 'só os parados há pelo menos N dias' } } } },
+  { name: 'estoque', description: 'Chapas em estoque por material (disponíveis, reservadas, usadas).', input_schema: { type: 'object', properties: { material: { type: 'string' } } } },
+  { name: 'comissoes', description: 'Comissão dos vendedores sobre vendas fechadas no período.', input_schema: { type: 'object', properties: { de: IA_DATAS, ate: IA_DATAS } } },
+  { name: 'agenda', description: 'Medições agendadas e entregas/instalações previstas num período.', input_schema: { type: 'object', properties: { de: IA_DATAS, ate: IA_DATAS } } },
+  { name: 'ponto_equilibrio', description: 'Ponto de equilíbrio do mês: custo fixo mensal x vendido, quanto falta, entradas e saídas do mês.', input_schema: { type: 'object', properties: { mes: { type: 'string', description: 'AAAA-MM; padrão = mês atual' } } } },
+  { name: 'clientes', description: 'Histórico de um cliente: pedidos, total vendido, recebido e m².', input_schema: { type: 'object', properties: { nome: { type: 'string', description: 'parte do nome do cliente' } }, required: ['nome'] } }
+];
+var IA_PRECISA = { financeiro: ['trns'], saldos_bancos: ['trns', 'cfgSaldo'], a_receber: ['trns'], ponto_equilibrio: ['trns'], clientes: ['trns'], vendas: ['orcs'], pedidos: ['orcs'], comissoes: ['orcs'], orcamentos_em_aberto: ['orcRows'], agenda: ['medicoes'] };
+
+// Carrega, uma vez por pergunta, os dados reais. Se uma fonte falhar, a consulta que depende dela avisa (em vez de responder com número errado).
+async function iaCarregarDados() {
+  var D = { hoje: iaHojeLocal(), falhou: {} };
+  var sb = getSB();
+  D.ords = (typeof orders !== 'undefined' ? orders : []) || [];
+  async function paginar(tabela, cols, ordem, chave) {
+    var todos = [], de = 0;
+    for (var p = 0; p < 30; p++) {
+      var q = sb.from(tabela).select(cols); if (ordem) q = q.order(ordem, { ascending: false });
+      var r = await q.range(de, de + 999);
+      if (r.error) throw r.error;
+      todos = todos.concat(r.data || []);
+      if (!r.data || r.data.length < 1000) break; de += 1000;
+    }
+    return todos;
+  }
+  async function tentar(chaves, fn) { try { await fn(); } catch (e) { chaves.forEach(function (k) { D.falhou[k] = String(e && e.message || e); }); } }
+  await Promise.all([
+    tentar(['trns'], async function () { D.trns = await paginar('transacoes', '*', 'data'); }),
+    tentar(['orcRows', 'orcs'], async function () {
+      D.orcRows = await paginar('orcamentos', 'id,pedido_id,cliente,status,dados,updated_at', 'updated_at');
+      D.orcs = D.orcRows.map(function (r) { var o = r.dados || {}; if (!o.pedidoId && r.pedido_id) o.pedidoId = r.pedido_id; if (!o.id && r.id) o.id = r.id; return o; });
+    }),
+    tentar(['cfgSaldo'], async function () { var r = await sb.from('configuracoes').select('*').in('chave', ['saldo_sicredi', 'saldo_caixa', 'saldo_mp', 'saldo_dinheiro', 'saldo_data', 'saldo_cutoff_ms']); if (r.error) throw r.error; D.cfgSaldo = r.data || []; }),
+    tentar(['medicoes'], async function () { D.medicoes = await getMedicoes(); }),
+    tentar([], async function () { var r = await sb.from('contas_receber').select('*').eq('status', 'pendente'); D.contasReceber = r.error ? [] : (r.data || []); })
+  ]);
+  try { D.pedras = getPedrasCadastradas(); D.estoque = getEstoque(); D.contasPagar = getContasPagar(); D.comissaoCfg = getComissaoConfig(); D.gastosCfg = JSON.parse(localStorage.getItem('mf_gastos_config') || '{}'); } catch (e) {}
+  D.trns = D.trns || []; D.orcs = D.orcs || []; D.orcRows = D.orcRows || []; D.cfgSaldo = D.cfgSaldo || []; D.medicoes = D.medicoes || []; D.contasReceber = D.contasReceber || [];
+  return D;
+}
+
+function iaExecutarFerramenta(nome, args, D) {
+  var f = IA_EXEC[nome];
+  if (!f) return JSON.stringify({ erro: 'ferramenta desconhecida: ' + nome });
+  var falhas = (IA_PRECISA[nome] || []).filter(function (k) { return D.falhou && D.falhou[k]; });
+  if (falhas.length) return JSON.stringify({ erro: 'Não consegui carregar os dados necessários (' + falhas.join(', ') + '): ' + D.falhou[falhas[0]] + '. Avise o usuário que não dá para responder com segurança agora.' });
   try {
+    var s = JSON.stringify(f(args || {}, D));
+    if (s.length > 30000) s = s.slice(0, 30000) + ' ...[RESULTADO CORTADO: peça um período ou filtro menor]';
+    return s;
+  } catch (e) { return JSON.stringify({ erro: 'falha ao consultar: ' + (e && e.message ? e.message : e) }); }
+}
+
+function iaPromptSistema(hoje) {
+  var dias = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+  var d = new Date(hoje + 'T12:00:00');
+  return 'Você é o assessor completo da Unipedras Marmoraria (Volta Redonda/RJ), dentro do sistema MarmorFlow. Hoje é ' + dias[d.getDay()] + ', ' + hoje + '.\n'
+    + 'Responda sempre em português do Brasil, de forma clara e objetiva, com valores em R$ no formato brasileiro (R$ 1.234,56) e áreas em m².\n'
+    + 'REGRAS:\n'
+    + '- Para responder, use as ferramentas de consulta, escolhendo SÓ as que a pergunta exige (pergunta de m² não precisa de financeiro). Pode usar mais de uma quando necessário.\n'
+    + '- Converta períodos em datas: "setembro" = ' + (d.getFullYear()) + '-09-01 a ' + (d.getFullYear()) + '-09-30 (ajuste o ano pelo contexto; se o mês citado ainda não chegou neste ano, use o ano anterior). "mês passado", "esta semana" etc. a partir de hoje.\n'
+    + '- Use APENAS números devolvidos pelas ferramentas. Não invente nem estime. Se a ferramenta devolver erro, aviso ou "pedidos_sem_m2", diga isso claramente.\n'
+    + '- "Vendido" = pedido fechado; a data da venda é o dia em que foi movido para Pedido Fechado. Transferências entre bancos não são receita nem despesa.\n'
+    + '- Se pedirem uma lista longa, mostre tudo que a ferramenta devolveu (em tabela quando ajudar) e avise se houve corte.\n'
+    + '- Se a pergunta for geral (não depender de dados), responda direto, sem ferramenta.';
+}
+
+async function iaResponderComFerramentas(texto, historico, aoStatus) {
+  var WORKER_URL = 'https://mute-wildflower-ed3c.unipedras-marmorariavr.workers.dev';
+  var hoje = iaHojeLocal(), D = null;
+  var messages = (historico || []).map(function (h) { return { role: h.role, content: h.content }; }).concat([{ role: 'user', content: texto }]);
+  for (var passo = 0; passo < 8; passo++) {
+    var resp = await fetch(WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2500, system: iaPromptSistema(hoje), tools: IA_TOOLS, messages: messages }) });
+    var data = null; try { data = await resp.json(); } catch (e) {}
+    if (!resp.ok || !data || data.type === 'error' || data.error) {
+      var er = new Error('IA: ' + (data && data.error && data.error.message ? data.error.message : 'status ' + resp.status));
+      er.semFerramentas = (passo === 0); // falhou já na 1ª chamada: volta ao modo antigo
+      throw er;
+    }
+    if (data.stop_reason === 'tool_use') {
+      messages.push({ role: 'assistant', content: data.content });
+      if (!D) { if (aoStatus) aoStatus('Consultando os dados...'); D = await iaCarregarDados(); }
+      var resultados = [];
+      (data.content || []).forEach(function (b) { if (b.type === 'tool_use') resultados.push({ type: 'tool_result', tool_use_id: b.id, content: iaExecutarFerramenta(b.name, b.input, D) }); });
+      messages.push({ role: 'user', content: resultados });
+      if (aoStatus) aoStatus('Analisando...');
+      continue;
+    }
+    var out = (data.content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('\n').trim();
+    if (data.stop_reason === 'max_tokens') out += '\n\n_(resposta cortada por tamanho — peça de novo com um período ou filtro menor)_';
+    return out || 'Não consegui montar a resposta. Tente reformular a pergunta.';
+  }
+  throw new Error('A IA fez consultas demais sem concluir. Tente uma pergunta mais específica.');
+}
+
+async function iaResponderLegado(texto, historico) {
+  {
     const WORKER_URL = 'https://mute-wildflower-ed3c.unipedras-marmorariavr.workers.dev';
     const hoje = new Date().toISOString().substring(0,10);
     const fmtV = function(v){ return 'R$ '+(parseFloat(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2}); };
@@ -2443,7 +2784,6 @@ async function enviarMensagemIA() {
     +secPedidos + secFin + secReceber + secPagar + secCRM + secMateriais + secComissoes + secDividas + secSaldoBancos + secMetricas
     + montarSecVendasPorMaterial(ords, (typeof getOrcamentos==='function' ? getOrcamentos() : []), (typeof getPedrasCadastradas==='function' ? getPedrasCadastradas() : []), hoje);
 
-    const historico = msgs._historico || [];
 
     const mensagens = [
       { role:'user', content: contexto + '\n\n' + (historico.length ? 'Histórico:\n'+historico.map(function(h){return h.role+': '+h.content;}).join('\n')+'\n\n' : '') + texto }
@@ -2463,6 +2803,42 @@ async function enviarMensagemIA() {
     const resposta = (data.content && data.content[0] && data.content[0].text)
       || data.resposta || data.message || data.text
       || JSON.stringify(data).substring(0, 200);
+    return resposta;
+  }
+}
+
+async function enviarMensagemIA() {
+  const input = document.getElementById('ia-input');
+  const msgs  = document.getElementById('ia-msgs');
+  if (!input || !msgs) { alert('Chat não encontrado'); return; }
+
+  const texto = input.value.trim();
+  if (!texto) return;
+  input.value = '';
+
+  // Mostra mensagem do usuário IMEDIATAMENTE
+  const userMsg = document.createElement('div');
+  userMsg.style.cssText = 'background:#1a2332;color:white;border-radius:12px;padding:12px 16px;max-width:85%;box-shadow:0 1px 4px rgba(0,0,0,.06);align-self:flex-end;font-size:13px;line-height:1.5;margin-left:auto;';
+  userMsg.textContent = texto;
+  msgs.appendChild(userMsg);
+
+  const loadMsg = document.createElement('div');
+  loadMsg.style.cssText = 'background:white;border-radius:12px;padding:12px 16px;max-width:85%;box-shadow:0 1px 4px rgba(0,0,0,.06);align-self:flex-start;font-size:13px;color:#888;';
+  loadMsg.textContent = '⏳ Pensando...';
+  msgs.appendChild(loadMsg);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  try {
+    const historico = msgs._historico || [];
+    let resposta;
+    try {
+      resposta = await iaResponderComFerramentas(texto, historico, function(m){ loadMsg.textContent = '⏳ ' + m; });
+    } catch(eF) {
+      if (eF && eF.semFerramentas) {
+        console.warn('IA com ferramentas indisponível, usando modo antigo:', eF.message);
+        resposta = await iaResponderLegado(texto, historico);
+      } else { throw eF; }
+    }
 
     loadMsg.style.color = '#333';
     loadMsg.classList.add('ia-md');

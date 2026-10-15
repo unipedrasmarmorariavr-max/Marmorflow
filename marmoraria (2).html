@@ -1040,7 +1040,19 @@ function toggleFiltroAv() {
 <div class="notif" id="notif"></div>
 
 <script>
-const MF_VERSAO = '05/10 · salvamento seguro v3'; // conferir em cada aparelho se já está com o arquivo novo
+const MF_VERSAO = '15/10 · salvamento seguro v4'; // conferir em cada aparelho se já está com o arquivo novo
+// Código curto deste aparelho/navegador (ex.: #A3F9). Fica guardado no navegador e aparece na lateral do
+// sistema, nos erros registrados e em cada orçamento gravado — assim sabemos QUAL aparelho fez o quê.
+function mfAparelho() {
+  try {
+    var c = localStorage.getItem('mf_aparelho');
+    if (!c) {
+      c = Math.floor(Math.random() * 65536).toString(16).toUpperCase().padStart(4, '0');
+      localStorage.setItem('mf_aparelho', c);
+    }
+    return '#' + c;
+  } catch(e) { return '#????'; }
+}
 console.log('MarmorFlow versão:', MF_VERSAO);
 // ─── REGISTRO AUTOMÁTICO DE ERROS ───────────────────────────────────────────
 // Anota na tabela "erros_sistema" do Supabase qualquer erro de tela e falha de salvamento,
@@ -1064,7 +1076,7 @@ function registrarErroSistema(tipo, mensagem, detalhe) {
       versao: (typeof MF_VERSAO !== 'undefined' ? MF_VERSAO : ''),
       perfil: (typeof currentUser !== 'undefined' ? String(currentUser || '') : ''),
       aba: (function(){ try { return localStorage.getItem('mf_aba') || ''; } catch(e) { return ''; } })(),
-      aparelho: (navigator.userAgent || '').slice(0, 160) + ' | tela ' + (window.innerWidth || 0) + 'x' + (window.innerHeight || 0),
+      aparelho: mfAparelho() + ' ' + (navigator.userAgent || '').slice(0, 160) + ' | tela ' + (window.innerWidth || 0) + 'x' + (window.innerHeight || 0),
       tipo: String(tipo).slice(0, 60),
       mensagem: mensagem,
       detalhe: String(detalhe == null ? '' : detalhe).slice(0, 1500)
@@ -1355,33 +1367,100 @@ function doLogout() {
 }
 
 // ============ DB ============
+// Aviso fixo (vermelho, no topo) quando o sistema não consegue carregar os dados do servidor.
+// Antes só aparecia um aviso pequeno que sumia sozinho e a tela ficava vazia, parecendo que "tudo sumiu".
+var _loadFalhasSeguidas = 0;
+var _loadRetryTimer = null;
+function mostrarAvisoFalhaCarga() {
+  try {
+    var el = document.getElementById('mf-aviso-carga');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'mf-aviso-carga';
+      el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:100000;background:#B3261E;color:#fff;padding:10px 14px;font-size:14px;font-weight:600;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.35);';
+      el.innerHTML = '⚠️ Não consegui carregar os dados do servidor. O que aparece na tela pode estar vazio ou desatualizado — <u>seus dados NÃO foram apagados</u>. Não crie nem altere nada até isso sumir. '
+        + '<button id="mf-aviso-carga-btn" style="margin-left:8px;padding:5px 12px;border-radius:6px;border:0;background:#fff;color:#B3261E;font-weight:800;cursor:pointer;">Tentar de novo</button>'
+        + '<span id="mf-aviso-carga-st" style="margin-left:8px;font-weight:400;font-size:12px;opacity:.9;"></span>';
+      document.body.appendChild(el);
+      document.getElementById('mf-aviso-carga-btn').onclick = function() {
+        var st = document.getElementById('mf-aviso-carga-st'); if (st) st.textContent = 'tentando...';
+        loadOrders(false).then(function(ok) { var st2 = document.getElementById('mf-aviso-carga-st'); if (st2 && !ok) st2.textContent = 'ainda sem resposta'; });
+      };
+    }
+    if (!_loadRetryTimer) {
+      _loadRetryTimer = setInterval(function() { if (!document.hidden) loadOrders(true); }, 15000); // tenta sozinho a cada 15s
+    }
+  } catch(e) {}
+}
+function esconderAvisoFalhaCarga() {
+  try {
+    var el = document.getElementById('mf-aviso-carga'); if (el) el.remove();
+    if (_loadRetryTimer) { clearInterval(_loadRetryTimer); _loadRetryTimer = null; }
+  } catch(e) {}
+}
+
+// Carrega os pedidos. Devolve true se carregou, false se falhou (nesse caso NÃO mexe na lista atual).
 async function loadOrders(silencioso = false) {
   if (!silencioso) showLoading('Carregando pedidos...');
-  const { data, error } = await getSB().from('pedidos').select('*').order('created_at',{ascending:false}).limit(1000);
+  let data = null, error = null;
+  try {
+    const r = await getSB().from('pedidos').select('*').order('created_at',{ascending:false}).limit(1000);
+    data = r.data; error = r.error;
+  } catch(e) { error = e || new Error('falha de rede'); }
   if (!silencioso) hideLoading();
-  if (error) { showNotif('Erro ao carregar','error'); return; }
-  orders = data||[];
+  // Lista vazia vindo do servidor quando já tínhamos pedidos na tela = resposta suspeita (já aconteceu
+  // o Kanban esvaziar por uns instantes). Trata como falha: mantém o que está na tela e tenta de novo.
+  const vazioSuspeito = !error && Array.isArray(data) && data.length === 0 && orders && orders.length > 0;
+  if (error || !Array.isArray(data) || vazioSuspeito) {
+    _loadFalhasSeguidas++;
+    registrarErroSistema('carga_pedidos', vazioSuspeito ? 'Servidor devolveu lista vazia (suspeito)' : 'Falha ao carregar pedidos: ' + (error && error.message ? error.message : error),
+      'silencioso=' + silencioso + ' | falhas seguidas=' + _loadFalhasSeguidas + ' | pedidos na tela=' + (orders ? orders.length : 0));
+    // Carga manual/inicial: avisa já. Carga automática (a cada 20s): só avisa na 2ª falha seguida (ignora soluço de rede).
+    if (!silencioso || _loadFalhasSeguidas >= 2) mostrarAvisoFalhaCarga();
+    return false;
+  }
+  const recuperou = _loadFalhasSeguidas > 0;
+  _loadFalhasSeguidas = 0;
+  esconderAvisoFalhaCarga();
+  orders = data;
   // Carrega cache de medições em paralelo
   try {
     const { data: meds } = await getSB().from('medicoes').select('*');
     _medicoes = meds || [];
   } catch(e) { _medicoes = []; }
+  if (recuperou) {
+    // Voltou depois de uma falha: redesenha a tela atual com os dados reais
+    try { if (!pedidoOrcAtual && typeof showTab === 'function') showTab(localStorage.getItem('mf_aba') || 'kanban', false); } catch(e) {}
+    try { showNotif('Dados carregados novamente ✓','success'); } catch(e) {}
+  }
+  return true;
 }
-async function nextId() {
-  // Consulta direto no banco o maior número já usado — evita repetir um ID que já existe
-  // (a lista 'orders' em memória pode estar filtrada ou incompleta, causando colisão)
-  try {
-    const { data, error } = await getSB().from('pedidos').select('id');
-    if (!error && data && data.length) {
-      const nums = data.map(o=>parseInt((o.id||'').replace('MRM-',''))).filter(n=>!isNaN(n));
-      if (nums.length) return 'MRM-'+String(Math.max(...nums)+1).padStart(3,'0');
-    }
-  } catch(e) { console.warn('nextId: falha ao consultar Supabase, usando fallback em memória', e); }
 
-  // Fallback: usa os pedidos já carregados em memória (comportamento anterior)
-  if (!orders||!orders.length) return 'MRM-001';
-  const nums = orders.map(o=>parseInt((o.id||'').replace('MRM-',''))).filter(n=>!isNaN(n));
-  return 'MRM-'+String((nums.length?Math.max(...nums):0)+1).padStart(3,'0');
+// Próximo número de pedido. Devolve null se NÃO tiver certeza (banco sem resposta): quem chama
+// deve parar e avisar. Antes, quando o banco falhava e a lista estava vazia, ele devolvia 'MRM-001'
+// e podia criar um pedido com ID repetido.
+async function nextId() {
+  try {
+    if (_loadFalhasSeguidas > 0) return null; // sistema já está sem conseguir falar com o servidor
+    let todos = [], de = 0;
+    for (let pag = 0; pag < 20; pag++) { // lê todos os IDs, de 1000 em 1000 (o servidor limita cada resposta)
+      const { data, error } = await getSB().from('pedidos').select('id').range(de, de + 999);
+      if (error || !Array.isArray(data)) { registrarErroSistema('proximo_id', 'Falha ao consultar IDs: ' + (error && error.message ? error.message : 'sem dados'), ''); return null; }
+      todos = todos.concat(data);
+      if (data.length < 1000) break;
+      de += 1000;
+    }
+    if (!todos.length) {
+      if (orders && orders.length) { registrarErroSistema('proximo_id', 'Banco devolveu 0 IDs mas há pedidos na tela', 'pedidos na tela=' + orders.length); return null; }
+      return 'MRM-001'; // banco realmente vazio (sistema novo)
+    }
+    const nums = todos.map(o=>parseInt((o.id||'').replace('MRM-',''))).filter(n=>!isNaN(n));
+    if (!nums.length) { registrarErroSistema('proximo_id', 'Nenhum ID numérico encontrado', 'total=' + todos.length); return null; }
+    return 'MRM-'+String(Math.max(...nums)+1).padStart(3,'0');
+  } catch(e) {
+    registrarErroSistema('proximo_id', 'Exceção: ' + (e && e.message ? e.message : e), '');
+    return null;
+  }
 }
 
 // ============ TABS ============
@@ -1957,7 +2036,7 @@ function renderSidebar(perfil) {
   const userEl = document.getElementById('sidebar-user-info');
   if (userEl) {
     const nomes = {dono:'👑 Dono', comercial:'💼 Comercial', producao:'⚙️ Produção', financeiro:'💰 Financeiro', medidor:'📐 Medidor'};
-    userEl.innerHTML = '<strong>'+( nomes[perfil]||perfil)+'</strong>Unipedras Marmoraria<div style="font-size:9px;opacity:.55;margin-top:3px;">versão '+MF_VERSAO+'</div>';
+    userEl.innerHTML = '<strong>'+( nomes[perfil]||perfil)+'</strong>Unipedras Marmoraria<div style="font-size:9px;opacity:.55;margin-top:3px;">versão '+MF_VERSAO+' · aparelho '+mfAparelho()+'</div>';
   }
 
   // Restaura estado do sidebar
@@ -3731,6 +3810,7 @@ async function saveMedidor() {
   if (!cliente){showNotif('Nome do cliente é obrigatório','error');return;}
   showLoading('Salvando...');
   const id=editingId||await nextId();
+  if (!id) { hideLoading(); alert('Não consegui falar com o servidor para gerar o número do pedido.\n\nNada foi salvo. Confira a internet e tente de novo em instantes.'); return; }
   const data={
     id,cliente,
     telefone:document.getElementById('m-telefone').value.trim(),
@@ -11231,6 +11311,7 @@ async function finalizarMedicao() {
 
     showLoading('Gerando ID...');
     const novoId = await nextId();
+    if (!novoId) { hideLoading(); alert('Não consegui falar com o servidor para gerar o número do pedido.\n\nA medição NÃO foi concluída. Confira a internet e tente de novo em instantes.'); return; }
     showLoading('Salvando pedido...');
 
     const novoPedido = {
@@ -12499,7 +12580,7 @@ async function salvarOrcamento(orc, forcar) {
     pedido_key: orc.pedidoKey || null,
     cliente: orc.cliente || '',
     status: orc.status || '',
-    dados: orc,
+    dados: Object.assign({}, orc, { _ultimoSalvamento: { aparelho: mfAparelho(), versao: MF_VERSAO } }),
     updated_at: new Date().toISOString()
   };
   try {

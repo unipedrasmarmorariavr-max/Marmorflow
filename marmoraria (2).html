@@ -14272,14 +14272,15 @@ function mfdEhConj(p) {
   return !!p && (p.formato === 'L' || p.formato === 'U') && (!p.tipo || p.tipo === 'bancada' || p.tipo === 'pia' || p.tipo === 'lavatorio');
 }
 function mfdParteVazia() {
-  return { comp: '', larg: '', esp: { fundo: 0, esq: 0, dir: 0, frente: 0 }, saia: { fundo: 0, esq: 0, dir: 0, frente: 0 }, acab: { fundo: '', esq: '', dir: '', frente: '' }, cubas: [], cook: null, recortes: [], rot: '' };
+  return { comp: '', larg: '', esp: { fundo: 0, esq: 0, dir: 0, frente: 0 }, saia: { fundo: 0, esq: 0, dir: 0, frente: 0 }, acab: { fundo: '', esq: '', dir: '', frente: '' }, cubas: [], cook: null, recortes: [], rot: '', apoio: null };
 }
 function mfdNormalizaParte(x) {
   var b = mfdParteVazia(); x = x || {};
   return {
     comp: x.comp || '', larg: x.larg || '',
     esp: Object.assign({}, b.esp, x.esp || {}), saia: Object.assign({}, b.saia, x.saia || {}), acab: Object.assign({}, b.acab, x.acab || {}),
-    cubas: Array.isArray(x.cubas) ? x.cubas : [], cook: x.cook || null, recortes: Array.isArray(x.recortes) ? x.recortes : [], rot: x.rot || ''
+    cubas: Array.isArray(x.cubas) ? x.cubas : [], cook: x.cook || null, recortes: Array.isArray(x.recortes) ? x.recortes : [], rot: x.rot || '',
+    apoio: (x.apoio && (x.apoio.alt || x.apoio.larg)) ? { alt: x.apoio.alt || '', larg: x.apoio.larg || '' } : null
   };
 }
 function mfdParteObj(p, parte) { return parte ? p.lat[parte] : p; }
@@ -14343,6 +14344,7 @@ function mfdAreaConj(p) {
       var L = 0; mfdLivres(g.R, r, k).livre.forEach(function (i) { L += i[1] - i[0]; });
       tot += h * L;
     });
+    if (r.d.apoio) tot += mfdN(r.d.apoio.alt) * (mfdN(r.d.apoio.larg) || r.w);
   });
   return tot / 10000;
 }
@@ -14516,6 +14518,13 @@ function mfdSVGConj(p) {
         o.push(ln(x1, y1, x2, y2, '#f3f4f6', 4)); o.push(ln(x1, y1, x2, y2, C_LINE, 1.8, '7 4'));
       });
     });
+  });
+  // apoio: pedra vertical que desce do tampo até o chão, no fim (frente) da lateral — por baixo, então vai tracejado
+  R.forEach(function (r) {
+    var a = r.d.apoio; if (!a || r.k === 'main') return;
+    var hh = Math.max(7, 3 * s), x0 = X(r.x), w = r.w * s, y1 = Y(r.y + r.h);
+    o.push('<rect x="' + x0.toFixed(1) + '" y="' + (y1 - hh - 1).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + hh.toFixed(1) + '" fill="#e5e7eb" stroke="#1f2937" stroke-width="1.6" stroke-dasharray="5 3"/>');
+    o.push(txt(x0 + w / 2, y1 - hh - 5, 'APOIO ↓' + mfdFmt(mfdN(a.alt)), 9.5, 800, '#374151', 'middle'));
   });
   // nomes das peças
   R.forEach(function (r) { o.push(txt(X(r.x + r.w / 2), Y(r.y) + 14, String((r.k === 'main' ? p.rotFrente : r.d.rot) || mfdNomeParte(r.k)).toUpperCase(), 10, 700, '#9ca3af', 'middle')); });
@@ -14825,11 +14834,13 @@ function mfdSVG(pIn) {
 }
 
 // legenda curta que acompanha cada desenho (só mostra o que o tipo da peça usa)
+function p0hasApoio(pIn) { var p = pIn && mfdNormalizaPeca(pIn); return !!(p && p.lat && ((p.lat.esq && p.lat.esq.apoio) || (p.lat.dir && p.lat.dir.apoio))); }
 function mfdLegendaHTML(pIn) {
   var c = pIn ? mfdCampos(mfdNormalizaPeca(pIn)) : mfdCampos(null);
   var a = [];
   if (c.esp) a.push('<span>▨ espelho</span>');
   if (c.saia) a.push('<span>⋮ saia</span>');
+  if (p0hasApoio(pIn)) a.push('<span>▭ apoio (desce até o chão)</span>');
   if (c.vao) a.push('<span>┄ vão sem pedra</span>');
   a.push('<span>Medidas em cm · esquerda/direita olhando ' + (c.parede ? 'para a parede' : 'de frente') + '</span>');
   return '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:#4b5563;margin-top:4px;justify-content:center;">' + a.join('') + '</div>';
@@ -14978,18 +14989,22 @@ function mfdNomeItemMudou(idx) {
 // ── MONTAR O DESENHO PELA LISTA "Peça a Peça" ────────────────────────────────
 // Peças principais = linhas que não são espelho/saia. Espelho e saia são encaixados nos lados pelo comprimento.
 function mfdLerLista(it) {
-  var tampos = [], faixas = [];
+  var tampos = [], faixas = [], apoios = [];
   ((it && it.pecas) || []).forEach(function (o) {
     var med = mfdMedidaCm(o.medidas); if (!med) return;
     var nome = String(o.nome || ''), q = Math.min(parseInt(o.qtd, 10) || 1, 10);
     var t = nome.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     var k = /espelho|rodape|frontao|testeira/.test(t) ? 'esp' : (/\bsaia\b/.test(t) ? 'saia' : '');
+    if (/\bapoio\b/.test(t)) {   // pedra vertical até o chão (não é tampo): altura = lado maior, largura = lado menor
+      for (var j = 0; j < q; j++) apoios.push({ alt: med.comp, larg: med.prof, nome: nome, depois: tampos.length ? tampos[tampos.length - 1] : null });
+      return;
+    }
     for (var i = 0; i < q; i++) {
       if (k) faixas.push({ k: k, comp: med.comp, med: med.prof, nome: nome });
       else tampos.push({ nome: nome, comp: med.comp, med: med.prof });
     }
   });
-  return { tampos: tampos, faixas: faixas };
+  return { tampos: tampos, faixas: faixas, apoios: apoios };
 }
 function mfdMontarDaLista(idx, semConfirmar) {
   var it = mfdItem(idx); if (!it) return false;
@@ -15018,9 +15033,18 @@ function mfdMontarDaLista(idx, semConfirmar) {
     if (/molhad|cuba/.test(norm(nome))) d.cubas = [{ modelo: '', larg: '', prof: '', de: 'dir', dist: '', dfrente: '' }];
   }
   marca(p, frente.nome); ks.forEach(function (k) { marca(p.lat[k], p.lat[k].rot); });
+  // apoio: vai na lateral da linha de cima (a última peça principal antes dele na lista); senão, na 1ª lateral sem apoio
+  var notaApoio = [];
+  (L.apoios || []).forEach(function (a) {
+    var alvo = null;
+    ks.forEach(function (k) { if (!alvo && p.lat[k] && p.lat[k].rot === (a.depois && a.depois.nome) && !p.lat[k].apoio) alvo = k; });
+    if (!alvo) ks.forEach(function (k) { if (!alvo && p.lat[k] && p.lat[k].comp && !p.lat[k].apoio) alvo = k; });
+    if (alvo) { p.lat[alvo].apoio = { alt: a.alt, larg: a.larg }; notaApoio.push('Apoio ' + mfdFmt(a.alt) + ' × ' + mfdFmt(a.larg) + ' → no fim da ' + (p.lat[alvo].rot || 'lateral')); }
+    else { p.obs = (p.obs ? p.obs + ' · ' : '') + 'APOIO ' + mfdFmt(a.alt) + ' × ' + mfdFmt(a.larg) + ' (até o chão)'; notaApoio.push('Apoio ' + mfdFmt(a.alt) + ' × ' + mfdFmt(a.larg) + ' → sem lateral para ele; foi para a observação da peça'); }
+  });
   p = mfdNormalizaPeca(p);
   var r = mfdEncaixaFaixas(p, L.faixas);
-  p.sobras = r.sobras; p.logLista = r.log;
+  p.sobras = r.sobras; p.logLista = (r.log || []).concat(notaApoio);
   var pecas = [p];
   extras.forEach(function (t) {   // sobrou peça principal que não cabe no formato: vira peça solta (nada se perde)
     var q = mfdPecaVazia(t.nome); q.tipo = 'bancada'; q.fundo = t.comp; q.frente = t.comp; q.prof = t.med; pecas.push(mfdNormalizaPeca(q));
@@ -15137,6 +15161,7 @@ function mfdAcabRapido(idx, pi, modo, parte) {
 }
 // medidas "2.05x0.60" (m) ou "205x60" (cm) → cm
 function mfdMedidaCm(str) {
+  str = String(str == null ? '' : str).replace(/[×✕]/g, 'x');   // "2×0,70" (com o sinal ×) também vale
   var m = (typeof parseMedidas === 'function') ? parseMedidas(str) : { l: 0, c: 0 };
   var a = m.l, b = m.c;
   if (!a || !b) return null;
@@ -15319,6 +15344,8 @@ function mfdFormParte(idx, pi, p, parte, c, dl) {
       '<td style="padding:2px 6px;">' + mfdTxt(idx, pi, pre + 'acab.' + k, d.acab[k], 'digite ou escolha', 170, dl) + '</td></tr>';
   });
   h += '</tbody></table>';
+  if (lat) h += '<div style="display:flex;gap:8px;align-items:center;margin:4px 0 6px;font-size:12px;"><b>Apoio até o chão</b> (pedra vertical no fim desta lateral) altura (cm) ' +
+    mfdInp(idx, pi, pre + 'apoio.alt', d.apoio ? d.apoio.alt : '', '—', 56) + ' largura (cm) ' + mfdInp(idx, pi, pre + 'apoio.larg', d.apoio ? d.apoio.larg : '', '=lateral', 56) + '</div>';
   if (conj && vis.length < 4) h += '<div style="font-size:11px;color:#777;margin:-2px 0 6px;">Os lados encostados em outra peça não aparecem (são a emenda).</div>';
   var rid = 'mfd-rapido-' + idx + '-' + pi + (lat ? '-' + parte : '');
   var btn = 'background:#e8f4f7;color:#1e5f74;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;font-weight:600;';

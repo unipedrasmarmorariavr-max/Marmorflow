@@ -3143,9 +3143,12 @@ function selecionarTodosHistorico() {
 }
 
 async function excluirPedidoHistorico(id) {
-  if (!confirm('Excluir este pedido permanentemente? Esta ação não pode ser desfeita.')) return;
+  if (!confirm('Excluir este pedido permanentemente? Esta ação não pode ser desfeita.\n\nO orçamento deste pedido também será excluído.')) return;
   showLoading('Excluindo...');
-  await getSB().from('pedidos').delete().eq('id', id);
+  const _ordH = orders.find(o => o.id === id);
+  const _rH = await getSB().from('pedidos').delete().eq('id', id);
+  if (_rH && _rH.error) { hideLoading(); alert('Não consegui excluir: ' + _rH.error.message + '\n\nNada foi alterado.'); return; }
+  await excluirOrcamentoDoPedido(_ordH);
   orders = orders.filter(o => o.id !== id);
   hideLoading();
   showNotif('Pedido excluído ✓', 'success');
@@ -3155,10 +3158,13 @@ async function excluirPedidoHistorico(id) {
 async function excluirSelecionadosHistorico() {
   const selecionados = [...document.querySelectorAll('.chk-historico:checked')].map(c => c.dataset.id);
   if (selecionados.length === 0) { showNotif('Selecione pelo menos um pedido', 'error'); return; }
-  if (!confirm('Excluir ' + selecionados.length + ' pedido(s) permanentemente? Esta ação não pode ser desfeita.')) return;
+  if (!confirm('Excluir ' + selecionados.length + ' pedido(s) permanentemente? Esta ação não pode ser desfeita.\n\nOs orçamentos desses pedidos também serão excluídos.')) return;
   showLoading('Excluindo...');
   for (const id of selecionados) {
-    await getSB().from('pedidos').delete().eq('id', id);
+    const _ordS = orders.find(o => o.id === id);
+    const _rS = await getSB().from('pedidos').delete().eq('id', id);
+    if (_rS && _rS.error) { registrarErroSistema('excluir_pedido', 'Falha ao excluir ' + id + ': ' + _rS.error.message, id); continue; }
+    await excluirOrcamentoDoPedido(_ordS);
   }
   orders = orders.filter(o => !selecionados.includes(o.id));
   hideLoading();
@@ -4386,6 +4392,20 @@ async function fecharPedido() {
 }
 
 // ============ DELETE ============
+// Excluir o pedido também exclui o orçamento dele. Sem isso, o orçamento ficava órfão no banco e um pedido NOVO
+// que recebesse o mesmo número (o último número livre é reaproveitado) "herdava" o orçamento do pedido excluído.
+// (O banco guarda cópia de segurança de orçamento apagado em orcamentos_historico.)
+async function excluirOrcamentoDoPedido(order) {
+  try {
+    if (!order || order.ref_fechado) return;   // cópia "-P": o orçamento é do pedido ORIGINAL, que continua
+    const { error } = await getSB().from('orcamentos').delete().eq('pedido_id', order.id);
+    if (error) throw error;
+    salvarOrcamentos(getOrcamentos().filter(o => o.pedidoId !== order.id));
+  } catch (e) {
+    registrarErroSistema('excluir_orcamento_do_pedido', 'Falha ao excluir o orçamento do pedido excluído: ' + (e && e.message ? e.message : e), order && order.id);
+  }
+}
+
 async function deleteOrder(id) {
   const order = orders.find(o => o.id === id);
   if (!order) return;
@@ -4394,12 +4414,15 @@ async function deleteOrder(id) {
   const copia = orders.find(o => o.ref_fechado === id);
   const msgExtra = copia ? `\n\nA cópia ${copia.id} em Em Corte também será excluída.` : '';
 
-  if (!confirm(`Excluir pedido ${id}?${msgExtra}`)) return;
+  const msgOrc = order.ref_fechado ? '' : '\n\nO orçamento deste pedido também será excluído.';
+  if (!confirm(`Excluir pedido ${id}?${msgExtra}${msgOrc}`)) return;
 
   showLoading('Excluindo...');
 
   // Deleta o pedido principal
-  await getSB().from('pedidos').delete().eq('id', id);
+  const _rDel = await getSB().from('pedidos').delete().eq('id', id);
+  if (_rDel && _rDel.error) { hideLoading(); alert('Não consegui excluir o pedido ' + id + ': ' + _rDel.error.message + '\n\nNada foi alterado.'); return; }
+  await excluirOrcamentoDoPedido(order);
 
   // Se era um Pedido Fechado, deleta a cópia em Em Corte automaticamente
   if (copia) {
@@ -13562,6 +13585,21 @@ async function abrirTelaOrcamentoPedido(id) {
     return;
   }
 
+
+  // Proteção: orçamento MAIS ANTIGO que o próprio pedido = sobra de um pedido excluído que tinha o mesmo número.
+  if (orc && order.created_at && orc.criadoEm) {
+    const tPed = Date.parse(order.created_at), tOrc = Date.parse(orc.criadoEm);
+    if (isFinite(tPed) && isFinite(tOrc) && tOrc < tPed - 5 * 60000) {
+      const f = d => new Date(d).toLocaleString('pt-BR');
+      const comecarVazio = confirm('ATENÇÃO: este pedido (criado em ' + f(order.created_at) + ') abriu um orçamento criado ANTES dele (em ' + f(orc.criadoEm) + ', cliente "' + (orc.cliente || '—') + '").\n\nIsso costuma acontecer quando um pedido é excluído e um pedido novo recebe o mesmo número.\n\nOK = começar este orçamento em branco (o antigo vai para o histórico de segurança)\nCancelar = usar o orçamento antigo mesmo assim');
+      if (comecarVazio) {
+        try { await getSB().from('orcamentos').delete().eq('pedido_id', idOrc); } catch(e) { console.warn('Erro ao limpar orçamento órfão:', e.message); }
+        salvarOrcamentos(getOrcamentos().filter(o => o.pedidoId !== idOrc));
+        registrarErroSistema('orcamento_orfao', 'Orçamento antigo ao abrir pedido novo com o mesmo número', idOrc + ' orç criado ' + orc.criadoEm + ' / pedido criado ' + order.created_at);
+        orc = null; _orcVersaoBanco = null;
+      }
+    }
+  }
 
   if (!orc) {
     // Novo orçamento — começa do zero

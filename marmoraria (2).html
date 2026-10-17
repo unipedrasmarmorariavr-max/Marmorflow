@@ -14089,6 +14089,7 @@ function mfdTipoDeTexto(txt) {
 function mfdCampos(p) {
   var t = (p && p.tipo) || '';
   var c = { esp: true, saia: true, vao: true, cubas: true, cook: true, recortes: true, frente: true, juncao: true, parede: true, qtd: false, comps: false, ocultos: false };
+  if (mfdEhConj(p)) { c.frente = false; c.vao = false; }
   if (t === 'escada' || t === 'fachada') {
     return { esp: false, saia: false, vao: false, cubas: false, cook: false, recortes: false, frente: false, juncao: false, parede: false, qtd: false, comps: true, ocultos: false };
   }
@@ -14119,11 +14120,19 @@ function mfdQtd(p) { var q = parseInt(mfdN(p.qtd), 10); return q > 0 ? q : 1; }
 function mfdPecaPronta(pIn) {
   var p = mfdNormalizaPeca(pIn);
   if (mfdCampos(p).comps) return p.comps.some(function (x) { return mfdN(x.comp) && mfdN(x.med); });
+  if (mfdEhConj(p)) return mfdGeomConj(p).R.length > 0;
   return !!((mfdN(p.fundo) || mfdN(p.frente)) && mfdN(p.prof));
+}
+// título do tipo: "Bancada", "Bancada em L", "Ilha"...
+function mfdTipoTitulo(q) {
+  var tn = mfdTipoNome(q.tipo);
+  if (mfdEhConj(q)) tn = (tn || 'Bancada') + ' em ' + q.formato;
+  return tn;
 }
 // área em m² (tampo + espelhos + saias, ou a soma das linhas de escada/fachada)
 function mfdAreaPeca(pIn) {
   var q = mfdVisivel(pIn), c = mfdCampos(q), tot = 0;
+  if (mfdEhConj(q)) return mfdAreaConj(q);
   if (c.comps) {
     q.comps.forEach(function (x) { tot += mfdN(x.comp) * mfdN(x.med) * (parseInt(mfdN(x.qtd), 10) || 1); });
     return tot / 10000;
@@ -14163,7 +14172,8 @@ function mfdPecaVazia(nome) {
     recortes: [],
     obs: '',
     tipo: '', todos: false, qtd: '',
-    comps: [], juncaoEsc: '', juncaoRod: ''
+    comps: [], juncaoEsc: '', juncaoRod: '',
+    formato: '', lateral: 'esq', canto: 'lateral', lat: { esq: mfdParteVazia(), dir: mfdParteVazia() }
   };
 }
 
@@ -14189,6 +14199,10 @@ function mfdNormalizaPeca(p) {
     return { nome: x.nome || '', comp: x.comp || '', med: x.med || '', qtd: x.qtd || '', acab: x.acab || '' };
   });
   o.juncaoEsc = p.juncaoEsc || ''; o.juncaoRod = p.juncaoRod || '';
+  o.formato = (p.formato === 'L' || p.formato === 'U') ? p.formato : '';
+  o.lateral = p.lateral === 'dir' ? 'dir' : 'esq';
+  o.canto = p.canto === 'frente' ? 'frente' : 'lateral';
+  o.lat = { esq: mfdNormalizaParte(p.lat && p.lat.esq), dir: mfdNormalizaParte(p.lat && p.lat.dir) };
   return o;
 }
 
@@ -14204,10 +14218,290 @@ function mfdListaAcab() {
   return MFD_ACAB_PADRAO.slice();
 }
 
+// ── BANCADA EM L / EM U (peças encostadas) ────────────────────────────────────
+// Peça da frente (junto da parede do fundo) + lateral(is). Tudo em cm, vista de cima.
+function mfdFormatoDeTexto(txt) {
+  var t = String(txt || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (/\bem\s*u\b|ferradura/.test(t)) return 'U';
+  if (/\bem\s*l\b/.test(t)) return 'L';
+  return '';
+}
+function mfdEhConj(p) {
+  return !!p && (p.formato === 'L' || p.formato === 'U') && (!p.tipo || p.tipo === 'bancada' || p.tipo === 'pia' || p.tipo === 'lavatorio');
+}
+function mfdParteVazia() {
+  return { comp: '', larg: '', esp: { fundo: 0, esq: 0, dir: 0, frente: 0 }, saia: { fundo: 0, esq: 0, dir: 0, frente: 0 }, acab: { fundo: '', esq: '', dir: '', frente: '' }, cubas: [], cook: null, recortes: [] };
+}
+function mfdNormalizaParte(x) {
+  var b = mfdParteVazia(); x = x || {};
+  return {
+    comp: x.comp || '', larg: x.larg || '',
+    esp: Object.assign({}, b.esp, x.esp || {}), saia: Object.assign({}, b.saia, x.saia || {}), acab: Object.assign({}, b.acab, x.acab || {}),
+    cubas: Array.isArray(x.cubas) ? x.cubas : [], cook: x.cook || null, recortes: Array.isArray(x.recortes) ? x.recortes : []
+  };
+}
+function mfdParteObj(p, parte) { return parte ? p.lat[parte] : p; }
+
+// trechos livres (sem outra peça encostada) de um lado de um retângulo
+function mfdLivres(R, r, side) {
+  var eps = 0.01, horiz = (side === 'fundo' || side === 'frente');
+  var a0 = horiz ? r.x : r.y, a1 = a0 + (horiz ? r.w : r.h);
+  var line = side === 'fundo' ? r.y : side === 'frente' ? r.y + r.h : side === 'esq' ? r.x : r.x + r.w;
+  var cob = [];
+  R.forEach(function (o) {
+    if (o === r) return;
+    var ol, o0, o1;
+    if (side === 'fundo') { ol = o.y + o.h; o0 = o.x; o1 = o.x + o.w; }
+    else if (side === 'frente') { ol = o.y; o0 = o.x; o1 = o.x + o.w; }
+    else if (side === 'esq') { ol = o.x + o.w; o0 = o.y; o1 = o.y + o.h; }
+    else { ol = o.x; o0 = o.y; o1 = o.y + o.h; }
+    if (Math.abs(ol - line) > eps) return;
+    var s0 = Math.max(a0, o0), s1 = Math.min(a1, o1);
+    if (s1 - s0 > eps) cob.push([s0, s1]);
+  });
+  cob.sort(function (x, y) { return x[0] - y[0]; });
+  var livre = [], cur = a0;
+  cob.forEach(function (c) { if (c[0] - cur > eps) livre.push([cur, c[0]]); cur = Math.max(cur, c[1]); });
+  if (a1 - cur > eps) livre.push([cur, a1]);
+  return { livre: livre, cob: cob, a0: a0, a1: a1, line: line, horiz: horiz };
+}
+
+// geometria do conjunto: retângulos já encostados. x → direita, y → da parede (fundo) para a frente
+function mfdGeomConj(p) {
+  var Wm = mfdN(p.fundo), Pm = mfdN(p.prof);
+  var ks = p.formato === 'U' ? ['esq', 'dir'] : [p.lateral === 'dir' ? 'dir' : 'esq'];
+  var Ld = {};
+  ks.forEach(function (k) { Ld[k] = { comp: mfdN(p.lat[k].comp), larg: mfdN(p.lat[k].larg) }; });
+  var a = Ld.esq ? Ld.esq.larg : 0, b = Ld.dir ? Ld.dir.larg : 0;
+  var cantoLat = p.canto !== 'frente';
+  var R = [];
+  var xm = cantoLat ? a : 0;
+  if (Wm > 0 && Pm > 0) R.push({ k: 'main', d: p, x: xm, y: 0, w: Wm, h: Pm });
+  var yl = cantoLat ? 0 : Pm;
+  if (Ld.esq && Ld.esq.comp && Ld.esq.larg) R.push({ k: 'esq', d: p.lat.esq, x: 0, y: yl, w: a, h: Ld.esq.comp });
+  if (Ld.dir && Ld.dir.comp && Ld.dir.larg) R.push({ k: 'dir', d: p.lat.dir, x: cantoLat ? xm + Wm : Math.max(0, Wm - b), y: yl, w: b, h: Ld.dir.comp });
+  var W = 0, H = 0;
+  R.forEach(function (r) { W = Math.max(W, r.x + r.w); H = Math.max(H, r.y + r.h); });
+  return { R: R, W: W, H: H, ks: ks };
+}
+function mfdLadosVisiveis(p, parte) {
+  var todos = ['fundo', 'esq', 'dir', 'frente'];
+  if (!mfdEhConj(p)) return todos;
+  var g = mfdGeomConj(p), r = null;
+  g.R.forEach(function (x) { if (x.k === (parte || 'main')) r = x; });
+  if (!r) return todos;
+  return todos.filter(function (k) { return mfdLivres(g.R, r, k).livre.length > 0; });
+}
+function mfdAreaConj(p) {
+  var g = mfdGeomConj(p), tot = 0;
+  g.R.forEach(function (r) {
+    tot += r.w * r.h;
+    ['fundo', 'esq', 'dir', 'frente'].forEach(function (k) {
+      var h = mfdN(r.d.esp[k]) + mfdN(r.d.saia[k]); if (!h) return;
+      var L = 0; mfdLivres(g.R, r, k).livre.forEach(function (i) { L += i[1] - i[0]; });
+      tot += h * L;
+    });
+  });
+  return tot / 10000;
+}
+function mfdNomeParte(k) { return k === 'main' ? 'PEÇA DA FRENTE' : (k === 'esq' ? 'LATERAL ESQ.' : 'LATERAL DIR.'); }
+
+function mfdSVGConj(p) {
+  var g = mfdGeomConj(p), R = g.R;
+  if (!R.length) return '<div style="padding:14px;border:1px dashed #bbb;border-radius:8px;color:#888;font-size:12px;text-align:center;">Preencha as medidas da peça da frente (e das laterais) para ver o desenho.</div>';
+  var id = 'mfd' + (++_mfdSeq);
+  var VW = 720, VHM = 520, T = 12, TAG = 13, ROW = 26, COL = 36, EPS = 0.01;
+  var W = g.W, H = g.H, SIDES = ['fundo', 'esq', 'dir', 'frente'];
+  var LN = { fundo: 'FUNDO', esq: 'ESQ.', dir: 'DIR.', frente: 'FRENTE' };
+  // informação de cada lado de cada peça
+  R.forEach(function (r) {
+    r.s = {};
+    SIDES.forEach(function (k) {
+      var lv = mfdLivres(R, r, k), esp = mfdN(r.d.esp[k]), saia = mfdN(r.d.saia[k]), acab = String(r.d.acab[k] || '').trim();
+      var tags = [];
+      if (lv.livre.length) {
+        if (esp) tags.push('ESPELHO ' + mfdFmt(esp));
+        if (saia) tags.push('SAIA ' + mfdFmt(saia) + (p.juncao ? ' · ' + p.juncao : ''));
+        if (acab) tags.push(LN[k] + ': ' + acab.toUpperCase());
+      } else { esp = 0; saia = 0; }
+      r.s[k] = { lv: lv, esp: esp, saia: saia, tags: tags, out: (esp ? T : 0) + (saia ? T : 0) };
+    });
+  });
+  var sideLine = function (r, k) { return k === 'fundo' ? r.y : k === 'frente' ? r.y + r.h : k === 'esq' ? r.x : r.x + r.w; };
+  var bnd = { fundo: 0, frente: H, esq: 0, dir: W };
+  var extra = { fundo: 0, frente: 0, esq: 0, dir: 0 }, outB = { fundo: 0, frente: 0, esq: 0, dir: 0 };
+  R.forEach(function (r) { SIDES.forEach(function (k) {
+    var sd = r.s[k];
+    if (sd.lv.livre.length && Math.abs(sideLine(r, k) - bnd[k]) < EPS) {
+      extra[k] = Math.max(extra[k], sd.out + sd.tags.length * TAG);
+      outB[k] = Math.max(outB[k], sd.out);
+    }
+  }); });
+  // cotas
+  var topP = R.filter(function (r) { return r.y < EPS; }).sort(function (a, b) { return a.x - b.x; });
+  var botP = R.filter(function (r) { return Math.abs(r.y + r.h - H) < EPS; }).sort(function (a, b) { return a.x - b.x; });
+  var totalTop = topP.length > 1 || (topP.length === 1 && Math.abs(topP[0].w - W) > EPS);
+  var totalBot = botP.length > 1 || (botP.length === 1 && Math.abs(botP[0].w - W) > EPS);
+  var nt = totalTop ? 2 : 1, nb = totalBot ? 2 : 1;
+  function pack(list) {   // cotas verticais em colunas sem sobreposição
+    var cols = [];
+    list.sort(function (a, b) { return (a.h - b.h) || (a.y - b.y); }).forEach(function (r) {
+      var c = 0;
+      while (cols[c] && cols[c].some(function (q) { return r.y < q.y + q.h - EPS && q.y < r.y + r.h - EPS; })) c++;
+      (cols[c] = cols[c] || []).push(r); r.col = c;
+    });
+    return cols.length;
+  }
+  var leftL = R.filter(function (r) { return r.x < EPS || (r.x + r.w < W - EPS); });
+  var rightL = R.filter(function (r) { return r.x >= EPS && Math.abs(r.x + r.w - W) < EPS; });
+  var nL = pack(leftL), nR = pack(rightL);
+  var Lm = extra.esq + 26 + nL * COL + 22, Rm = extra.dir + 24 + nR * COL + (nR ? 22 : 0);
+  var Tm = extra.fundo + nt * ROW + 32, Bm = extra.frente + nb * ROW + 18;
+  var s = Math.min((VW - Lm - Rm) / W, (VHM - Tm - Bm) / H);
+  if (!(s > 0)) s = 1;
+  var X = function (x) { return Lm + x * s; }, Y = function (y) { return Tm + y * s; };
+  var VH = Tm + H * s + Bm;
+
+  var C_LINE = '#1f2937', C_COTA = '#0b4f6c', o = [];
+  var halo = 'paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round;';
+  function txt(x, y, t, size, weight, color, anchor, rot) {
+    return '<text x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" font-size="' + size + '" font-weight="' + weight + '" fill="' + color + '" text-anchor="' + (anchor || 'middle') + '" style="' + halo + '"' +
+      (rot ? ' transform="rotate(' + rot + ' ' + x.toFixed(1) + ' ' + y.toFixed(1) + ')"' : '') + '>' + mfdEsc(t) + '</text>';
+  }
+  function ln(x1, y1, x2, y2, color, w, dash) {
+    return '<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" stroke="' + color + '" stroke-width="' + w + '"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') + '/>';
+  }
+  function cotaH(xa, xb, y, t, ea, eb) {
+    var r = [];
+    if (ea !== undefined) r.push(ln(xa, ea, xa, y + 5, '#9ca3af', 0.8, '2 2'));
+    if (eb !== undefined) r.push(ln(xb, eb, xb, y + 5, '#9ca3af', 0.8, '2 2'));
+    r.push(ln(xa, y, xb, y, C_COTA, 1.4));
+    r.push('<polygon points="' + xa.toFixed(1) + ',' + y.toFixed(1) + ' ' + (xa + 7).toFixed(1) + ',' + (y - 3).toFixed(1) + ' ' + (xa + 7).toFixed(1) + ',' + (y + 3).toFixed(1) + '" fill="' + C_COTA + '"/>');
+    r.push('<polygon points="' + xb.toFixed(1) + ',' + y.toFixed(1) + ' ' + (xb - 7).toFixed(1) + ',' + (y - 3).toFixed(1) + ' ' + (xb - 7).toFixed(1) + ',' + (y + 3).toFixed(1) + '" fill="' + C_COTA + '"/>');
+    r.push(txt((xa + xb) / 2, y - 5, t, 15, 800, '#111', 'middle'));
+    return r.join('');
+  }
+  function cotaV(x, ya, yb, t, side, ea, eb) {
+    var r = [];
+    if (ea !== undefined) r.push(ln(ea, ya, x + (side === 'l' ? 5 : -5), ya, '#9ca3af', 0.8, '2 2'));
+    if (eb !== undefined) r.push(ln(eb, yb, x + (side === 'l' ? 5 : -5), yb, '#9ca3af', 0.8, '2 2'));
+    r.push(ln(x, ya, x, yb, C_COTA, 1.4));
+    r.push('<polygon points="' + x.toFixed(1) + ',' + ya.toFixed(1) + ' ' + (x - 3).toFixed(1) + ',' + (ya + 7).toFixed(1) + ' ' + (x + 3).toFixed(1) + ',' + (ya + 7).toFixed(1) + '" fill="' + C_COTA + '"/>');
+    r.push('<polygon points="' + x.toFixed(1) + ',' + yb.toFixed(1) + ' ' + (x - 3).toFixed(1) + ',' + (yb - 7).toFixed(1) + ' ' + (x + 3).toFixed(1) + ',' + (yb - 7).toFixed(1) + '" fill="' + C_COTA + '"/>');
+    r.push(txt(x + (side === 'l' ? -7 : 7), (ya + yb) / 2 + 5, t, 15, 800, '#111', side === 'l' ? 'end' : 'start'));
+    return r.join('');
+  }
+  o.push('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + VW + ' ' + Math.round(VH) + '" width="100%" style="max-width:' + VW + 'px;display:block;margin:0 auto;font-family:Arial,Helvetica,sans-serif;">');
+  o.push('<defs>' +
+    '<pattern id="' + id + 'e" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#fff"/><line x1="0" y1="0" x2="0" y2="6" stroke="#374151" stroke-width="1.6"/></pattern>' +
+    '<pattern id="' + id + 's" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="#fff"/><circle cx="2.5" cy="2.5" r="1.1" fill="#374151"/></pattern></defs>');
+
+  // peças
+  R.forEach(function (r) {
+    o.push('<rect x="' + X(r.x).toFixed(1) + '" y="' + Y(r.y).toFixed(1) + '" width="' + (r.w * s).toFixed(1) + '" height="' + (r.h * s).toFixed(1) + '" fill="#f3f4f6" stroke="' + C_LINE + '" stroke-width="2.4" stroke-linejoin="round"/>');
+  });
+  // emendas (lado em comum): tracejadas
+  R.forEach(function (r) {
+    ['dir', 'frente'].forEach(function (k) {
+      r.s[k].lv.cob.forEach(function (c) {
+        var line = r.s[k].lv.line, x1, y1, x2, y2;
+        if (k === 'dir') { x1 = x2 = X(line); y1 = Y(c[0]); y2 = Y(c[1]); } else { y1 = y2 = Y(line); x1 = X(c[0]); x2 = X(c[1]); }
+        o.push(ln(x1, y1, x2, y2, '#f3f4f6', 4)); o.push(ln(x1, y1, x2, y2, C_LINE, 1.8, '7 4'));
+      });
+    });
+  });
+  // nomes das peças
+  R.forEach(function (r) { o.push(txt(X(r.x + r.w / 2), Y(r.y) + 14, mfdNomeParte(r.k), 10, 700, '#9ca3af', 'middle')); });
+  // faixas (espelho = hachura · saia = pontilhado) só nos trechos livres
+  R.forEach(function (r) { SIDES.forEach(function (k) {
+    var sd = r.s[k], off = 0, ordem = k === 'frente' ? ['saia', 'esp'] : ['esp', 'saia'];
+    ordem.forEach(function (kind) {
+      var h = kind === 'esp' ? sd.esp : sd.saia; if (!h) return;
+      var a = off, b = off + T, fill = kind === 'esp' ? 'url(#' + id + 'e)' : 'url(#' + id + 's)';
+      sd.lv.livre.forEach(function (iv) {
+        var pg, L = sd.lv.line;
+        if (k === 'fundo') pg = [[X(iv[0]), Y(L) - b], [X(iv[1]), Y(L) - b], [X(iv[1]), Y(L) - a], [X(iv[0]), Y(L) - a]];
+        else if (k === 'frente') pg = [[X(iv[0]), Y(L) + a], [X(iv[1]), Y(L) + a], [X(iv[1]), Y(L) + b], [X(iv[0]), Y(L) + b]];
+        else if (k === 'esq') pg = [[X(L) - b, Y(iv[0])], [X(L) - a, Y(iv[0])], [X(L) - a, Y(iv[1])], [X(L) - b, Y(iv[1])]];
+        else pg = [[X(L) + a, Y(iv[0])], [X(L) + b, Y(iv[0])], [X(L) + b, Y(iv[1])], [X(L) + a, Y(iv[1])]];
+        o.push('<polygon points="' + pg.map(function (q) { return q[0].toFixed(1) + ',' + q[1].toFixed(1); }).join(' ') + '" fill="' + fill + '" stroke="' + C_LINE + '" stroke-width="1.2"/>');
+      });
+      off += T;
+    });
+  }); });
+  // etiquetas (no meio do maior trecho livre)
+  R.forEach(function (r) { SIDES.forEach(function (k) {
+    var sd = r.s[k]; if (!sd.tags.length) return;
+    var best = sd.lv.livre.slice().sort(function (a, b) { return (b[1] - b[0]) - (a[1] - a[0]); })[0];
+    var mid = (best[0] + best[1]) / 2, L = sd.lv.line;
+    sd.tags.forEach(function (t, i) {
+      var d = sd.out + 10 + i * TAG;
+      if (k === 'fundo') o.push(txt(X(mid), Y(L) - d, t, 10.5, 700, '#374151', 'middle'));
+      else if (k === 'frente') o.push(txt(X(mid), Y(L) + d + 4, t, 10.5, 700, '#374151', 'middle'));
+      else if (k === 'esq') o.push(txt(X(L) - d, Y(mid), t, 10.5, 700, '#374151', 'middle', -90));
+      else o.push(txt(X(L) + d, Y(mid), t, 10.5, 700, '#374151', 'middle', 90));
+    });
+  }); });
+  // recortes de cada peça (posição medida a partir da própria peça)
+  R.forEach(function (r) {
+    var lista = [].concat((r.d.cubas || []).map(function (c) { return ['cuba', c, 40, 34]; }), r.d.cook ? [['cook', r.d.cook, 56, 49]] : [], (r.d.recortes || []).map(function (c) { return ['outro', c, 20, 20]; }));
+    var semPos = 0, semTot = 0;
+    lista.forEach(function (it) { if (!mfdN(it[1].dist) && !mfdN(it[1].dfrente)) semTot++; });
+    lista.forEach(function (it) {
+      var kind = it[0], c = it[1], w = mfdN(c.larg), h = mfdN(c.prof), medido = !!(w && h);
+      if (!w) w = it[2]; if (!h) h = it[3];
+      var ref = c.ref === 'centro' ? 'centro' : 'borda', dfr = mfdN(c.dfrente), dist = mfdN(c.dist), de = c.de === 'dir' ? 'dir' : 'esq';
+      var cyc = dfr ? (r.y + r.h - dfr - (ref === 'centro' ? 0 : h / 2)) : r.y + r.h / 2, cxc;
+      if (!dist && !dfr) { cxc = r.x + r.w / 2 + (semPos - (semTot - 1) / 2) * (Math.max(w, 30) + 6); semPos++; }
+      else if (de === 'esq') cxc = r.x + dist + (ref === 'centro' ? 0 : w / 2);
+      else cxc = r.x + r.w - dist - (ref === 'centro' ? 0 : w / 2);
+      var fora = (cyc - h / 2 < r.y - 0.05) || (cyc + h / 2 > r.y + r.h + 0.05) || (cxc - w / 2 < r.x - 0.05) || (cxc + w / 2 > r.x + r.w + 0.05);
+      var col = fora ? '#dc2626' : (kind === 'cuba' ? '#1d4ed8' : (kind === 'cook' ? '#9a3412' : '#6d28d9'));
+      var fill = kind === 'cuba' ? 'rgba(59,130,246,.13)' : (kind === 'cook' ? 'rgba(234,88,12,.12)' : 'rgba(124,58,237,.10)');
+      var cx = X(cxc), cy = Y(cyc), wp = w * s, hp = h * s, g2 = [];
+      g2.push('<rect x="' + (cx - wp / 2).toFixed(1) + '" y="' + (cy - hp / 2).toFixed(1) + '" width="' + wp.toFixed(1) + '" height="' + hp.toFixed(1) + '" rx="' + (kind === 'cuba' ? 8 : 3) + '" fill="' + fill + '" stroke="' + col + '" stroke-width="1.8"' + ((medido && (dist || dfr)) ? '' : ' stroke-dasharray="6 3"') + '/>');
+      if (kind === 'cook') { g2.push(ln(cx - wp / 2, cy - hp / 2, cx + wp / 2, cy + hp / 2, col, 0.8, '3 3')); g2.push(ln(cx - wp / 2, cy + hp / 2, cx + wp / 2, cy - hp / 2, col, 0.8, '3 3')); }
+      var nome = kind === 'cuba' ? 'CUBA' : (kind === 'cook' ? 'COOKTOP' : String(c.nome || 'RECORTE').toUpperCase());
+      var fs = Math.max(9, Math.min(13, wp / 6));
+      g2.push(txt(cx, cy - 2, nome, fs, 800, col, 'middle'));
+      var sub = [];
+      if (kind === 'cuba' && c.modelo) sub.push(String(c.modelo));
+      if (medido) sub.push(mfdFmt(w) + ' × ' + mfdFmt(h)); else if (kind === 'cook') sub.push('corte não informado'); else if (kind === 'cuba') sub.push('conforme gabarito');
+      if (!dist && !dfr) sub.push('posição a confirmar');
+      if (fora) sub.push('⚠ passa da peça — confira');
+      sub.forEach(function (t, i) { g2.push(txt(cx, cy + 11 + i * 12, t, Math.max(9, fs - 1), 700, col, 'middle')); });
+      if (dist) {
+        var ex = de === 'esq' ? X(r.x) : X(r.x + r.w), fim = ref === 'centro' ? cx : (de === 'esq' ? cx - wp / 2 : cx + wp / 2), yl = cy - hp / 2 - 7;
+        if (yl < Y(r.y) + 12) yl = cy + hp / 2 + 9;
+        g2.push(ln(ex, yl, fim, yl, col, 1.2)); g2.push('<circle cx="' + fim.toFixed(1) + '" cy="' + yl.toFixed(1) + '" r="2.2" fill="' + col + '"/>');
+        g2.push(txt((ex + fim) / 2, yl - 4, mfdFmt(dist), 13, 800, col, 'middle'));
+      }
+      if (dfr) {
+        var xl = cx + wp / 2 + 7, yfim = ref === 'centro' ? cy : cy + hp / 2;
+        g2.push(ln(xl, Y(r.y + r.h), xl, yfim, col, 1.2)); g2.push(txt(xl + 3, (Y(r.y + r.h) + yfim) / 2 + 4, mfdFmt(dfr), 13, 800, col, 'start'));
+      }
+      o.push(g2.join(''));
+    });
+  });
+  // cotas — sempre fora
+  var topBase = Y(0) - extra.fundo - 16;
+  topP.forEach(function (r) { var e = Y(0) - r.s.fundo.out; o.push(cotaH(X(r.x), X(r.x + r.w), topBase, mfdFmt(r.w), e, e)); });
+  if (totalTop) o.push(cotaH(X(0), X(W), topBase - ROW, mfdFmt(W), Y(0) - outB.fundo, Y(0) - outB.fundo));
+  var botBase = Y(H) + extra.frente + 20;
+  botP.forEach(function (r) { var e = Y(H) + r.s.frente.out; o.push(cotaH(X(r.x), X(r.x + r.w), botBase, mfdFmt(r.w), e, e)); });
+  if (totalBot) o.push(cotaH(X(0), X(W), botBase + ROW, mfdFmt(W), Y(H) + outB.frente, Y(H) + outB.frente));
+  leftL.forEach(function (r) { o.push(cotaV(X(0) - extra.esq - 22 - r.col * COL, Y(r.y), Y(r.y + r.h), mfdFmt(r.h), 'l', X(0) - outB.esq, X(0) - outB.esq)); });
+  rightL.forEach(function (r) { o.push(cotaV(X(W) + extra.dir + 22 + r.col * COL, Y(r.y), Y(r.y + r.h), mfdFmt(r.h), 'r', X(W) + outB.dir, X(W) + outB.dir)); });
+  o.push(txt(X(W / 2), 11, '▲ PAREDE (FUNDO)', 10, 700, '#6b7280', 'middle'));
+  o.push('</svg>');
+  return o.join('');
+}
+
 // ─── SVG ────────────────────────────────────────────────────────────────────
 var _mfdSeq = 0;
 function mfdSVG(pIn) {
   var p = mfdVisivel(pIn), CP = mfdCampos(p);
+  if (mfdEhConj(p)) return mfdSVGConj(p);
   var LN = CP.parede ? MFD_LADO_NOME : { fundo: 'TRÁS', esq: 'ESQ.', dir: 'DIR.', frente: 'FRENTE' };
   var F = mfdN(p.fundo), R = mfdN(p.frente), P = mfdN(p.prof);
   if (!F && R) F = R;
@@ -14438,6 +14732,12 @@ function mfdLegendaHTML(pIn) {
 function mfdResumoPeca(pIn) {
   var p = mfdVisivel(pIn), c = mfdCampos(p), a = [];
   if (c.comps) return '';
+  if (mfdEhConj(p)) {
+    var rs = mfdGeomConj(p).R.map(function (r) {
+      return (r.k === 'main' ? 'frente ' : (r.k === 'esq' ? 'lateral esq. ' : 'lateral dir. ')) + (r.k === 'main' ? mfdFmt(r.w) + ' × ' + mfdFmt(r.h) : mfdFmt(r.h) + ' × ' + mfdFmt(r.w));
+    });
+    return rs.join(' · ');
+  }
   var F = mfdN(p.fundo), R = mfdN(p.frente), P = mfdN(p.prof);
   if (!c.parede && !c.frente) { if (F) a.push('comprimento ' + mfdFmt(F)); if (P) a.push('largura ' + mfdFmt(P)); }
   else {
@@ -14549,15 +14849,38 @@ function mfdSementes(p) {
 function mfdAddPeca(idx) {
   var it = mfdItem(idx); if (!it) return;
   var p = mfdPecaVazia('');
-  p.tipo = mfdTipoDeTexto(it.peca);   // só sugere; o comercial pode trocar
+  p.tipo = mfdTipoDeTexto(it.nome) || mfdTipoDeTexto(it.peca);   // só sugere; o comercial pode trocar
+  var f = mfdFormatoDeTexto(it.nome);
+  if (f && (p.tipo === 'bancada' || p.tipo === 'pia' || p.tipo === 'lavatorio')) p.formato = f;
   mfdGarante(it).pecas.push(mfdSementes(mfdNormalizaPeca(p)));
   mfdRender(idx);
+}
+// o comercial escolheu/alterou o nome do item: se ainda não há desenho, já monta a peça certa
+function mfdNomeItemMudou(idx) {
+  try {
+    var it = mfdItem(idx); if (!it) return;
+    var tipo = mfdTipoDeTexto(it.nome);
+    if (!tipo) return;
+    var ja = it.desenho && Array.isArray(it.desenho.pecas) && it.desenho.pecas.length;
+    if (!ja) {
+      mfdAddPeca(idx);
+      var box = document.getElementById('desenho-box-' + idx);
+      var det = box && box.querySelector('details'); if (det) det.open = true;
+    }
+  } catch (e) { console.error('nome do item → desenho:', e); }
 }
 function mfdSetTipo(idx, pi, t) {
   var it = mfdItem(idx); if (!it || !it.desenho) return;
   var p = it.desenho.pecas[pi] = mfdNormalizaPeca(it.desenho.pecas[pi]);
   p.tipo = t; p.todos = false;
+  if (t && t !== 'bancada' && t !== 'pia' && t !== 'lavatorio') p.formato = '';
   mfdSementes(p);
+  mfdRender(idx);
+}
+function mfdSetFormato(idx, pi, f) {
+  var it = mfdItem(idx); if (!it || !it.desenho) return;
+  var p = it.desenho.pecas[pi] = mfdNormalizaPeca(it.desenho.pecas[pi]);
+  p.formato = (f === 'L' || f === 'U') ? f : '';
   mfdRender(idx);
 }
 function mfdToggleTodos(idx, pi) {
@@ -14590,33 +14913,35 @@ function mfdDupPeca(idx, pi) {
   it.desenho.pecas.splice(pi + 1, 0, c);
   mfdRender(idx);
 }
-function mfdAddLista(idx, pi, campo) {
+function mfdAddLista(idx, pi, campo, parte) {
   var it = mfdItem(idx); if (!it || !it.desenho) return;
-  var p = it.desenho.pecas[pi] = mfdNormalizaPeca(it.desenho.pecas[pi]);
-  if (campo === 'cubas') p.cubas.push({ modelo: '', larg: '', prof: '', de: 'dir', dist: '', dfrente: '' });
-  else if (campo === 'recortes') p.recortes.push({ nome: '', larg: '', prof: '', de: 'esq', dist: '', dfrente: '' });
+  var p = it.desenho.pecas[pi] = mfdNormalizaPeca(it.desenho.pecas[pi]), d = mfdParteObj(p, parte || '');
+  if (campo === 'cubas') d.cubas.push({ modelo: '', larg: '', prof: '', de: 'dir', dist: '', dfrente: '' });
+  else if (campo === 'recortes') d.recortes.push({ nome: '', larg: '', prof: '', de: 'esq', dist: '', dfrente: '' });
   mfdRender(idx);
 }
-function mfdDelLista(idx, pi, campo, ci) {
+function mfdDelLista(idx, pi, campo, ci, parte) {
   var it = mfdItem(idx); if (!it || !it.desenho) return;
   var p = it.desenho.pecas[pi] = mfdNormalizaPeca(it.desenho.pecas[pi]);
-  p[campo].splice(ci, 1);
+  mfdParteObj(p, parte || '')[campo].splice(ci, 1);
   mfdRender(idx);
 }
-function mfdToggleCook(idx, pi, on) {
+function mfdToggleCook(idx, pi, on, parte) {
   var it = mfdItem(idx); if (!it || !it.desenho) return;
   var p = it.desenho.pecas[pi] = mfdNormalizaPeca(it.desenho.pecas[pi]);
-  p.cook = on ? { larg: '', prof: '', de: 'esq', dist: '', dfrente: '' } : null;
+  mfdParteObj(p, parte || '').cook = on ? { larg: '', prof: '', de: 'esq', dist: '', dfrente: '' } : null;
   mfdRender(idx);
 }
-// "45", "boleado"... em todas as bordas (esq., dir., frente) ou só na frente
-function mfdAcabRapido(idx, pi, modo) {
+// "45", "boleado"... em todas as bordas (esq., dir., frente), só na frente, ou em todas as bordas livres (L/U)
+function mfdAcabRapido(idx, pi, modo, parte) {
   var it = mfdItem(idx); if (!it || !it.desenho) return;
-  var inp = document.getElementById('mfd-rapido-' + idx + '-' + pi);
+  parte = parte || '';
+  var inp = document.getElementById('mfd-rapido-' + idx + '-' + pi + (parte ? '-' + parte : ''));
   var v = inp ? inp.value.trim() : '';
-  var p = it.desenho.pecas[pi] = mfdNormalizaPeca(it.desenho.pecas[pi]);
-  if (modo === 'frente') p.acab.frente = v;
-  else { p.acab.esq = v; p.acab.dir = v; p.acab.frente = v; }
+  var p = it.desenho.pecas[pi] = mfdNormalizaPeca(it.desenho.pecas[pi]), d = mfdParteObj(p, parte);
+  if (modo === 'frente') d.acab.frente = v;
+  else if (modo === 'livres') mfdLadosVisiveis(p, parte).forEach(function (k) { if (k !== 'fundo') d.acab[k] = v; });
+  else { d.acab.esq = v; d.acab.dir = v; d.acab.frente = v; }
   mfdRender(idx);
 }
 // medidas "2.05x0.60" (m) ou "205x60" (cm) → cm
@@ -14643,7 +14968,9 @@ function mfdPreencherDaLista(idx, pi) {
 function mfdImportar(idx) {
   var it = mfdItem(idx); if (!it) return;
   var d = mfdGarante(it), novas = 0;
+  var puladas = [];
   (it.pecas || []).forEach(function (o) {
+    if (/espelho|saia|rodap|fronta|testeira/i.test(String(o.nome || ''))) { puladas.push(o.nome); return; }   // faixas: entram como espelho/saia no desenho, não como peça
     var med = mfdMedidaCm(o.medidas);
     if (!med) return;
     var p = mfdPecaVazia(o.nome || '');
@@ -14654,6 +14981,7 @@ function mfdImportar(idx) {
   });
   if (!novas) { alert('Nenhuma peça com medida preenchida na lista "Peça a Peça".'); return; }
   mfdRender(idx);
+  if (puladas.length) alert('Importei só as peças principais. Espelho e saia (' + puladas.length + ' linhas da lista) não viram peça: digite a altura de cada um no lado certo do desenho.');
 }
 
 // ── lista de acabamentos (configurável) ────────────────────────────────────
@@ -14697,17 +15025,19 @@ function mfdTxt(idx, pi, path, val, ph, w, listId) {
     'oninput="mfdSet(' + idx + ',' + pi + ',\'' + path + '\',this.value)" ' +
     'style="width:' + (w || 120) + 'px;max-width:100%;padding:5px 7px;border:1.5px solid #cbd5e1;border-radius:6px;font-size:13px;">';
 }
-function mfdSel(idx, pi, path, val, opcoes) {
-  return '<select onchange="mfdSet(' + idx + ',' + pi + ',\'' + path + '\',this.value)" style="padding:5px 4px;border:1.5px solid #cbd5e1;border-radius:6px;font-size:12px;background:#fff;">' +
+function mfdSel(idx, pi, path, val, opcoes, rerender) {
+  return '<select onchange="mfdSet(' + idx + ',' + pi + ',\'' + path + '\',this.value)' + (rerender ? ';mfdRender(' + idx + ')' : '') + '" style="padding:5px 4px;border:1.5px solid #cbd5e1;border-radius:6px;font-size:12px;background:#fff;">' +
     opcoes.map(function (o) { return '<option value="' + o[0] + '"' + (String(val) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>';
 }
 var MFD_LBL = 'font-size:10px;font-weight:700;color:#1e5f74;text-transform:uppercase;letter-spacing:.3px;';
 
-function mfdRecorteLinha(idx, pi, campo, c, ci, tipo) {
-  var base = tipo === 'cook' ? 'cook.' : (campo + '.' + ci + '.');
+function mfdRecorteLinha(idx, pi, campo, c, ci, tipo, parte) {
+  parte = parte || '';
+  var pre = parte ? 'lat.' + parte + '.' : '', ps = parte ? ',\'' + parte + '\'' : '';
+  var base = pre + (tipo === 'cook' ? 'cook.' : (campo + '.' + ci + '.'));
   var btnDel = tipo === 'cook'
-    ? 'mfdToggleCook(' + idx + ',' + pi + ',false)'
-    : 'mfdDelLista(' + idx + ',' + pi + ',\'' + campo + '\',' + ci + ')';
+    ? 'mfdToggleCook(' + idx + ',' + pi + ',false' + ps + ')'
+    : 'mfdDelLista(' + idx + ',' + pi + ',\'' + campo + '\',' + ci + ps + ')';
   var nomeCampo = tipo === 'cuba'
     ? mfdTxt(idx, pi, base + 'modelo', c.modelo || '', 'Modelo (ex: Tecnocuba 15)', 170)
     : (tipo === 'cook' ? '<b style="font-size:12px;color:#9a3412;">COOKTOP</b>' : mfdTxt(idx, pi, base + 'nome', c.nome || '', 'Nome (ex: furo torneira)', 150));
@@ -14759,71 +15089,111 @@ function mfdCompsPainel(idx, pi, p) {
   return h;
 }
 
-function mfdCardPeca(idx, pi, pIn) {
-  var p = mfdNormalizaPeca(pIn), dl = 'mfd-acab-' + idx, c = mfdCampos(p);
+// formulário de uma parte: a peça principal ('') ou a lateral 'esq' / 'dir' (bancada em L e U)
+function mfdFormParte(idx, pi, p, parte, c, dl) {
+  var conj = mfdEhConj(p), lat = parte !== '';
+  var d = lat ? p.lat[parte] : p;
+  var pre = lat ? 'lat.' + parte + '.' : '';
+  var ps = lat ? ',\'' + parte + '\'' : '';
+  var soleira = !c.frente && !c.comps && !conj;
   var lblFundo = c.parede ? 'Fundo (parede)' : 'Trás';
-  var lados = [['fundo', lblFundo], ['esq', 'Esquerda'], ['dir', 'Direita'], ['frente', 'Frente']];
-  var soleira = !c.frente && !c.comps;
+  var nomes = { fundo: lblFundo, esq: 'Esquerda', dir: 'Direita', frente: 'Frente' };
+  var vis = conj ? mfdLadosVisiveis(p, parte) : ['fundo', 'esq', 'dir', 'frente'];
+  var h = '';
+  // medidas
+  if (lat) {
+    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px;">' +
+      '<div><div style="' + MFD_LBL + '">Comprimento (cm)</div>' + mfdInp(idx, pi, pre + 'comp', d.comp, '', 72) + '</div>' +
+      '<div><div style="' + MFD_LBL + '">Largura (cm)</div>' + mfdInp(idx, pi, pre + 'larg', d.larg, '', 72) + '</div>' +
+      '<div style="font-size:11px;color:#777;max-width:300px;">Comprimento = do fundo (parede) até a frente. Largura = a profundidade desta lateral.</div></div>';
+  } else {
+    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px;">' +
+      '<div><div style="' + MFD_LBL + '">' + (conj ? 'Comprimento (cm)' : (soleira ? 'Comprimento (cm)' : (c.parede ? 'Fundo (cm)' : 'Trás (cm)'))) + '</div>' + mfdInp(idx, pi, 'fundo', p.fundo, '', 72) + '</div>' +
+      (c.frente ? '<div><div style="' + MFD_LBL + '">Frente (cm)</div>' + mfdInp(idx, pi, 'frente', p.frente, 'igual', 72) + '</div>' : '') +
+      '<div><div style="' + MFD_LBL + '">' + (soleira ? 'Largura (cm)' : 'Profundidade (cm)') + '</div>' + mfdInp(idx, pi, 'prof', p.prof, '', 72) + '</div>' +
+      (c.qtd ? '<div><div style="' + MFD_LBL + '">Quantidade</div>' + mfdInp(idx, pi, 'qtd', p.qtd, '1', 60) + '</div>' : '') +
+      (c.frente ? '<div style="font-size:11px;color:#777;max-width:230px;">Frente vazia = igual ao ' + (c.parede ? 'fundo' : 'trás') + '. Se o medidor anotou medidas diferentes, o tampo sai trapezoidal.</div>' : '') + '</div>';
+  }
+  // lados
+  var th = 'padding:2px 6px;font-size:10px;text-transform:uppercase;';
+  h += '<table style="border-collapse:collapse;font-size:12px;margin-bottom:6px;"><thead><tr style="color:#1e5f74;text-align:left;">' +
+    '<th style="padding:2px 8px 2px 0;font-size:10px;text-transform:uppercase;">Lado</th>' +
+    (c.esp ? '<th style="' + th + '">Espelho (cm)</th>' : '') + (c.saia ? '<th style="' + th + '">Saia (cm)</th>' : '') +
+    '<th style="' + th + '">Acabamento da borda</th></tr></thead><tbody>';
+  ['fundo', 'esq', 'dir', 'frente'].forEach(function (k) {
+    if (vis.indexOf(k) < 0) return;
+    h += '<tr><td style="padding:2px 8px 2px 0;font-weight:700;white-space:nowrap;">' + nomes[k] + '</td>' +
+      (c.esp ? '<td style="padding:2px 6px;">' + mfdInp(idx, pi, pre + 'esp.' + k, d.esp[k], '—', 56) + '</td>' : '') +
+      (c.saia ? '<td style="padding:2px 6px;">' + mfdInp(idx, pi, pre + 'saia.' + k, d.saia[k], '—', 56) + '</td>' : '') +
+      '<td style="padding:2px 6px;">' + mfdTxt(idx, pi, pre + 'acab.' + k, d.acab[k], 'digite ou escolha', 170, dl) + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  if (conj && vis.length < 4) h += '<div style="font-size:11px;color:#777;margin:-2px 0 6px;">Os lados encostados em outra peça não aparecem (são a emenda).</div>';
+  var rid = 'mfd-rapido-' + idx + '-' + pi + (lat ? '-' + parte : '');
+  var btn = 'background:#e8f4f7;color:#1e5f74;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;font-weight:600;';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;font-size:12px;">' +
+    ((!lat && c.juncao) ? '<span style="' + MFD_LBL + '">Junção da saia/espelho</span>' +
+      mfdSel(idx, pi, 'juncao', p.juncao, [['', '— não informar'], ['45°', '45°'], ['reta', 'reta']]) + '<span style="width:14px"></span>' : '') +
+    '<span style="' + MFD_LBL + '">Aplicar acabamento</span>' +
+    '<input id="' + rid + '" list="' + dl + '" placeholder="ex: Boleado" style="padding:5px 7px;border:1.5px solid #cbd5e1;border-radius:6px;font-size:13px;width:130px;">' +
+    (conj
+      ? '<button onclick="mfdAcabRapido(' + idx + ',' + pi + ',\'livres\'' + ps + ')" style="' + btn + '">nas bordas livres</button>'
+      : '<button onclick="mfdAcabRapido(' + idx + ',' + pi + ',\'todas\')" style="' + btn + '">esq. + dir. + frente</button>' +
+        '<button onclick="mfdAcabRapido(' + idx + ',' + pi + ',\'frente\')" style="' + btn + '">só frente</button>') + '</div>';
+  // vão
+  if (c.vao && !lat) h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;font-size:12px;">' +
+    '<span style="' + MFD_LBL + '">Vão sem pedra</span>' +
+    mfdSel(idx, pi, 'vao.lado', p.vao.lado, [['', 'não tem'], ['esq', 'à esquerda'], ['dir', 'à direita']]) +
+    mfdInp(idx, pi, 'vao.larg', p.vao.larg, 'cm', 56) + '<span style="color:#777;">(ex: espaço da geladeira)</span></div>';
+  // cubas
+  if (c.cubas) h += '<div style="margin-bottom:6px;"><div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;"><span style="' + MFD_LBL + '">Cubas</span>' +
+    '<button onclick="mfdAddLista(' + idx + ',' + pi + ',\'cubas\'' + ps + ')" style="background:#1e5f74;color:#fff;border:none;border-radius:6px;padding:2px 9px;cursor:pointer;font-weight:700;">+</button></div>' +
+    d.cubas.map(function (cc, ci) { return mfdRecorteLinha(idx, pi, 'cubas', cc, ci, 'cuba', parte); }).join('') + '</div>';
+  // cooktop
+  if (c.cook) h += '<div style="margin-bottom:6px;"><label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer;margin-bottom:4px;">' +
+    '<input type="checkbox" ' + (d.cook ? 'checked ' : '') + 'onchange="mfdToggleCook(' + idx + ',' + pi + ',this.checked' + ps + ')" style="accent-color:#9a3412;"> <span style="' + MFD_LBL + '">Cooktop</span> <span style="color:#777;">(medida do corte é opcional)</span></label>' +
+    (d.cook ? mfdRecorteLinha(idx, pi, 'cook', d.cook, 0, 'cook', parte) : '') + '</div>';
+  // outros recortes
+  if (c.recortes) h += '<div style="margin-bottom:6px;"><div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;"><span style="' + MFD_LBL + '">Outros recortes / furos</span>' +
+    '<button onclick="mfdAddLista(' + idx + ',' + pi + ',\'recortes\'' + ps + ')" style="background:#1e5f74;color:#fff;border:none;border-radius:6px;padding:2px 9px;cursor:pointer;font-weight:700;">+</button></div>' +
+    d.recortes.map(function (cc, ci) { return mfdRecorteLinha(idx, pi, 'recortes', cc, ci, 'outro', parte); }).join('') + '</div>';
+  return h;
+}
+
+function mfdCardPeca(idx, pi, pIn) {
+  var p = mfdNormalizaPeca(pIn), dl = 'mfd-acab-' + idx, c = mfdCampos(p), conj = mfdEhConj(p);
+  var podeFormato = (!p.tipo || p.tipo === 'bancada' || p.tipo === 'pia' || p.tipo === 'lavatorio') && !c.comps;
   var h = '<div style="border:1.5px solid #c7d6dd;border-radius:10px;padding:10px;margin-bottom:10px;background:#fff;">';
   h += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">' +
     '<span style="font-weight:800;color:#1e5f74;font-size:12px;">PEÇA ' + (pi + 1) + '</span>' +
     '<select onchange="mfdSetTipo(' + idx + ',' + pi + ',this.value)" title="Tipo da peça" style="padding:5px 6px;border:1.5px solid #1e5f74;border-radius:6px;font-size:13px;font-weight:700;color:#1e5f74;background:#fff;">' +
     '<option value=""' + (p.tipo ? '' : ' selected') + '>— escolha o tipo —</option>' +
     MFD_TIPOS.map(function (t) { return '<option value="' + t[0] + '"' + (p.tipo === t[0] ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select>' +
+    (podeFormato ? '<select onchange="mfdSetFormato(' + idx + ',' + pi + ',this.value)" title="Formato" style="padding:5px 6px;border:1.5px solid #1e5f74;border-radius:6px;font-size:13px;font-weight:700;color:#1e5f74;background:#fff;">' +
+      [['', 'Reta'], ['L', 'Em L'], ['U', 'Em U']].map(function (f) { return '<option value="' + f[0] + '"' + (p.formato === f[0] ? ' selected' : '') + '>' + f[1] + '</option>'; }).join('') + '</select>' : '') +
     mfdTxt(idx, pi, 'nome', p.nome, 'Nome (ex: cozinha, banheiro)', 170) +
-    (c.comps ? '' : '<button onclick="mfdPreencherDaLista(' + idx + ',' + pi + ')" title="Usar a medida da peça ' + (pi + 1) + ' da lista Peça a Peça" style="background:#e8f4f7;color:#1e5f74;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;font-weight:600;">↧ medida da lista</button>') +
+    ((c.comps || conj) ? '' : '<button onclick="mfdPreencherDaLista(' + idx + ',' + pi + ')" title="Usar a medida da peça ' + (pi + 1) + ' da lista Peça a Peça" style="background:#e8f4f7;color:#1e5f74;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;font-weight:600;">↧ medida da lista</button>') +
     '<span style="flex:1"></span>' +
     '<button onclick="mfdDupPeca(' + idx + ',' + pi + ')" style="background:#f5f5f5;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;" title="Duplicar">⧉</button>' +
     '<button onclick="mfdDelPeca(' + idx + ',' + pi + ')" style="background:#fff0f0;color:#B85A4A;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;" title="Remover">🗑</button></div>';
 
   if (c.comps) {
     h += mfdCompsPainel(idx, pi, p);
-  } else {
-    // medidas
-    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px;">' +
-      '<div><div style="' + MFD_LBL + '">' + (soleira ? 'Comprimento (cm)' : (c.parede ? 'Fundo (cm)' : 'Trás (cm)')) + '</div>' + mfdInp(idx, pi, 'fundo', p.fundo, '', 72) + '</div>' +
-      (c.frente ? '<div><div style="' + MFD_LBL + '">Frente (cm)</div>' + mfdInp(idx, pi, 'frente', p.frente, 'igual', 72) + '</div>' : '') +
-      '<div><div style="' + MFD_LBL + '">' + (soleira ? 'Largura (cm)' : 'Profundidade (cm)') + '</div>' + mfdInp(idx, pi, 'prof', p.prof, '', 72) + '</div>' +
-      (c.qtd ? '<div><div style="' + MFD_LBL + '">Quantidade</div>' + mfdInp(idx, pi, 'qtd', p.qtd, '1', 60) + '</div>' : '') +
-      (c.frente ? '<div style="font-size:11px;color:#777;max-width:230px;">Frente vazia = igual ao ' + (c.parede ? 'fundo' : 'trás') + '. Se o medidor anotou medidas diferentes, o tampo sai trapezoidal.</div>' : '') + '</div>';
-    // lados
-    var th = 'padding:2px 6px;font-size:10px;text-transform:uppercase;';
-    h += '<table style="border-collapse:collapse;font-size:12px;margin-bottom:6px;"><thead><tr style="color:#1e5f74;text-align:left;">' +
-      '<th style="padding:2px 8px 2px 0;font-size:10px;text-transform:uppercase;">Lado</th>' +
-      (c.esp ? '<th style="' + th + '">Espelho (cm)</th>' : '') + (c.saia ? '<th style="' + th + '">Saia (cm)</th>' : '') +
-      '<th style="' + th + '">Acabamento da borda</th></tr></thead><tbody>';
-    lados.forEach(function (l) {
-      var k = l[0];
-      h += '<tr><td style="padding:2px 8px 2px 0;font-weight:700;white-space:nowrap;">' + l[1] + '</td>' +
-        (c.esp ? '<td style="padding:2px 6px;">' + mfdInp(idx, pi, 'esp.' + k, p.esp[k], '—', 56) + '</td>' : '') +
-        (c.saia ? '<td style="padding:2px 6px;">' + mfdInp(idx, pi, 'saia.' + k, p.saia[k], '—', 56) + '</td>' : '') +
-        '<td style="padding:2px 6px;">' + mfdTxt(idx, pi, 'acab.' + k, p.acab[k], 'digite ou escolha', 170, dl) + '</td></tr>';
+  } else if (conj) {
+    var box = 'border:1px solid #dbe4ea;border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#fbfdfe;';
+    var tt = 'font-size:12px;font-weight:800;color:#1e5f74;text-transform:uppercase;margin-bottom:6px;';
+    // lateral (L) e onde fica o canto
+    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px;font-size:12px;">' +
+      (p.formato === 'L' ? '<span style="' + MFD_LBL + '">Lateral à</span>' + mfdSel(idx, pi, 'lateral', p.lateral, [['esq', 'esquerda'], ['dir', 'direita']], true) +
+        '<span style="color:#777;">(olhando para a parede)</span><span style="width:8px"></span>' : '') +
+      '<span style="' + MFD_LBL + '">O canto é da</span>' + mfdSel(idx, pi, 'canto', p.canto, [['lateral', 'lateral (ela vai até a parede)'], ['frente', 'peça da frente (ela vai até a parede lateral)']], true) + '</div>';
+    h += '<div style="' + box + '"><div style="' + tt + '">Peça da frente <span style="font-weight:400;text-transform:none;color:#777;">(junto da parede do fundo)</span></div>' + mfdFormParte(idx, pi, p, '', c, dl) + '</div>';
+    var ks = p.formato === 'U' ? ['esq', 'dir'] : [p.lateral === 'dir' ? 'dir' : 'esq'];
+    ks.forEach(function (k) {
+      h += '<div style="' + box + '"><div style="' + tt + '">Lateral ' + (k === 'esq' ? 'esquerda' : 'direita') + '</div>' + mfdFormParte(idx, pi, p, k, c, dl) + '</div>';
     });
-    h += '</tbody></table>';
-    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;font-size:12px;">' +
-      (c.juncao ? '<span style="' + MFD_LBL + '">Junção da saia/espelho</span>' +
-        mfdSel(idx, pi, 'juncao', p.juncao, [['', '— não informar'], ['45°', '45°'], ['reta', 'reta']]) + '<span style="width:14px"></span>' : '') +
-      '<span style="' + MFD_LBL + '">Aplicar acabamento</span>' +
-      '<input id="mfd-rapido-' + idx + '-' + pi + '" list="' + dl + '" placeholder="ex: Boleado" style="padding:5px 7px;border:1.5px solid #cbd5e1;border-radius:6px;font-size:13px;width:130px;">' +
-      '<button onclick="mfdAcabRapido(' + idx + ',' + pi + ',\'todas\')" style="background:#e8f4f7;color:#1e5f74;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;font-weight:600;">esq. + dir. + frente</button>' +
-      '<button onclick="mfdAcabRapido(' + idx + ',' + pi + ',\'frente\')" style="background:#e8f4f7;color:#1e5f74;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;font-weight:600;">só frente</button></div>';
-    // vão
-    if (c.vao) h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;font-size:12px;">' +
-      '<span style="' + MFD_LBL + '">Vão sem pedra</span>' +
-      mfdSel(idx, pi, 'vao.lado', p.vao.lado, [['', 'não tem'], ['esq', 'à esquerda'], ['dir', 'à direita']]) +
-      mfdInp(idx, pi, 'vao.larg', p.vao.larg, 'cm', 56) + '<span style="color:#777;">(ex: espaço da geladeira)</span></div>';
-    // cubas
-    if (c.cubas) h += '<div style="margin-bottom:6px;"><div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;"><span style="' + MFD_LBL + '">Cubas</span>' +
-      '<button onclick="mfdAddLista(' + idx + ',' + pi + ',\'cubas\')" style="background:#1e5f74;color:#fff;border:none;border-radius:6px;padding:2px 9px;cursor:pointer;font-weight:700;">+</button></div>' +
-      p.cubas.map(function (cc, ci) { return mfdRecorteLinha(idx, pi, 'cubas', cc, ci, 'cuba'); }).join('') + '</div>';
-    // cooktop
-    if (c.cook) h += '<div style="margin-bottom:6px;"><label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer;margin-bottom:4px;">' +
-      '<input type="checkbox" ' + (p.cook ? 'checked ' : '') + 'onchange="mfdToggleCook(' + idx + ',' + pi + ',this.checked)" style="accent-color:#9a3412;"> <span style="' + MFD_LBL + '">Cooktop</span> <span style="color:#777;">(medida do corte é opcional)</span></label>' +
-      (p.cook ? mfdRecorteLinha(idx, pi, 'cook', p.cook, 0, 'cook') : '') + '</div>';
-    // outros recortes
-    if (c.recortes) h += '<div style="margin-bottom:6px;"><div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;"><span style="' + MFD_LBL + '">Outros recortes / furos</span>' +
-      '<button onclick="mfdAddLista(' + idx + ',' + pi + ',\'recortes\')" style="background:#1e5f74;color:#fff;border:none;border-radius:6px;padding:2px 9px;cursor:pointer;font-weight:700;">+</button></div>' +
-      p.recortes.map(function (cc, ci) { return mfdRecorteLinha(idx, pi, 'recortes', cc, ci, 'outro'); }).join('') + '</div>';
+  } else {
+    h += mfdFormParte(idx, pi, p, '', c, dl);
     // só os campos do tipo × todos os campos (nunca trava)
     if (c.ocultos) h += '<div style="margin-bottom:6px;"><button onclick="mfdToggleTodos(' + idx + ',' + pi + ')" style="background:none;border:none;color:#1e5f74;text-decoration:underline;cursor:pointer;font-size:12px;padding:0;">' +
       (p.todos ? 'mostrar só os campos deste tipo' : 'mostrar todos os campos (espelho, saia, cuba...)') + '</button></div>';
@@ -14846,7 +15216,7 @@ function mfdPainelHTML(idx, aberto) {
     '<datalist id="mfd-acab-' + idx + '">' + lista.map(function (a) { return '<option value="' + mfdEsc(a) + '">'; }).join('') + '</datalist>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 10px;">' +
     '<button onclick="mfdAddPeca(' + idx + ')" style="background:#1e5f74;color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:700;">+ Peça no desenho</button>' +
-    '<button onclick="mfdImportar(' + idx + ')" style="background:#e8f4f7;color:#1e5f74;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:600;">↧ Trazer as peças da lista acima</button>' +
+    (mfdFormatoDeTexto(it.nome) ? '' : '<button onclick="mfdImportar(' + idx + ')" style="background:#e8f4f7;color:#1e5f74;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:600;">↧ Trazer as peças da lista acima</button>') +
     '<button onclick="mfdEditarAcab()" style="background:#f5f5f5;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;">⚙ Lista de acabamentos</button>' +
     (pecas.length ? '<button onclick="mfdImprimirItemAtual(' + idx + ')" style="background:#fff;color:#1e5f74;border:1.5px solid #1e5f74;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:700;">🖨️ Ver / imprimir folha</button>' : '') +
     '</div>' +
@@ -14888,7 +15258,7 @@ function mfdFolhaHTML(ctx) {
       var q = mfdNormalizaPeca(p);
       if (!mfdPecaPronta(q)) return;
       desenhadas++; algum = true;
-      var tn = mfdTipoNome(q.tipo).toUpperCase();
+      var tn = mfdTipoTitulo(q).toUpperCase();
       var titulo = tn ? (q.nome ? tn + ' · ' + q.nome : tn) : (q.nome || ('Peça ' + (pi + 1)));
       h += '<div class="peca"><h3>' + mfdEsc(titulo) + '</h3><div class="res">' + mfdEsc(mfdResumoPeca(q)) + '</div>' +
         (mfdCampos(q).comps ? mfdCompsHTML(q) : mfdSVG(q) + mfdLegendaHTML(q)) +
@@ -15124,8 +15494,9 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
     <div style="background:#f8f8f8;border-bottom:1px solid #e0e0e0;padding:12px 16px;display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
       <div class="item-orcamento-grid" style="flex:1;display:grid;gap:8px;align-items:end;">
         <div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:#1e5f74;font-weight:600;text-transform:uppercase;letter-spacing:.3px;">Nome do Item *</label>
-          <input class="form-input" style="padding:7px 10px;" value="${item.nome||''}" placeholder="bancada, pia..."
-            oninput="orcamentoAtual.itens[${idx}].nome=this.value"></div>
+          <input class="form-input" style="padding:7px 10px;" value="${item.nome||''}" placeholder="bancada, pia..." list="mfd-nomes-item-${idx}"
+            oninput="orcamentoAtual.itens[${idx}].nome=this.value" onchange="mfdNomeItemMudou(${idx})">
+          <datalist id="mfd-nomes-item-${idx}"><option value="Bancada"><option value="Bancada em L"><option value="Bancada em U"><option value="Ilha"><option value="Soleira"><option value="Peitoril"><option value="Escada"><option value="Fachada"><option value="Lavatório"><option value="Pia"></datalist></div>
         <div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:#1e5f74;font-weight:600;text-transform:uppercase;letter-spacing:.3px;">Ambiente *</label>
           <input class="form-input" style="padding:7px 10px;" value="${item.ambiente||''}" placeholder="cozinha, banheiro..."
             oninput="orcamentoAtual.itens[${idx}].ambiente=this.value"></div>

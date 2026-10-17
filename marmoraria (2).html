@@ -14173,7 +14173,8 @@ function mfdPecaVazia(nome) {
     obs: '',
     tipo: '', todos: false, qtd: '',
     comps: [], juncaoEsc: '', juncaoRod: '',
-    formato: '', lateral: 'esq', canto: 'lateral', lat: { esq: mfdParteVazia(), dir: mfdParteVazia() }
+    formato: '', lateral: 'esq', canto: 'lateral', lat: { esq: mfdParteVazia(), dir: mfdParteVazia() },
+    rotFrente: '', sobras: [], logLista: []
   };
 }
 
@@ -14203,6 +14204,9 @@ function mfdNormalizaPeca(p) {
   o.lateral = p.lateral === 'dir' ? 'dir' : 'esq';
   o.canto = p.canto === 'frente' ? 'frente' : 'lateral';
   o.lat = { esq: mfdNormalizaParte(p.lat && p.lat.esq), dir: mfdNormalizaParte(p.lat && p.lat.dir) };
+  o.rotFrente = p.rotFrente || '';
+  o.sobras = Array.isArray(p.sobras) ? p.sobras : [];
+  o.logLista = Array.isArray(p.logLista) ? p.logLista : [];
   return o;
 }
 
@@ -14230,14 +14234,14 @@ function mfdEhConj(p) {
   return !!p && (p.formato === 'L' || p.formato === 'U') && (!p.tipo || p.tipo === 'bancada' || p.tipo === 'pia' || p.tipo === 'lavatorio');
 }
 function mfdParteVazia() {
-  return { comp: '', larg: '', esp: { fundo: 0, esq: 0, dir: 0, frente: 0 }, saia: { fundo: 0, esq: 0, dir: 0, frente: 0 }, acab: { fundo: '', esq: '', dir: '', frente: '' }, cubas: [], cook: null, recortes: [] };
+  return { comp: '', larg: '', esp: { fundo: 0, esq: 0, dir: 0, frente: 0 }, saia: { fundo: 0, esq: 0, dir: 0, frente: 0 }, acab: { fundo: '', esq: '', dir: '', frente: '' }, cubas: [], cook: null, recortes: [], rot: '' };
 }
 function mfdNormalizaParte(x) {
   var b = mfdParteVazia(); x = x || {};
   return {
     comp: x.comp || '', larg: x.larg || '',
     esp: Object.assign({}, b.esp, x.esp || {}), saia: Object.assign({}, b.saia, x.saia || {}), acab: Object.assign({}, b.acab, x.acab || {}),
-    cubas: Array.isArray(x.cubas) ? x.cubas : [], cook: x.cook || null, recortes: Array.isArray(x.recortes) ? x.recortes : []
+    cubas: Array.isArray(x.cubas) ? x.cubas : [], cook: x.cook || null, recortes: Array.isArray(x.recortes) ? x.recortes : [], rot: x.rot || ''
   };
 }
 function mfdParteObj(p, parte) { return parte ? p.lat[parte] : p; }
@@ -14304,6 +14308,71 @@ function mfdAreaConj(p) {
   });
   return tot / 10000;
 }
+
+// ── ENCAIXE DAS FAIXAS DA LISTA (espelho / saia) NOS LADOS DA BANCADA ─────────────────────────
+// Cada linha "ESPELHO 1,8 × 0,18" é um comprimento total: pode ser um lado ou a soma de lados da mesma peça.
+function mfdRetsSolver(p) {
+  if (mfdEhConj(p)) return mfdGeomConj(p).R;
+  var F = mfdN(p.fundo) || mfdN(p.frente), P = mfdN(p.prof);
+  return (F > 0 && P > 0) ? [{ k: 'main', d: p, x: 0, y: 0, w: F, h: P }] : [];
+}
+function mfdNomeLadoPeca(p, r, lado) {
+  var peca = r.k === 'main' ? (p.rotFrente || (mfdEhConj(p) ? 'peça da frente' : 'peça')) : (r.d.rot || (r.k === 'esq' ? 'lateral esquerda' : 'lateral direita'));
+  var l = { fundo: 'fundo (parede)', esq: 'lado esquerdo', dir: 'lado direito', frente: 'frente' }[lado];
+  return String(peca).toLowerCase() + ': ' + l;
+}
+// faixas: [{k:'esp'|'saia', comp, med}]; grava as alturas nos lados e devolve { log, sobras }
+function mfdEncaixaFaixas(p, faixas) {
+  var R = mfdRetsSolver(p), TOL = 1.5, lados = [], log = [], sobras = [];
+  R.forEach(function (r) { ['fundo', 'esq', 'dir', 'frente'].forEach(function (lado) {
+    var len = 0; mfdLivres(R, r, lado).livre.forEach(function (i) { len += i[1] - i[0]; });
+    if (len > 0.5) lados.push({ r: r, lado: lado, len: len, usado: false });
+  }); });
+  function prio(kind, sd) {
+    var interno = (sd.r.k === 'esq' && sd.lado === 'dir') || (sd.r.k === 'dir' && sd.lado === 'esq');
+    if (kind === 'esp') return sd.lado === 'fundo' ? 0 : sd.lado === 'frente' ? -1 : (interno ? 3 : 1);
+    return sd.lado === 'frente' ? 0 : sd.lado === 'fundo' ? -1 : (interno ? 1 : 3);
+  }
+  function menor(a, b) { for (var i = 0; i < a.length; i++) { if (a[i] < b[i]) return true; if (a[i] > b[i]) return false; } return false; }
+  faixas.forEach(function (f) {
+    var melhor = null, livres = lados.filter(function (x) { return !x.usado; });
+    function testa(conj) {
+      var soma = 0, pr = 0;
+      for (var q = 0; q < conj.length; q++) if (prio(f.k, conj[q]) < 0) return;   // lado impossível para este tipo de faixa
+      conj.forEach(function (x) { soma += x.len; pr += prio(f.k, x); });
+      var err = Math.abs(soma - f.comp);
+      if (err > TOL) return;
+      var sc = [err > 0.3 ? 1 : 0, pr, conj.length, err];
+      if (!melhor || menor(sc, melhor.sc)) melhor = { conj: conj, sc: sc };
+    }
+    livres.forEach(function (a, i) {
+      testa([a]);
+      livres.forEach(function (b, j) {
+        if (j <= i || b.r !== a.r) return;
+        testa([a, b]);
+        livres.forEach(function (c, k) { if (k > j && c.r === a.r) testa([a, b, c]); });
+      });
+    });
+    var rot = (f.k === 'esp' ? 'ESPELHO ' : 'SAIA ') + mfdFmt(f.comp) + ' × ' + mfdFmt(f.med);
+    if (melhor) {
+      melhor.conj.forEach(function (x) { x.usado = true; x.r.d[f.k === 'esp' ? 'esp' : 'saia'][x.lado] = f.med; });
+      log.push(rot + '  →  ' + melhor.conj.map(function (x) { return mfdNomeLadoPeca(p, x.r, x.lado); }).join(' + '));
+    } else {
+      sobras.push({ k: f.k, comp: f.comp, med: f.med });
+      log.push(rot + '  →  NÃO ENCAIXEI (escolha o lado)');
+    }
+  });
+  return { log: log, sobras: sobras };
+}
+// lados disponíveis para atribuir à mão uma linha que sobrou
+function mfdOpcoesLado(p) {
+  var R = mfdRetsSolver(p), o = [];
+  R.forEach(function (r) { ['fundo', 'esq', 'dir', 'frente'].forEach(function (lado) {
+    if (mfdLivres(R, r, lado).livre.length) o.push({ parte: r.k === 'main' ? '' : r.k, lado: lado, txt: mfdNomeLadoPeca(p, r, lado) });
+  }); });
+  return o;
+}
+
 function mfdNomeParte(k) { return k === 'main' ? 'PEÇA DA FRENTE' : (k === 'esq' ? 'LATERAL ESQ.' : 'LATERAL DIR.'); }
 
 function mfdSVGConj(p) {
@@ -14411,7 +14480,7 @@ function mfdSVGConj(p) {
     });
   });
   // nomes das peças
-  R.forEach(function (r) { o.push(txt(X(r.x + r.w / 2), Y(r.y) + 14, mfdNomeParte(r.k), 10, 700, '#9ca3af', 'middle')); });
+  R.forEach(function (r) { o.push(txt(X(r.x + r.w / 2), Y(r.y) + 14, String((r.k === 'main' ? p.rotFrente : r.d.rot) || mfdNomeParte(r.k)).toUpperCase(), 10, 700, '#9ca3af', 'middle')); });
   // faixas (espelho = hachura · saia = pontilhado) só nos trechos livres
   R.forEach(function (r) { SIDES.forEach(function (k) {
     var sd = r.s[k], off = 0, ordem = k === 'frente' ? ['saia', 'esp'] : ['esp', 'saia'];
@@ -14862,12 +14931,96 @@ function mfdNomeItemMudou(idx) {
     var tipo = mfdTipoDeTexto(it.nome);
     if (!tipo) return;
     var ja = it.desenho && Array.isArray(it.desenho.pecas) && it.desenho.pecas.length;
-    if (!ja) {
-      mfdAddPeca(idx);
-      var box = document.getElementById('desenho-box-' + idx);
-      var det = box && box.querySelector('details'); if (det) det.open = true;
-    }
+    if (!ja) { if (!(mfdLerLista(it).tampos.length && mfdMontarDaLista(idx, true))) mfdAddPeca(idx); } else mfdRender(idx);   // já tem peças: só atualiza o painel (aparece o aviso, se for o caso)
+    var box = document.getElementById('desenho-box-' + idx);
+    var det = box && box.querySelector('details'); if (det) det.open = true;
   } catch (e) { console.error('nome do item → desenho:', e); }
+}
+
+// ── MONTAR O DESENHO PELA LISTA "Peça a Peça" ────────────────────────────────
+// Peças principais = linhas que não são espelho/saia. Espelho e saia são encaixados nos lados pelo comprimento.
+function mfdLerLista(it) {
+  var tampos = [], faixas = [];
+  ((it && it.pecas) || []).forEach(function (o) {
+    var med = mfdMedidaCm(o.medidas); if (!med) return;
+    var nome = String(o.nome || ''), q = Math.min(parseInt(o.qtd, 10) || 1, 10);
+    var t = nome.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    var k = /espelho|rodape|frontao|testeira/.test(t) ? 'esp' : (/\bsaia\b/.test(t) ? 'saia' : '');
+    for (var i = 0; i < q; i++) {
+      if (k) faixas.push({ k: k, comp: med.comp, med: med.prof, nome: nome });
+      else tampos.push({ nome: nome, comp: med.comp, med: med.prof });
+    }
+  });
+  return { tampos: tampos, faixas: faixas };
+}
+function mfdMontarDaLista(idx, semConfirmar) {
+  var it = mfdItem(idx); if (!it) return false;
+  var L = mfdLerLista(it);
+  if (!L.tampos.length) { alert('Não achei peça principal com medida na lista "Peça a Peça" (linhas que não são espelho nem saia).'); return false; }
+  var tipo = mfdTipoDeTexto(it.nome) || 'bancada';
+  var jaTem = it.desenho && Array.isArray(it.desenho.pecas) && it.desenho.pecas.length;
+  if (jaTem && !semConfirmar && !confirm('Refazer o desenho pela lista apaga o desenho atual deste item (cubas, posições, acabamentos que você digitou). A lista Peça a Peça e o preço não mudam.\n\nContinuar?')) return false;
+  if (tipo !== 'bancada' && tipo !== 'pia' && tipo !== 'lavatorio') {   // soleira, ilha, peitoril...: cada linha é uma peça
+    if (jaTem) it.desenho.pecas = [];
+    mfdImportar(idx);
+    return true;
+  }
+  var T = L.tampos.slice();
+  var formato = mfdFormatoDeTexto(it.nome) || (T.length >= 3 ? 'U' : (T.length === 2 ? 'L' : ''));
+  var fi = 0; T.forEach(function (t, i) { if (t.comp > T[fi].comp) fi = i; });
+  var frente = T.splice(fi, 1)[0];
+  var p = mfdPecaVazia(''); p.tipo = tipo; p.formato = formato;
+  p.fundo = frente.comp; p.prof = frente.med; p.rotFrente = frente.nome;
+  var ks = formato === 'U' ? ['esq', 'dir'] : (formato === 'L' ? ['esq'] : []);
+  ks.forEach(function (k, i) { if (T[i]) p.lat[k] = Object.assign(mfdParteVazia(), { comp: T[i].comp, larg: T[i].med, rot: T[i].nome }); });
+  var extras = T.slice(ks.length);
+  function norm(n) { return String(n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  function marca(d, nome) {   // o nome da peça diz o que ela leva
+    if (/cook/.test(norm(nome))) d.cook = { larg: '', prof: '', de: 'esq', dist: '', dfrente: '' };
+    if (/molhad|cuba/.test(norm(nome))) d.cubas = [{ modelo: '', larg: '', prof: '', de: 'dir', dist: '', dfrente: '' }];
+  }
+  marca(p, frente.nome); ks.forEach(function (k) { marca(p.lat[k], p.lat[k].rot); });
+  p = mfdNormalizaPeca(p);
+  var r = mfdEncaixaFaixas(p, L.faixas);
+  p.sobras = r.sobras; p.logLista = r.log;
+  var pecas = [p];
+  extras.forEach(function (t) {   // sobrou peça principal que não cabe no formato: vira peça solta (nada se perde)
+    var q = mfdPecaVazia(t.nome); q.tipo = 'bancada'; q.fundo = t.comp; q.frente = t.comp; q.prof = t.med; pecas.push(mfdNormalizaPeca(q));
+  });
+  it.desenho = { v: 1, pecas: pecas };
+  mfdRender(idx);
+  var box = document.getElementById('desenho-box-' + idx), det = box && box.querySelector('details'); if (det) det.open = true;
+  return true;
+}
+function mfdAtribuirSobra(idx, pi, si, valor) {
+  var it = mfdItem(idx); if (!it || !it.desenho || !valor) return;
+  var p = it.desenho.pecas[pi] = mfdNormalizaPeca(it.desenho.pecas[pi]);
+  var sb = p.sobras[si]; if (!sb) return;
+  var pr = valor.split('|'), d = pr[0] === 'main' ? p : p.lat[pr[0]];
+  d[sb.k === 'esp' ? 'esp' : 'saia'][pr[1]] = sb.med;
+  p.sobras.splice(si, 1);
+  mfdRender(idx);
+}
+function mfdInverterLaterais(idx, pi) {
+  var it = mfdItem(idx); if (!it || !it.desenho) return;
+  var p = it.desenho.pecas[pi] = mfdNormalizaPeca(it.desenho.pecas[pi]);
+  var t = p.lat.esq; p.lat.esq = p.lat.dir; p.lat.dir = t;
+  mfdRender(idx);
+}
+function mfdIgnorarSobra(idx, pi, si) {
+  var it = mfdItem(idx); if (!it || !it.desenho) return;
+  var p = it.desenho.pecas[pi] = mfdNormalizaPeca(it.desenho.pecas[pi]);
+  p.sobras.splice(si, 1);
+  mfdRender(idx);
+}
+
+// o nome do item é "Bancada em L/U" mas o desenho tem peças soltas: monta o conjunto no lugar delas
+function mfdMontarConj(idx) {
+  var it = mfdItem(idx); if (!it || !it.desenho) return;
+  var n = it.desenho.pecas.length;
+  if (!confirm('Isto apaga as ' + n + ' peça(s) soltas do desenho e monta a ' + (it.nome || 'bancada') + ' pelo que está na lista Peça a Peça.\n\nA lista e o preço não mudam. Continuar?')) return;
+  it.desenho.pecas = [];
+  if (!mfdMontarDaLista(idx, true)) mfdAddPeca(idx);
 }
 function mfdSetTipo(idx, pi, t) {
   var it = mfdItem(idx); if (!it || !it.desenho) return;
@@ -15186,11 +15339,12 @@ function mfdCardPeca(idx, pi, pIn) {
     h += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px;font-size:12px;">' +
       (p.formato === 'L' ? '<span style="' + MFD_LBL + '">Lateral à</span>' + mfdSel(idx, pi, 'lateral', p.lateral, [['esq', 'esquerda'], ['dir', 'direita']], true) +
         '<span style="color:#777;">(olhando para a parede)</span><span style="width:8px"></span>' : '') +
+      (p.formato === 'U' ? '<button onclick="mfdInverterLaterais(' + idx + ',' + pi + ')" style="background:#e8f4f7;color:#1e5f74;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;font-weight:600;">⇄ inverter as laterais</button><span style="width:8px"></span>' : '') +
       '<span style="' + MFD_LBL + '">O canto é da</span>' + mfdSel(idx, pi, 'canto', p.canto, [['lateral', 'lateral (ela vai até a parede)'], ['frente', 'peça da frente (ela vai até a parede lateral)']], true) + '</div>';
-    h += '<div style="' + box + '"><div style="' + tt + '">Peça da frente <span style="font-weight:400;text-transform:none;color:#777;">(junto da parede do fundo)</span></div>' + mfdFormParte(idx, pi, p, '', c, dl) + '</div>';
+    h += '<div style="' + box + '"><div style="' + tt + '">Peça da frente <span style="font-weight:400;text-transform:none;color:#777;">(junto da parede do fundo)</span> ' + mfdTxt(idx, pi, 'rotFrente', p.rotFrente, 'nome no desenho', 150) + '</div>' + mfdFormParte(idx, pi, p, '', c, dl) + '</div>';
     var ks = p.formato === 'U' ? ['esq', 'dir'] : [p.lateral === 'dir' ? 'dir' : 'esq'];
     ks.forEach(function (k) {
-      h += '<div style="' + box + '"><div style="' + tt + '">Lateral ' + (k === 'esq' ? 'esquerda' : 'direita') + '</div>' + mfdFormParte(idx, pi, p, k, c, dl) + '</div>';
+      h += '<div style="' + box + '"><div style="' + tt + '">Lateral ' + (k === 'esq' ? 'esquerda' : 'direita') + ' ' + mfdTxt(idx, pi, 'lat.' + k + '.rot', p.lat[k].rot, 'nome no desenho', 150) + '</div>' + mfdFormParte(idx, pi, p, k, c, dl) + '</div>';
     });
   } else {
     h += mfdFormParte(idx, pi, p, '', c, dl);
@@ -15198,6 +15352,18 @@ function mfdCardPeca(idx, pi, pIn) {
     if (c.ocultos) h += '<div style="margin-bottom:6px;"><button onclick="mfdToggleTodos(' + idx + ',' + pi + ')" style="background:none;border:none;color:#1e5f74;text-decoration:underline;cursor:pointer;font-size:12px;padding:0;">' +
       (p.todos ? 'mostrar só os campos deste tipo' : 'mostrar todos os campos (espelho, saia, cuba...)') + '</button></div>';
   }
+  if (p.sobras.length) {
+    var ops = mfdOpcoesLado(p);
+    h += '<div style="font-size:12px;padding:8px 10px;margin-bottom:8px;background:#fff7e0;border:1px solid #e0b84a;border-radius:6px;color:#7a5b00;"><b>Linhas da lista que não consegui encaixar</b> — diga em que lado vai cada uma:' +
+      p.sobras.map(function (sb, si) {
+        return '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;"><b>' + (sb.k === 'esp' ? 'ESPELHO ' : 'SAIA ') + mfdFmt(sb.comp) + ' × ' + mfdFmt(sb.med) + '</b>' +
+          '<select onchange="mfdAtribuirSobra(' + idx + ',' + pi + ',' + si + ',this.value)" style="padding:4px;border:1.5px solid #cbd5e1;border-radius:6px;font-size:12px;background:#fff;"><option value="">— escolher o lado —</option>' +
+          ops.map(function (o) { return '<option value="' + (o.parte || 'main') + '|' + o.lado + '">' + mfdEsc(o.txt) + '</option>'; }).join('') + '</select>' +
+          '<button onclick="mfdIgnorarSobra(' + idx + ',' + pi + ',' + si + ')" style="background:#f5f5f5;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px;">ignorar</button></div>';
+      }).join('') + '</div>';
+  }
+  if (p.logLista.length) h += '<details style="margin-bottom:8px;font-size:12px;"><summary style="cursor:pointer;color:#1e5f74;font-weight:700;">Como o sistema montou pela lista (conferir)</summary><ul style="margin:4px 0 0;padding-left:18px;color:#444;">' +
+    p.logLista.map(function (l) { return '<li' + (/NÃO ENCAIXEI/.test(l) ? ' style="color:#b45309;font-weight:700;"' : '') + '>' + mfdEsc(l) + '</li>'; }).join('') + '</ul></details>';
   h += '<div style="margin-bottom:8px;"><div style="' + MFD_LBL + '">Observação da peça (sai na folha)</div>' + mfdTxt(idx, pi, 'obs', p.obs, 'ex: furo da torneira no centro da cuba', 420) + '</div>';
   h += '<div id="mfd-prev-' + idx + '-' + pi + '" style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:6px;">' + mfdPreviaHTML(p) + '</div>';
   h += '</div>';
@@ -15216,10 +15382,17 @@ function mfdPainelHTML(idx, aberto) {
     '<datalist id="mfd-acab-' + idx + '">' + lista.map(function (a) { return '<option value="' + mfdEsc(a) + '">'; }).join('') + '</datalist>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 10px;">' +
     '<button onclick="mfdAddPeca(' + idx + ')" style="background:#1e5f74;color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:700;">+ Peça no desenho</button>' +
-    (mfdFormatoDeTexto(it.nome) ? '' : '<button onclick="mfdImportar(' + idx + ')" style="background:#e8f4f7;color:#1e5f74;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:600;">↧ Trazer as peças da lista acima</button>') +
+    (mfdLerLista(it).tampos.length ? '<button onclick="mfdMontarDaLista(' + idx + ')" style="background:#2E9E5B;color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:700;">' + (pecas.length ? '↻ Refazer pela lista' : '↧ Montar o desenho pela lista') + '</button>' : '') +
     '<button onclick="mfdEditarAcab()" style="background:#f5f5f5;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;">⚙ Lista de acabamentos</button>' +
     (pecas.length ? '<button onclick="mfdImprimirItemAtual(' + idx + ')" style="background:#fff;color:#1e5f74;border:1.5px solid #1e5f74;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:700;">🖨️ Ver / imprimir folha</button>' : '') +
     '</div>' +
+    (function () {
+      var f = mfdFormatoDeTexto(it.nome);
+      if (!f || !pecas.length || pecas.some(function (q) { return mfdEhConj(mfdNormalizaPeca(q)); })) return '';
+      return '<div style="font-size:12px;padding:8px 10px;margin-bottom:8px;background:#fff7e0;border:1px solid #e0b84a;border-radius:6px;color:#7a5b00;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
+        '<span>⚠ O item é <b>' + mfdEsc(it.nome) + '</b>, mas o desenho tem <b>' + pecas.length + '</b> peça(s) soltas, não montadas.</span>' +
+        '<button onclick="mfdMontarConj(' + idx + ')" style="background:#1e5f74;color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:700;">Montar como ' + mfdEsc(it.nome) + '</button></div>';
+    })() +
     '<div id="mfd-area-' + idx + '" style="margin-bottom:8px;">' + mfdAvisoArea(it) + '</div>' +
     pecas.map(function (p, pi) { return mfdCardPeca(idx, pi, p); }).join('') +
     (pecas.length ? '' : '<div style="font-size:12px;color:#777;">Clique em “+ Peça no desenho” ou “Trazer as peças da lista acima”. Vista de cima: fundo (parede) em cima; esquerda e direita olhando para a parede.</div>') +

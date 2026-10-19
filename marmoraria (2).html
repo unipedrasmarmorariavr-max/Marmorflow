@@ -13743,6 +13743,70 @@ async function limparOrcamentoAtual() {
   showNotif('Orçamento limpo! Começando do zero.', 'success');
 }
 
+// ─── VERSÕES ANTERIORES DO ORÇAMENTO ─────────────────────────────────────────
+// O banco (gatilho de banco_protecoes.sql) guarda cópia de cada versão antiga em orcamentos_historico.
+// Aqui só LEMOS essas cópias e deixamos voltar para uma delas. Nada é apagado.
+let _versoesOrc = [];
+function _vEsc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function _vResumo(d) {
+  try {
+    if (typeof d === 'string') d = JSON.parse(d);
+    const its = (d && d.itens) || [];
+    let pecas = 0; its.forEach(i => (i.pecas || []).forEach(q => { if (q && (q.medidas || '').trim()) pecas++; }));
+    const nomes = its.map(i => (i.nome || '').trim()).filter(Boolean).slice(0, 3).join(', ');
+    return its.length + ' item(ns) · ' + pecas + ' peça(s) com medida' + (nomes ? ' · ' + nomes : '');
+  } catch (e) { return '(não consegui ler)'; }
+}
+function fecharVersoesOrcamento() { const m = document.getElementById('modal-versoes-orc'); if (m) m.remove(); }
+async function abrirVersoesOrcamento() {
+  if (!orcamentoAtual || !orcamentoAtual.pedidoId) return;
+  showLoading('Buscando versões anteriores...');
+  let rows = [], erro = '';
+  try {
+    const { data, error } = await getSB().from('orcamentos_historico')
+      .select('hid,motivo,arquivado_em,versao_de,cliente,dados')
+      .eq('pedido_id', orcamentoAtual.pedidoId).order('arquivado_em', { ascending: false }).limit(40);
+    if (error) erro = error.message; else rows = data || [];
+  } catch (e) { erro = e.message || String(e); }
+  hideLoading();
+  _versoesOrc = rows;
+  fecharVersoesOrcamento();
+  const f = d => d ? new Date(d).toLocaleString('pt-BR') : '—';
+  let corpo;
+  if (erro) corpo = '<div style="color:#b71c1c;font-size:13px;">Não consegui ler o histórico: ' + _vEsc(erro) + '<br><br>Se aparecer que a tabela não existe, falta rodar o arquivo <b>banco_protecoes.sql</b> no Supabase.</div>';
+  else if (!rows.length) corpo = '<div style="font-size:13px;color:#555;">Ainda não há versões antigas guardadas para este pedido. Elas passam a existir a cada alteração salva.</div>';
+  else corpo = rows.map((r, i) => '<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;border:1px solid #e0e0e0;border-radius:8px;padding:9px 12px;margin-bottom:8px;">' +
+      '<div style="min-width:0;"><div style="font-weight:700;font-size:13px;">' + _vEsc(f(r.versao_de)) + (r.motivo === 'delete' ? ' <span style="background:#ffebee;color:#b71c1c;border-radius:4px;padding:1px 6px;font-size:11px;">orçamento apagado</span>' : '') + '</div>' +
+      '<div style="font-size:12px;color:#555;">' + _vEsc(r.cliente || '—') + ' · ' + _vEsc(_vResumo(r.dados)) + '</div></div>' +
+      '<button onclick="restaurarVersaoOrcamento(' + i + ')" style="background:#2E7D32;color:#fff;border:none;border-radius:6px;padding:7px 12px;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap;">Voltar para esta</button></div>').join('');
+  const m = document.createElement('div');
+  m.id = 'modal-versoes-orc';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  m.innerHTML = '<div style="background:#fff;color:#222;border-radius:12px;max-width:640px;width:100%;max-height:85vh;overflow:auto;padding:18px;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:17px;font-weight:800;">🕘 Versões anteriores — ' + _vEsc(orcamentoAtual.pedidoId) + '</div>' +
+    '<button onclick="fecharVersoesOrcamento()" style="border:none;background:#eee;border-radius:6px;padding:6px 10px;cursor:pointer;">Fechar</button></div>' +
+    '<div style="font-size:12px;color:#666;margin-bottom:12px;">A mais recente fica em cima. Ao voltar para uma versão, o orçamento atual é substituído por ela (uma cópia do estado de agora fica guardada neste navegador).</div>' + corpo + '</div>';
+  m.addEventListener('click', e => { if (e.target === m) fecharVersoesOrcamento(); });
+  document.body.appendChild(m);
+}
+async function restaurarVersaoOrcamento(i) {
+  const r = _versoesOrc[i]; if (!r || !orcamentoAtual) return;
+  const order = orders.find(o => o.id === orcamentoAtual.pedidoId); if (!order) return;
+  let d = r.dados; try { if (typeof d === 'string') d = JSON.parse(d); } catch (e) { d = null; }
+  if (!d || !Array.isArray(d.itens)) { alert('Esta versão não pôde ser lida. Nada foi alterado.'); return; }
+  if (!confirm('Voltar o orçamento para a versão de ' + (r.versao_de ? new Date(r.versao_de).toLocaleString('pt-BR') : '—') + '?\n\n' + _vResumo(d) + '\n\nO que está na tela agora será substituído.')) return;
+  try { localStorage.setItem('mf_antes_restaurar_' + orcamentoAtual.pedidoId, JSON.stringify({ quando: new Date().toISOString(), orc: orcamentoAtual })); } catch (e) {}
+  const novo = JSON.parse(JSON.stringify(d));
+  delete novo._ultimoSalvamento;
+  novo.id = orcamentoAtual.id; novo.pedidoId = orcamentoAtual.pedidoId; novo.pedidoKey = orcamentoAtual.pedidoKey || novo.pedidoKey;
+  orcamentoAtual = novo;
+  fecharVersoesOrcamento();
+  const ok = await salvarOrcamentoPedido(true);
+  renderTelaOrcamentoPedido(order);
+  iniciarProtecaoOrcamento();
+  showNotif(ok ? 'Versão restaurada e salva.' : 'Versão carregada na tela, mas NÃO foi salva — clique em Salvar.', ok ? 'success' : 'error');
+}
+
 // ─── PROTEÇÃO CONTRA PERDA DE ORÇAMENTO ──────────────────────────────────────
 // 1) Salvamento automático do orçamento (a cada ~3s, só quando algo mudou)
 // 2) Trava no "Voltar": grava antes de sair; se não conseguir gravar, NÃO sai
@@ -13922,6 +13986,7 @@ function renderTelaOrcamentoPedido(order) {
           <div style="font-size:10px;opacity:0.6;text-transform:uppercase;">LLH</div>
           <div id="hdr-llh" style="font-size:15px;font-weight:700;color:#A8D5A2;">${fmt(llh)}</div>
         </div>
+        <button onclick="abrirVersoesOrcamento()" style="background:#455a64;color:white;border:none;padding:9px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;" title="Ver versões anteriores deste orçamento e voltar para uma delas">🕘 Versões</button>
         <button onclick="limparOrcamentoAtual()" style="background:#6c757d;color:white;border:none;padding:9px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;" title="Apagar todo o orçamento e começar do zero">🗑 Limpar</button>
         <button onclick="salvarEImprimir()" style="background:#006382;color:white;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">🖨️ Salvar e Imprimir</button>
         <button onclick="salvarOrcamentoPedido()" style="background:#2E7D32;color:white;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">💾 Salvar</button>
@@ -14279,7 +14344,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
               oninput="orcamentoAtual.itens[${idx}].pecas[${pi}].qtd=this.value;orcamentoAtual.itens[${idx}].m2Override=0;"
               onblur="recalcularTelaOrc('${orderId}')"
               onkeydown="pKD(event,this,${idx},'${orderId}')">
-            <button onclick="adicionarPecaItem(${idx},'${orderId}')" style="background:#e8f4f7;color:#1e5f74;border:none;padding:4px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700;width:28px;height:28px;display:flex;align-items:center;justify-content:center;" title="Adicionar">+</button>
+            <button onclick="adicionarPecaItem(${idx},'${orderId}',${pi})" style="background:#e8f4f7;color:#1e5f74;border:none;padding:4px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700;width:28px;height:28px;display:flex;align-items:center;justify-content:center;" title="Adicionar">+</button>
             <button onclick="removerPecaItem(this,${idx},'${orderId}')" style="background:#fff0f0;color:#B85A4A;border:none;padding:4px;border-radius:6px;cursor:pointer;font-size:12px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;" title="Remover">✕</button>
             <button onclick="duplicarPecaItem(${idx},${pi},'${orderId}')" style="background:#f5f5f5;color:#555;border:none;padding:4px;border-radius:6px;cursor:pointer;font-size:12px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;" title="Duplicar">⧉</button>
           </div>`).join('')}
@@ -14877,7 +14942,7 @@ function calcAreaTotalItem(item) {
 function pKD(e, el, idx, orderId) {
   if (e.key === 'Enter') {
     e.preventDefault();
-    adicionarPecaItem(idx, orderId);
+    adicionarPecaItem(idx, orderId, indiceLinhaPeca(el, idx));   // nova linha logo ABAIXO da que está em foco
   } else if (e.key === 'Tab') {
     e.preventDefault();
     var lista = document.getElementById('pecas-lista-' + idx);
@@ -14893,10 +14958,32 @@ function pKD(e, el, idx, orderId) {
   }
 }
 
-// Adiciona linha de peça diretamente no DOM
-function adicionarPecaItem(idx, orderId) {
+// posição (0, 1, 2...) da linha de peça a que um campo/botão pertence
+function indiceLinhaPeca(el, idx) {
+  var lista = document.getElementById('pecas-lista-' + idx);
+  if (!lista || !el) return -1;
+  var row = el;
+  while (row && row.parentNode !== lista) row = row.parentNode;
+  return row ? Array.prototype.indexOf.call(lista.children, row) : -1;
+}
+
+// Adiciona linha de peça. Com 'depois' (posição de uma linha existente), a nova entra logo abaixo dela
+// e as de baixo descem; sem 'depois' (ou na última linha) entra no final.
+function adicionarPecaItem(idx, orderId, depois) {
   if (!orcamentoAtual.itens[idx]) return;
   if (!orcamentoAtual.itens[idx].pecas) orcamentoAtual.itens[idx].pecas = [];
+  var _pecas = orcamentoAtual.itens[idx].pecas;
+  if (typeof depois === 'number' && depois >= 0 && depois < _pecas.length - 1) {
+    // No meio da lista: cada linha da tela está amarrada à sua posição, então insere na lista e redesenha a tela
+    _pecas.splice(depois + 1, 0, {nome:'', medidas:'', qtd:'1'});
+    var yRol = window.pageYOffset;
+    var ordRef2 = orders.find(function(o){ return o.id === orderId; });
+    if (ordRef2) renderTelaOrcamentoPedido(ordRef2); else { recalcularTelaOrc(orderId); return; }
+    window.scrollTo(0, yRol);
+    var l2 = document.getElementById('pecas-lista-' + idx), r2 = l2 && l2.children[depois + 1];
+    var f2 = r2 && r2.querySelector('input'); if (f2) setTimeout(function(){ f2.focus(); }, 20);
+    return;
+  }
   // pi deve ser calculado AGORA, não em closure
   orcamentoAtual.itens[idx].pecas.push({nome:'', medidas:'', qtd:'1'});
   var pi = orcamentoAtual.itens[idx].pecas.length - 1;
@@ -14952,7 +15039,7 @@ function adicionarPecaItem(idx, orderId) {
   var bAdd = document.createElement('button');
   bAdd.style.cssText = 'background:#e8f4f7;color:#1e5f74;border:none;padding:4px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700;width:28px;height:28px;display:flex;align-items:center;justify-content:center;';
   bAdd.title = 'Adicionar'; bAdd.textContent = '+';
-  bAdd.onclick = function(){ adicionarPecaItem(idx, orderId); };
+  bAdd.onclick = (function(i){ return function(){ adicionarPecaItem(idx, orderId, i); }; })(pi);
 
   var bRem = document.createElement('button');
   bRem.style.cssText = 'background:#fff0f0;color:#B85A4A;border:none;padding:4px;border-radius:6px;cursor:pointer;font-size:12px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;';
@@ -15050,7 +15137,7 @@ function duplicarPecaItem(idx, pi, orderId) {
   var bAdd = document.createElement('button');
   bAdd.style.cssText = 'background:#006382;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:14px;';
   bAdd.title = 'Nova linha'; bAdd.textContent = '+';
-  bAdd.onclick = function(){ adicionarPecaItem(idx, orderId); };
+  bAdd.onclick = function(){ adicionarPecaItem(idx, orderId, newPi); };
 
   var bRem = document.createElement('button');
   bRem.style.cssText = 'background:#dc3545;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;';

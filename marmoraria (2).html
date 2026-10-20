@@ -1040,7 +1040,7 @@ function toggleFiltroAv() {
 <div class="notif" id="notif"></div>
 
 <script>
-const MF_VERSAO = '20/10 · v4.4 (financeiro completo)'; // conferir em cada aparelho se já está com o arquivo novo
+const MF_VERSAO = '20/10 · v4.5 (agenda profissional)'; // conferir em cada aparelho se já está com o arquivo novo
 // Código curto deste aparelho/navegador (ex.: #A3F9). Fica guardado no navegador e aparece na lateral do
 // sistema, nos erros registrados e em cada orçamento gravado — assim sabemos QUAL aparelho fez o quê.
 function mfAparelho() {
@@ -2940,24 +2940,20 @@ function renderHistorico(busca) {
   if (!el) return;
   // Monta esqueleto se ainda não existe
   if (!document.getElementById('hist-lista')) {
-    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">'
-      + '<div style="font-size:18px;font-weight:800;color:var(--stone);">📏 Histórico de Medidas</div>'
-      + '<div id="hist-total" style="font-size:13px;color:#888;"></div>'
-      + '</div>'
-      + '<div style="background:white;border-radius:12px;box-shadow:var(--shadow);padding:14px 16px;margin-bottom:16px;">'
-      + '<div style="display:flex;gap:10px;align-items:center;">'
-      + '<span style="font-size:18px;">🔍</span>'
-      + '<input id="hist-busca" type="text" placeholder="Buscar por nome do cliente, pedido ou endereço..." oninput="renderHistorico(this.value)" style="flex:1;border:none;outline:none;font-size:14px;color:var(--stone);background:transparent;">'
-      + '<span id="hist-clear" style="display:none;cursor:pointer;font-size:18px;color:#aaa;" onclick="document.getElementById(\'hist-busca\').value=\'\';renderHistorico(\'\');">✕</span>'
-      + '</div></div>'
-      + '<div id="hist-lista"><div style="padding:40px;text-align:center;color:#888;">Carregando...</div></div>'
+    el.innerHTML = '<div class="fp-card" style="margin-bottom:16px;">'
+      + '<div class="fp-head"><div><div class="fp-title">Histórico de medidas</div><div class="fp-sub" id="hist-total"></div></div></div>'
+      + '<div class="fp-toolbar"><div class="fp-search">'
+      + '<input id="hist-busca" type="text" placeholder="Buscar por cliente, pedido ou endereço..." oninput="renderHistorico(this.value)" autocomplete="off">'
+      + '<button id="hist-clear" style="display:none;" title="Limpar" onclick="document.getElementById(\'hist-busca\').value=\'\';renderHistorico(\'\');">✕</button>'
+      + '</div></div></div>'
+      + '<div id="hist-lista"><div class="fp-card"><div class="ag-empty">Carregando...</div></div></div>'
       + '<div id="hist-mais" style="text-align:center;margin-top:16px;padding-bottom:24px;"></div>';
   }
   // Atualiza valor e botão limpar
   const inp = document.getElementById('hist-busca');
   if (inp && inp.value !== termo) inp.value = termo;
   const clr = document.getElementById('hist-clear');
-  if (clr) clr.style.display = termo ? 'inline' : 'none';
+  if (clr) clr.style.display = termo ? 'block' : 'none';
 
   _histDebounce = setTimeout(() => _carregarHistorico(termo, 0), 400);
 }
@@ -2968,7 +2964,7 @@ async function _carregarHistorico(termoBusca, pagina) {
   const elMais = document.getElementById('hist-mais');
   if (!lista) return;
 
-  if (pagina === 0) lista.innerHTML = '<div style="padding:30px;text-align:center;color:#aaa;font-size:13px;">🔍 Buscando...</div>';
+  if (pagina === 0) lista.innerHTML = '<div class="fp-card"><div class="ag-empty">Buscando...</div></div>';
   if (elMais) elMais.innerHTML = '';
 
   const inicio = pagina * _HIST_POR_PAGINA;
@@ -2989,14 +2985,11 @@ async function _carregarHistorico(termoBusca, pagina) {
   const medicoes = meds || [];
   const total = count || 0;
 
-  if (elTotal) elTotal.textContent = total + ' medição(ões) concluída(s)';
+  if (elTotal) elTotal.textContent = total + (total===1?' medição concluída':' medições concluídas');
 
   if (pagina === 0) {
     if (medicoes.length === 0) {
-      lista.innerHTML = '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:60px 20px;text-align:center;color:#aaa;">'
-        + '<div style="font-size:48px;margin-bottom:12px;">📏</div>'
-        + '<div style="font-size:16px;font-weight:600;margin-bottom:8px;">' + (termoBusca ? 'Nenhum resultado para "' + termoBusca + '"' : 'Nenhuma medição concluída ainda') + '</div>'
-        + '<div style="font-size:13px;">As medições concluídas aparecem aqui</div></div>';
+      lista.innerHTML = '<div class="fp-card"><div class="ag-empty"><b>' + (termoBusca ? 'Nenhum resultado para "' + agEsc(termoBusca) + '"' : 'Nenhuma medição concluída ainda') + '</b>As medições concluídas aparecem aqui</div></div>';
     } else {
       lista.innerHTML = medicoes.map(renderCardHistorico).join('');
     }
@@ -3008,9 +3001,9 @@ async function _carregarHistorico(termoBusca, pagina) {
   if (elMais) {
     if (carregados < total) {
       var termoEsc = termoBusca.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-      elMais.innerHTML = '<button onclick="_carregarHistorico(\'' + termoEsc + '\',' + (pagina+1) + ')" style="background:var(--stone);color:white;border:none;padding:12px 32px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Ver mais (' + (total - carregados) + ' restantes)</button>';
+      elMais.innerHTML = '<button onclick="_carregarHistorico(\'' + termoEsc + '\',' + (pagina+1) + ')" class="fp-btn" style="padding:11px 28px;">Ver mais (' + (total - carregados) + ' restantes)</button>';
     } else if (total > 0) {
-      elMais.innerHTML = '<div style="font-size:12px;color:#aaa;padding:8px;">Todos os ' + total + ' registros carregados</div>';
+      elMais.innerHTML = '<div style="font-size:12px;color:#8a8577;padding:8px;">Todos os ' + total + ' registros carregados</div>';
     }
   }
 }
@@ -3021,29 +3014,26 @@ function renderCardHistorico(m) {
   const dataFmt = m.Data ? m.Data.substring(8,10)+'/'+m.Data.substring(5,7)+'/'+m.Data.substring(0,4) : '—';
   const endereco = [m.Endereco, m.Numero, m.Bairro, m.Complemento, m.Cidade].filter(Boolean).join(', ');
   const stage = pedido ? pedido.stage : null;
-  const stageLabels = {'aguardando':'⏳ Aguardando Orçamento','negociacao':'💬 Negociação','fechado':'✅ Pedido Fechado','corte':'🪚 Em Corte','acabamento':'✨ Acabamento','pronto':'📦 Pronto p/ Entrega','entregue':'🚚 Entregue'};
-  const stageCores = {'aguardando':'#8B6914','negociacao':'#006382','fechado':'#2E7D32','corte':'#B85A4A','acabamento':'#9C27B0','pronto':'#006382','entregue':'#2E7D32'};
+  const stageLabels = {'aguardando':'Aguardando orçamento','negociacao':'Negociação','fechado':'Pedido fechado','corte':'Em corte','acabamento':'Acabamento','pronto':'Pronto p/ entrega','entregue':'Entregue'};
+  const stageCores = {'aguardando':'#8B6914','negociacao':'#006382','fechado':'#2E7D32','corte':'#B85A4A','acabamento':'#7B3FA0','pronto':'#006382','entregue':'#2E7D32'};
   const stageLabel = stageLabels[stage] || (pedidoId ? stage : '—');
-  const stageCor = stageCores[stage] || '#aaa';
+  const stageCor = stageCores[stage] || '#8a8577';
 
-  return '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden;">'
-    + '<div style="background:var(--stone);color:white;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'
-    + '<div>'
-    + '<div style="font-size:15px;font-weight:700;">' + (m.Cliente||'—') + '</div>'
-    + '<div style="font-size:11px;opacity:.8;margin-top:2px;">📅 ' + dataFmt + (m.Horario?' · '+m.Horario:'') + (m.Created_by?' · por '+m.Created_by:'') + '</div>'
+  return '<div class="fp-card" style="margin-bottom:12px;">'
+    + '<div class="fp-head" style="padding:14px 22px;">'
+    +   '<div><div class="fp-title" style="font-size:15.5px;">' + agEsc(m.Cliente||'—') + '</div>'
+    +   '<div class="fp-sub">' + dataFmt + (m.Horario?' · '+agEsc(m.Horario):'') + (m.Created_by?' · por '+agEsc(m.Created_by):'') + '</div></div>'
+    +   '<div style="text-align:right;"><span class="fp-tag" style="background:#e3f1e5;color:#2E7D32;">Concluída</span>'
+    +   (pedidoId ? '<div class="fp-sub">Pedido ' + agEsc(pedidoId) + '</div>' : '') + '</div>'
     + '</div>'
-    + '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">'
-    + '<div style="background:rgba(255,255,255,0.15);padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;">✅ Concluída</div>'
-    + (pedidoId ? '<div style="font-size:11px;opacity:.8;">Pedido: ' + pedidoId + '</div>' : '')
-    + '</div></div>'
-    + '<div style="padding:16px 18px;display:flex;flex-direction:column;gap:10px;">'
-    + (endereco ? '<div style="display:flex;gap:8px;align-items:flex-start;"><span style="font-size:16px;flex-shrink:0;">📍</span><div style="font-size:13px;color:#555;">' + endereco + '</div></div>' : '')
-    + (m.Obs ? '<div style="display:flex;gap:8px;align-items:flex-start;"><span style="font-size:16px;flex-shrink:0;">📝</span><div style="font-size:13px;color:#555;">' + m.Obs + '</div></div>' : '')
-    + (m.Telefone ? '<div style="display:flex;gap:8px;align-items:center;"><span style="font-size:16px;">📞</span><a href="tel:' + m.Telefone + '" style="font-size:13px;color:#006382;text-decoration:none;">' + m.Telefone + '</a></div>' : '')
+    + '<div class="ag-hist-body">'
+    + (endereco ? '<div>📍 ' + agEsc(endereco) + '</div>' : '')
+    + (m.Obs ? '<div style="color:#6b665a;">📝 ' + agEsc(m.Obs) + '</div>' : '')
+    + (m.Telefone ? '<div>📞 <a href="tel:' + agEsc(m.Telefone) + '" style="color:#006382;text-decoration:none;">' + agEsc(m.Telefone) + '</a></div>' : '')
     + (pedidoId
-      ? '<div style="background:#f8f8f8;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><div style="font-size:12px;color:#888;font-weight:600;">STATUS DO PEDIDO</div><div style="font-size:13px;font-weight:700;color:' + stageCor + ';">' + stageLabel + '</div></div>'
-        + '<button onclick="abrirPedidoDoHistorico(\'' + pedidoId + '\')" style="background:var(--gold);color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;width:100%;">📋 Abrir Pedido ' + pedidoId + '</button>'
-      : '<div style="background:#fff5f5;border-radius:8px;padding:10px 14px;font-size:12px;color:#B85A4A;font-weight:600;text-align:center;">⚠️ Pedido não vinculado</div>')
+      ? '<div class="ag-hist-ped"><div><div class="fp-nl">Status do pedido</div><div style="font-size:13.5px;font-weight:700;color:' + stageCor + ';margin-top:2px;">' + agEsc(stageLabel) + '</div></div>'
+        + '<button class="fp-btn sm" onclick="abrirPedidoDoHistorico(\'' + pedidoId + '\')">Abrir pedido ' + agEsc(pedidoId) + '</button></div>'
+      : '<div class="ag-hist-ped" style="background:#fff7f6;border-color:#efc4bd;color:#a24e3f;font-weight:600;font-size:12.5px;">Pedido não vinculado</div>')
     + '</div></div>';
 }
 
@@ -9257,6 +9247,60 @@ async function salvarTransferencia() {
   document.head.appendChild(st);
 })();
 
+
+(function () {
+  if (document.getElementById('ag-css')) return;
+  var st = document.createElement('style'); st.id = 'ag-css';
+  st.textContent = [
+    '.ag-wrap{max-width:1000px;margin:0 auto;padding:24px}',
+    '.ag-h1{font-family:"DM Serif Display",serif;font-size:26px;color:var(--stone);line-height:1.15}',
+    '.ag-row{display:grid;grid-template-columns:78px minmax(0,1fr) auto;gap:16px;align-items:start;padding:16px 22px;border-bottom:1px solid #f0ece2;border-left:4px solid var(--ag-cor,#ccc)}',
+    '.ag-row:last-child{border-bottom:none}.ag-row:hover{background:#fcfbf8}',
+    '.ag-hora{font-size:20px;font-weight:800;color:var(--stone);font-variant-numeric:tabular-nums;line-height:1.1}',
+    '.ag-data{font-size:11.5px;color:#8a8577;margin-top:3px}',
+    '.ag-side{display:flex;flex-direction:column;align-items:flex-end;gap:8px}',
+    '.ag-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}',
+    'a.fp-btn,a.fp-link{text-decoration:none;display:inline-block}',
+    '.fp-btn.sm.neg{background:#fff;color:#B85A4A;border-color:#ecc9c2}.fp-btn.sm.neg:hover{background:#fbeeeb}',
+    '.ag-empty{padding:48px 20px;text-align:center;color:#8a8577;font-size:14px}',
+    '.ag-empty b{display:block;font-size:16px;color:var(--stone);margin-bottom:6px}',
+    '.ag-none{padding:22px;color:#8a8577;font-size:13px}',
+    '.ag-mob{padding:18px 22px;border-bottom:1px solid #f0ece2;border-left:4px solid var(--gold)}',
+    '.ag-mob-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}',
+    '.ag-hr{font-size:20px;font-weight:800;color:var(--stone)}',
+    '.ag-mob-nome{font-size:18px;font-weight:800;color:var(--stone);margin-bottom:6px}',
+    '.ag-mob-l{font-size:14px;color:#555;margin-bottom:5px}',
+    '.ag-mob-g{display:grid;gap:8px;margin-top:12px}',
+    '.ag-big{display:flex;align-items:center;justify-content:center;padding:14px;border-radius:10px;font-size:15px;font-weight:700;border:none;color:#fff;text-decoration:none;cursor:pointer}',
+    '.ag-grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}',
+    '.ag-dow{text-align:center;font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#8a8577;margin-bottom:8px}',
+    '.ag-day{border:1px solid #e6e1d6;border-radius:10px;padding:9px 10px;min-height:78px;background:#fff}',
+    '.ag-day.lv{background:#f6faf6;border-color:#dfeadf}',
+    '.ag-day.oc{background:#fbf3f1;border-color:#efd3cd;border-left:3px solid #B85A4A}',
+    '.ag-day.hj{box-shadow:0 0 0 2px var(--gold)}',
+    '.ag-dn{font-size:17px;font-weight:800;color:var(--stone)}.ag-dm{font-size:10.5px;color:#8a8577;margin-left:3px;text-transform:uppercase}',
+    '.ag-who{font-size:11.5px;font-weight:700;color:#a24e3f;margin-top:4px;line-height:1.25;word-break:break-word}',
+    '.ag-what{font-size:10.5px;color:#8a8577;word-break:break-word}',
+    '.ag-free{font-size:11px;color:#4A7C59;margin-top:6px;font-weight:600}',
+    '.ag-legend{display:flex;gap:14px;font-size:11.5px;color:#8a8577;align-items:center}',
+    '.ag-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}',
+    '.ag-cal{padding:16px 22px 12px}',
+    '.ag-hist-body{padding:14px 22px;display:grid;gap:8px;font-size:13px;color:#4a463c}',
+    '.ag-hist-ped{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:#faf8f3;border:1px solid #eee9de;border-radius:8px;padding:9px 12px}',
+    '@media(max-width:820px){.ag-wrap{padding:12px 8px}.ag-row{grid-template-columns:62px minmax(0,1fr);padding:14px}.ag-side{grid-column:1/3;align-items:flex-start}.ag-acts{justify-content:flex-start}.ag-hora{font-size:17px}.ag-cal{padding:12px 10px}}'
+  ].join('');
+  document.head.appendChild(st);
+})();
+
+function agEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function agHojeStr(){ var h=new Date(); return h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0')+'-'+String(h.getDate()).padStart(2,'0'); }
+function agDataCurta(ds){
+  if(!ds) return '';
+  var d=new Date(String(ds).substring(0,10)+'T12:00:00');
+  var n=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  return n[d.getDay()]+', '+String(ds).substring(8,10)+'/'+String(ds).substring(5,7);
+}
+
 async function renderFinanceiro() {
   const el = document.getElementById('financeiro-content');
   if (!el) return;
@@ -10942,9 +10986,8 @@ async function renderAgenda() {
   // Serrador, Acabador e Encarregado — só veem Instalações em leitura
   const soLeitura = currentUser === 'serrador' || currentUser === 'acabador' || currentUser === 'producao';
   if (soLeitura) {
-    el.innerHTML = '<div style="padding:24px;max-width:1000px;margin:0 auto;">'
-      +'<div style="font-family:\'DM Serif Display\',serif;font-size:26px;color:var(--stone);margin-bottom:20px;">📅 Agenda de Instalações</div>'
-      +'<div style="font-size:12px;color:#888;background:#f0f7ff;border-radius:8px;padding:8px 12px;margin-bottom:20px;">👁 Somente visualização</div>'
+    el.innerHTML = '<div class="ag-wrap">'
+      +'<div class="fp-topbar"><div><div class="ag-h1">Agenda de Instalações</div><div class="fp-sub">Somente visualização</div></div></div>'
       +'<div id="painel-agenda-instalacao"></div></div>';
     window._agendaSoLeitura = true;
     renderAgendaInstalacao();
@@ -10953,27 +10996,16 @@ async function renderAgenda() {
   window._agendaSoLeitura = false;
 
   const abaAtiva = localStorage.getItem('agenda_aba') || 'medicao';
-  
+  const tab = (id, txt) => `<button class="fp-tab ${abaAtiva===id?'fp-tab-ativo':''}" id="aba-${id}" onclick="switchAgendaAba('${id}')">${txt}</button>`;
+
   el.innerHTML = `
-  <div style="padding:24px;max-width:1000px;margin:0 auto;">
-    <div style="font-family:'DM Serif Display',serif;font-size:26px;color:var(--stone);margin-bottom:20px;">📅 Agenda</div>
-    
-    <!-- TABS -->
-    <div style="display:flex;gap:4px;margin-bottom:24px;border-bottom:2px solid var(--cream-dark);">
-      <button onclick="switchAgendaAba('medicao')" id="aba-medicao"
-        style="padding:10px 24px;border:none;background:${abaAtiva==='medicao'?'var(--gold)':'var(--cream-dark)'};color:${abaAtiva==='medicao'?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
-        📐 Medições
-      </button>
-      <button onclick="switchAgendaAba('instalacao')" id="aba-instalacao"
-        style="padding:10px 24px;border:none;background:${abaAtiva==='instalacao'?'var(--gold)':'var(--cream-dark)'};color:${abaAtiva==='instalacao'?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
-        🔧 Instalações
-      </button>
-      <button onclick="switchAgendaAba('historico')" id="aba-historico"
-        style="padding:10px 24px;border:none;background:${abaAtiva==='historico'?'var(--gold)':'var(--cream-dark)'};color:${abaAtiva==='historico'?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;">
-        📏 Histórico
-      </button>
+  <div class="ag-wrap">
+    <div class="fp-topbar">
+      <div><div class="ag-h1">Agenda</div><div class="fp-sub">Medições, instalações e histórico de medidas</div></div>
     </div>
-    
+    <div class="fp-tabs" style="margin-bottom:18px;">
+      ${tab('medicao','Medições')}${tab('instalacao','Instalações')}${tab('historico','Histórico')}
+    </div>
     <div id="painel-agenda-medicao" style="display:${abaAtiva==='medicao'?'block':'none'}"></div>
     <div id="painel-agenda-instalacao" style="display:${abaAtiva==='instalacao'?'block':'none'}"></div>
     <div id="painel-agenda-historico" style="display:${abaAtiva==='historico'?'block':'none'}"></div>
@@ -10989,10 +11021,7 @@ async function switchAgendaAba(aba) {
   ['medicao','instalacao','historico'].forEach(a => {
     const btn = document.getElementById('aba-'+a);
     const panel = document.getElementById('painel-agenda-'+a);
-    if (btn) {
-      btn.style.background = a===aba ? 'var(--gold)' : 'var(--cream-dark)';
-      btn.style.color = a===aba ? 'white' : 'var(--stone)';
-    }
+    if (btn) btn.classList.toggle('fp-tab-ativo', a===aba);
     if (panel) panel.style.display = a===aba ? 'block' : 'none';
   });
   if (aba === 'medicao') await renderAgendaMedicao();
@@ -11028,86 +11057,65 @@ async function salvarMedicoes(lista) {
 async function renderAgendaMedicao() {
   const el = document.getElementById('painel-agenda-medicao');
   if (!el) return;
-  el.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">Carregando...</div>';
+  el.innerHTML = '<div class="fp-card"><div class="ag-empty">Carregando...</div></div>';
 
   const todas = await getMedicoes();
-
-  // DEBUG TEMPORÁRIO — mostra o que veio do banco
-  if (!todas || todas.length === 0) {
-    el.innerHTML = `<div style="background:#fff3cd;border:2px solid #ffc107;border-radius:12px;padding:20px;margin:16px;">
-      <b>⚠️ Nenhuma medição retornada do banco.</b><br>
-      Total registros: ${todas?.length ?? 'null'}<br>
-      <small>Verifique se a tabela <b>medicoes</b> tem registros no Supabase.</small>
-    </div>`;
-    return;
-  }
-  // FIM DEBUG
-
-  const medicoes = todas.sort((a,b) => {
+  const medicoes = (todas || []).slice().sort((a,b) => {
     const dA = a.Data||a.data||''; const dB = b.Data||b.data||'';
     if (dA !== dB) return dA.localeCompare(dB);
     return (a.Horario||a.horario||'').localeCompare(b.Horario||b.horario||'');
   });
   // Data local (não UTC) — evita bug de fuso horário Brasil
-  const _hj = new Date();
-  const hoje = _hj.getFullYear()+'-'+String(_hj.getMonth()+1).padStart(2,'0')+'-'+String(_hj.getDate()).padStart(2,'0');
+  const hoje = agHojeStr();
   const isPerfMedidor = currentUser === 'medidor';
-  
-  // Agrupa: hoje, futuras, passadas
+
   const hojeList = medicoes.filter(m => (m.Data||m.data||'') === hoje);
   const futuras  = medicoes.filter(m => (m.Data||m.data||'') > hoje);
   const passadas = medicoes.filter(m => (m.Data||m.data||'') < hoje && m.Status !== 'concluido');
 
-  el.innerHTML = `
-  <div>
-    ${!isPerfMedidor ? `
-    <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
-      <button onclick="abrirModalMedicao()"
-        style="background:var(--gold);color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">
-        + Agendar Medição
-      </button>
-    </div>` : ''}
+  const btnNova = !isPerfMedidor ? `<button class="fp-btn ok" onclick="abrirModalMedicao()">+ Agendar medição</button>` : '';
 
-    ${hojeList.length > 0 ? `
-    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:16px;padding:20px;margin-bottom:20px;box-shadow:0 4px 20px rgba(0,0,0,0.2);">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-        <div style="background:var(--gold);border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">📋</div>
-        <div>
-          <div style="font-size:16px;font-weight:800;color:white;letter-spacing:.5px;">AGENDA DE HOJE</div>
-          <div style="font-size:12px;color:var(--gold);font-weight:600;">${hojeList.length} visita(s) agendada(s)</div>
-        </div>
+  let corpo;
+  if (medicoes.length === 0) {
+    corpo = `<div class="fp-card"><div class="ag-empty"><b>Nenhuma medição agendada</b>As visitas de medição aparecem aqui.
+      ${!isPerfMedidor ? `<div style="margin-top:14px;"><button class="fp-btn ok" onclick="abrirModalMedicao()">+ Agendar primeira medição</button></div>` : ''}</div></div>`;
+  } else {
+    corpo = `
+    <div class="fp-card" style="margin-bottom:16px;">
+      <div class="fp-head">
+        <div><div class="fp-title">Medições</div><div class="fp-sub">${medicoes.length} agendamento(s) no total</div></div>
+        ${btnNova}
       </div>
-      ${hojeList.map(m => cardMedicao(m, true)).join('')}
-    </div>` : `
-    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:16px;padding:24px;margin-bottom:20px;text-align:center;">
-      <div style="font-size:36px;margin-bottom:8px;">📋</div>
-      <div style="font-size:15px;font-weight:800;color:white;">AGENDA DE HOJE</div>
-      <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:6px;">Nenhuma medição agendada</div>
-    </div>`}
+      <div class="fp-kpis">
+        <div class="fp-kpi"><div class="fp-kl">Hoje</div><div class="fp-kv">${hojeList.length}</div><div class="fp-ks">visita(s) para hoje</div></div>
+        <div class="fp-kpi"><div class="fp-kl">Próximas</div><div class="fp-kv">${futuras.length}</div><div class="fp-ks">já agendadas</div></div>
+        <div class="fp-kpi"><div class="fp-kl">Atrasadas</div><div class="fp-kv" style="${passadas.length?'color:#B85A4A':''}">${passadas.length}</div><div class="fp-ks">${passadas.length?'não concluídas':'nenhuma pendência'}</div></div>
+      </div>
+    </div>
 
-    ${futuras.length > 0 ? `
-    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;margin-bottom:20px;">
-      <div style="font-size:13px;font-weight:700;color:var(--stone);margin-bottom:14px;">📅 Próximas Medições (${futuras.length})</div>
+    <div class="fp-card" style="margin-bottom:16px;">
+      <div class="fp-head"><div><div class="fp-title">Hoje</div><div class="fp-sub">${agDataCurta(hoje)}</div></div></div>
+      ${hojeList.length ? hojeList.map(m => cardMedicao(m, true)).join('') : '<div class="ag-none">Nenhuma medição para hoje.</div>'}
+    </div>
+
+    ${futuras.length ? `
+    <div class="fp-card" style="margin-bottom:16px;">
+      <div class="fp-head"><div><div class="fp-title">Próximas medições</div><div class="fp-sub">${futuras.length} agendada(s)</div></div></div>
       ${futuras.map(m => cardMedicao(m, false)).join('')}
     </div>` : ''}
 
-    ${passadas.length > 0 ? `
-    <details style="margin-top:8px;">
-      <summary style="cursor:pointer;padding:10px 16px;background:#f5f5f5;border-radius:8px;font-size:13px;font-weight:600;color:#888;">
-        Histórico (${passadas.length} medições passadas)
+    ${passadas.length ? `
+    <details class="fp-card" ${passadas.length>5?'':'open'} style="margin-bottom:16px;">
+      <summary class="fp-head" style="cursor:pointer;list-style:none;">
+        <div><div class="fp-title" style="color:#B85A4A;">Atrasadas</div><div class="fp-sub">${passadas.length} medição(ões) de dias anteriores sem conclusão</div></div>
+        <span class="fp-tag red">${passadas.length}</span>
       </summary>
-      <div style="background:white;border-radius:0 0 12px 12px;padding:16px;margin-top:2px;box-shadow:var(--shadow);">
-        ${passadas.reverse().map(m => cardMedicao(m, false, true)).join('')}
-      </div>
-    </details>` : ''}
+      ${passadas.slice().reverse().map(m => cardMedicao(m, false, true)).join('')}
+    </details>` : ''}`;
+  }
 
-    ${medicoes.length === 0 ? `
-    <div style="text-align:center;padding:60px;background:white;border-radius:14px;box-shadow:var(--shadow);">
-      <div style="font-size:48px;margin-bottom:16px;">📐</div>
-      <div style="font-size:16px;font-weight:600;color:var(--stone);">Nenhuma medição agendada</div>
-      ${!isPerfMedidor ? `<button onclick="abrirModalMedicao()" style="margin-top:16px;background:var(--gold);color:white;border:none;padding:12px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">+ Agendar primeira medição</button>` : ''}
-    </div>` : ''}
-  </div>
+  el.innerHTML = `
+  <div>${corpo}</div>
 
   <!-- MODAL MEDIÇÃO -->
   <div class="modal-overlay" id="modal-medicao-ag" style="align-items:flex-start;padding:20px;overflow-y:auto;">
@@ -11126,135 +11134,67 @@ async function renderAgendaMedicao() {
 }
 
 function cardMedicao(m, isHoje, passada) {
-  // Normaliza o Status para minúsculo para comparações seguras (Supabase pode salvar 'Pendente' ou 'pendente')
-  const statusNorm = (m.Status||'').toLowerCase();
-  const statusCor = statusNorm==='concluido'?'#2E7D32':statusNorm==='revisitar'?'#B85A4A':'#8B6914';
-  const statusLabel = statusNorm==='concluido'?'✅ Concluído':statusNorm==='revisitar'?'🔄 Aguarda Reagendamento':'⏳ Pendente';
+  // Normaliza o Status para minúsculo (Supabase pode salvar 'Pendente' ou 'pendente')
+  const st = (m.Status||'').toLowerCase();
+  const cor = st==='concluido'?'#2E7D32':st==='revisitar'?'#B85A4A':'#B8860B';
+  const tagCls = st==='concluido'?'':st==='revisitar'?'red':'amber';
+  const label = st==='concluido'?'Concluído':st==='revisitar'?'Aguarda reagendamento':'Pendente';
   const enderecoCompleto = [m.Endereco, m.Numero, m.Complemento].filter(Boolean).join(', ');
   const enderecoComBairro = [m.Endereco, m.Numero, m.Complemento, m.Bairro].filter(Boolean).join(', ');
   const cidadeStr = m.Cidade || 'Volta Redonda RJ';
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(enderecoComBairro+', '+cidadeStr)}`;
   const isPerfMedidor = currentUser === 'medidor';
+  const tel = m.Telefone || m.telefone || '';
+  const telNum = String(tel).replace(/\D/g,'');
+  const id = m.id;
+
+  if (isPerfMedidor && isHoje && st==='pendente') {
+    return `
+    <div class="ag-mob">
+      <div class="ag-mob-top"><span class="ag-hr">${agEsc(m.Horario||'Sem horário')}</span><span class="fp-tag ${tagCls}">${label}</span></div>
+      <div class="ag-mob-nome">${agEsc(m.Cliente||'—')}</div>
+      <div class="ag-mob-l">📍 ${agEsc(enderecoCompleto||'Endereço não informado')}${m.Bairro?' · '+agEsc(m.Bairro):''}</div>
+      ${tel?`<div class="ag-mob-l"><a href="tel:${agEsc(tel)}" style="color:#1e5f74;font-weight:600;text-decoration:none;">📞 ${agEsc(tel)}</a></div>`:''}
+      ${m.Obs?`<div class="ag-mob-l" style="color:#8a8577;">💬 ${agEsc(m.Obs)}</div>`:''}
+      <div class="ag-mob-g" style="grid-template-columns:${tel?'1fr 1fr':'1fr'};">
+        <a class="ag-big" style="background:#006382;" href="${mapsUrl}" target="_blank" rel="noopener">🗺️ Navegar</a>
+        ${tel?`<a class="ag-big" style="background:#25D366;" href="https://wa.me/55${telNum}" target="_blank" rel="noopener">WhatsApp</a>`:''}
+      </div>
+      <div class="ag-mob-g" style="grid-template-columns:1fr 1fr;">
+        <button class="ag-big" style="background:#2E7D32;" onclick="concluirMedicao('${id}')">Registrar medição</button>
+        <button class="ag-big" style="background:#B85A4A;" onclick="solicitarRevisita('${id}')">Revisitar</button>
+      </div>
+    </div>`;
+  }
+
+  const acoes = [];
+  if (enderecoCompleto) acoes.push(`<a class="fp-btn sm" href="${mapsUrl}" target="_blank" rel="noopener">Navegar</a>`);
+  if (tel) acoes.push(`<a class="fp-btn sm" href="https://wa.me/55${telNum}" target="_blank" rel="noopener">WhatsApp</a>`);
+  if (st==='pendente' || st==='revisitar') {
+    acoes.push(`<button class="fp-btn sm ok" onclick="concluirMedicao('${id}')">Registrar medição</button>`);
+    acoes.push(`<button class="fp-btn sm neg" onclick="solicitarRevisita('${id}')">Revisitar</button>`);
+  }
+  if (!isPerfMedidor) {
+    acoes.push(`<button class="fp-link" onclick="abrirModalMedicao('${id}')">Editar</button>`);
+    acoes.push(`<button class="fp-link danger" onclick="excluirMedicao('${id}')">Excluir</button>`);
+  }
 
   return `
-  <div style="border:1px solid ${isHoje&&statusNorm==='pendente'?'var(--gold)':'var(--cream-dark)'};border-radius:12px;padding:16px;margin-bottom:12px;background:${passada?'#fafafa':isHoje&&statusNorm==='pendente'?'white':'white'};${isHoje&&statusNorm==='pendente'?'box-shadow:0 2px 12px rgba(184,150,90,0.2);':''}">
-    
-    ${isPerfMedidor && isHoje && statusNorm==='pendente' ? `
-    <!-- VIEW MOBILE MEDIDOR — HOJE -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <div style="background:var(--gold);color:white;padding:6px 16px;border-radius:20px;font-size:15px;font-weight:700;">🕐 ${m.Horario||'Horário não definido'}</div>
-      <span style="background:${statusCor}22;color:${statusCor};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;">${statusLabel}</span>
+  <div class="ag-row" style="--ag-cor:${cor};">
+    <div>
+      <div class="ag-hora">${agEsc(m.Horario||'—')}</div>
+      <div class="ag-data">${m.Data?agDataCurta(m.Data):''}</div>
     </div>
-    <div style="font-size:18px;font-weight:800;color:var(--stone);margin-bottom:6px;">${m.Cliente||'—'}</div>
-    <div style="font-size:14px;color:#555;margin-bottom:4px;">📍 ${enderecoCompleto||'Endereço não informado'}${m.Bairro?' · '+m.Bairro:''}</div>
-    ${m.Telefone?`<a href="tel:${m.Telefone}" style="display:inline-flex;align-items:center;gap:6px;font-size:14px;color:#1e5f74;font-weight:600;margin-bottom:4px;text-decoration:none;">📞 ${m.Telefone}</a>`:''}
-    ${m.Obs?`<div style="font-size:13px;color:#888;margin-bottom:12px;">💬 ${m.Obs}</div>`:'<div style="margin-bottom:12px;"></div>'}
-    <div style="display:grid;grid-template-columns:${m.Telefone?'1fr 1fr':'1fr'};gap:8px;margin-bottom:10px;">
-      <a href="${mapsUrl}" target="_blank"
-        style="display:flex;align-items:center;justify-content:center;gap:8px;background:#006382;color:white;text-decoration:none;padding:14px;border-radius:10px;font-size:15px;font-weight:700;">
-        🗺️ Navegar
-      </a>
-      ${m.Telefone?`<a href="https://wa.me/55${m.Telefone.replace(/\D/g,'')}" target="_blank"
-        style="display:flex;align-items:center;justify-content:center;gap:8px;background:#25D366;color:white;text-decoration:none;padding:14px;border-radius:10px;font-size:15px;font-weight:700;">
-        📱 WhatsApp
-      </a>`:''}
+    <div style="min-width:0;">
+      <div class="fp-cli">${agEsc(m.Cliente||'—')}</div>
+      <div class="fp-meta">📍 ${agEsc(enderecoComBairro||'Endereço não informado')}</div>
+      ${tel?`<div class="fp-meta">📞 ${agEsc(tel)}</div>`:''}
+      ${m.Obs?`<div class="fp-meta" style="font-style:italic;">💬 ${agEsc(m.Obs)}</div>`:''}
+      ${m.motivoRevisita?`<div class="fp-meta" style="color:#B85A4A;">🔄 ${agEsc(m.motivoRevisita)}</div>`:''}
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-      <button onclick="concluirMedicao('${m.id}')"
-        style="background:#2E7D32;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;">
-        📋 Registrar Medição
-      </button>
-      <button onclick="solicitarRevisita('${m.id}')"
-        style="background:#B85A4A;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;">
-        🔄 Revisitar
-      </button>
-    </div>` : `
-    <!-- VIEW NORMAL -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
-      <div style="flex:1;">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
-          ${m.Horario?`<span style="background:${isHoje?'var(--gold)':'var(--cream-dark)'};color:${isHoje?'white':'var(--stone)'};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">🕐 ${m.Horario}</span>`:''}
-          <span style="font-size:11px;color:#888;">${m.Data?(()=>{
-            const dias=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-            const d=new Date(m.Data+'T12:00:00');
-            return dias[d.getDay()]+', '+m.Data.substring(8,10)+'/'+m.Data.substring(5,7)+'/'+m.Data.substring(0,4);
-          })():''}</span>
-          <span style="background:${statusCor}22;color:${statusCor};padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;">${statusLabel}</span>
-        </div>
-        <div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">${m.Cliente||'—'}</div>
-        <div style="font-size:13px;color:#555;">📍 ${enderecoComBairro||'Endereço não informado'}</div>
-        ${m.Obs?`<div style="font-size:12px;color:#888;margin-top:4px;">💬 ${m.Obs}</div>`:''}
-        ${m.motivoRevisita?`<div style="font-size:12px;color:#B85A4A;margin-top:4px;">🔄 ${m.motivoRevisita}</div>`:''}
-      </div>
-      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
-        ${enderecoCompleto ? `
-        <a href="${mapsUrl}" target="_blank"
-          style="background:#006382;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:6px;">
-          🗺️ Navegar
-        </a>` : ''}
-        ${m.Telefone ? `
-        <a href="https://wa.me/55${m.Telefone.replace(/\D/g,'')}" target="_blank"
-          style="background:#25D366;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:6px;">
-          📱 WhatsApp
-        </a>` : ''}
-        ${statusNorm==='pendente' || statusNorm==='revisitar' ? `
-        <button onclick="concluirMedicao('${m.id}')"
-          style="background:#2E7D32;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
-          📋 Registrar Medição
-        </button>
-        <button onclick="solicitarRevisita('${m.id}')"
-          style="background:#B85A4A;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
-          🔄 Revisitar
-        </button>` : ''}
-        ${!isPerfMedidor ? `
-        <button onclick="abrirModalMedicao('${m.id}')"
-          style="background:var(--cream-dark);border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:11px;">✏️</button>
-        <button onclick="excluirMedicao('${m.id}')"
-          style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;">🗑</button>` : ''}
-      </div>
-    </div>`}
-  </div>`;
-
-  return `
-  <div style="border:1px solid var(--cream-dark);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:${passada?'#fafafa':'white'};">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
-      <div style="flex:1;">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
-          ${isHoje&&m.Horario?`<span style="background:var(--gold);color:white;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">🕐 ${m.Horario}</span>`:''}
-          <span style="font-size:11px;color:#888;">${m.Data?m.Data.substring(8,10)+'/'+m.Data.substring(5,7)+'/'+m.Data.substring(0,4):''} ${m.Horario&&!isHoje?'• '+m.Horario:''}</span>
-          <span style="background:${statusCor}22;color:${statusCor};padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;">${statusLabel}</span>
-        </div>
-        <div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">${m.Cliente||'—'}</div>
-        <div style="font-size:13px;color:#555;margin-bottom:4px;">📍 ${enderecoComBairro||'Endereço não informado'}</div>
-        ${m.Obs?`<div style="font-size:12px;color:#888;font-style:italic;">💬 ${m.Obs}</div>`:''}
-        ${m.motivoRevisita?`<div style="font-size:12px;color:#B85A4A;margin-top:4px;">🔄 ${m.motivoRevisita}</div>`:''}
-      </div>
-      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
-        ${enderecoCompleto ? `
-        <a href="${mapsUrl}" target="_blank"
-          style="background:#006382;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:6px;">
-          🗺️ Navegar
-        </a>` : ''}
-        ${m.Telefone||m.telefone ? `
-        <a href="https://wa.me/55${(m.Telefone||m.telefone||'').replace(/\D/g,'')}" target="_blank"
-          style="background:#25D366;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:6px;">
-          📱 WhatsApp
-        </a>` : ''}
-        ${isPerfMedidor && statusNorm === 'pendente' ? `
-        <button onclick="concluirMedicao('${m.id}')"
-          style="background:#2E7D32;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
-          📋 Registrar Medição
-        </button>
-        <button onclick="solicitarRevisita('${m.id}')"
-          style="background:#B85A4A;color:white;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">
-          🔄 Revisitar
-        </button>` : ''}
-        ${!isPerfMedidor ? `
-        <button onclick="abrirModalMedicao('${m.id}')"
-          style="background:var(--cream-dark);border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:11px;">✏️</button>
-        <button onclick="excluirMedicao('${m.id}')"
-          style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;">🗑</button>` : ''}
-      </div>
+    <div class="ag-side">
+      <span class="fp-tag ${tagCls}">${label}</span>
+      <div class="ag-acts">${acoes.join('')}</div>
     </div>
   </div>`;
 }
@@ -11907,12 +11847,8 @@ function renderAgendaInstalacao() {
   if (!el) return;
 
   const podeEditar = currentUser === 'dono' || currentUser === 'comercial';
-  
-  // Pegar instalações extras cadastradas manualmente
-  const instalacoesExtras = JSON.parse(localStorage.getItem('mf_instalacoes') || '[]');
-  
-  // Combinar pedidos com instalação + instalações manuais
   const ocupados = getDiasOcupados();
+  const hojeStr = agHojeStr();
   const hoje = new Date();
   hoje.setHours(0,0,0,0);
 
@@ -11923,117 +11859,107 @@ function renderAgendaInstalacao() {
     d.setDate(d.getDate() + 1);
     if (isDiaUtil(d)) {
       const ds = dateToStr(d);
-      const pedido = ocupados.find(o => o.data === ds);
-      dias.push({ data: ds, pedido: pedido || null });
+      const doDia = ocupados.filter(o => o.data === ds);
+      dias.push({ data: ds, pedido: doDia[0] || null, qtd: doDia.length });
       count++;
     }
   }
 
   // Monta semanas posicionando cada dia na coluna correta (seg=0...sex=4)
-  // Agrupa por semana ISO (seg a sex)
-  const semanas = [];
   const porSemana = {};
   dias.forEach(function(dia) {
     const dd = new Date(dia.data + 'T12:00:00');
-    const dow = dd.getDay(); // 0=dom,1=seg...5=sex,6=sab
-    const col = dow - 1;    // seg=0...sex=4
+    const dow = dd.getDay();
+    const col = dow - 1;
     if (col < 0 || col > 4) return;
-    // Chave da semana = data da segunda-feira dessa semana
     const seg = new Date(dd);
     seg.setDate(dd.getDate() - (dow - 1));
     const chave = dateToStr(seg);
     if (!porSemana[chave]) porSemana[chave] = new Array(5).fill(null);
     porSemana[chave][col] = dia;
   });
-  // Ordena semanas por data
-  Object.keys(porSemana).sort().forEach(function(chave) {
-    semanas.push(porSemana[chave]);
-  });
-  console.log('dias:', dias.length, 'semanas:', semanas.length, 'porSemana keys:', Object.keys(porSemana));
+  const semanas = Object.keys(porSemana).sort().map(k => porSemana[k]);
 
   const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const diasSemana = ['Seg','Ter','Qua','Qui','Sex'];
-  const livres = dias.filter(d => !d.pedido).length;
-  const ocupadosCont = dias.filter(d => d.pedido).length;
+  const nomesDow = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const livres = dias.filter(x => !x.pedido).length;
+  const ocupadosCont = dias.filter(x => x.pedido).length;
+
+  const lista = ocupados.filter(o => o.data >= hojeStr).sort((a,b) => a.data.localeCompare(b.data));
+  const prox = lista[0];
+  const proxTxt = prox ? agDataCurta(prox.data) : '—';
+  const proxSub = prox ? agEsc(prox.cliente||prox.peca||'') : 'nada agendado';
+
+  const linhas = lista.map(o => {
+    const dd = new Date(o.data+'T12:00:00');
+    const diasR = Math.round((dd - new Date(hojeStr+'T12:00:00'))/86400000);
+    const cor = diasR<=3?'#B85A4A':diasR<=7?'#B8860B':'#4A7C59';
+    const tagCls = diasR<=3?'red':diasR<=7?'amber':'';
+    const quando = diasR===0?'Hoje':diasR===1?'Amanhã':diasR+' dias';
+    const idq = (o.id||'');
+    const acoes = [];
+    if (podeEditar) {
+      acoes.push('<button class="fp-link" onclick="definirResponsavelInstalacao(\''+idq+'\',\''+o.data+'\',\''+o.tipo+'\')">'+(o.responsavel?'Trocar responsável':'Definir responsável')+'</button>');
+      acoes.push('<button class="fp-link" onclick="abrirReagendarInstalacao(this)" data-id="'+idq+'" data-data="'+o.data+'" data-tipo="'+(o.tipo||'pedido')+'">Reagendar</button>');
+      if (o.tipo === 'pedido') acoes.push('<button class="fp-link" onclick="marcarComoSoEntrega(\''+o.id+'\')">É só entrega</button>');
+      if (o.tipo === 'manual') acoes.push('<button class="fp-link danger" onclick="excluirInstalacao(\''+o.id+'\')">Excluir</button>');
+    }
+    return '<div class="ag-row" style="--ag-cor:'+cor+';">'
+      + '<div><div class="ag-hora">'+dd.getDate()+'</div><div class="ag-data">'+meses[dd.getMonth()]+' · '+nomesDow[dd.getDay()]+'</div></div>'
+      + '<div style="min-width:0;">'
+      +   '<div class="fp-cli">'+agEsc(o.cliente||o.descricao||'—')+(o.id?' <span style="font-weight:600;color:#8a8577;font-size:12.5px;">· '+agEsc(o.id)+'</span>':'')+'</div>'
+      +   '<div class="fp-meta">'+agEsc(o.peca||o.tipo_servico||'')+(o.horario?' · '+agEsc(o.horario):'')+'</div>'
+      +   (o.endereco?'<div class="fp-meta">📍 '+agEsc(o.endereco)+'</div>':'')
+      +   (o.responsavel?'<div class="fp-meta" style="color:#1e5f74;font-weight:600;">👷 '+agEsc(o.responsavel)+'</div>':'')
+      + '</div>'
+      + '<div class="ag-side"><span class="fp-tag '+tagCls+'">'+quando+'</span><div class="ag-acts">'+acoes.join('')+'</div></div>'
+      + '</div>';
+  }).join('');
 
   el.innerHTML = `
   <div>
-    <div style="display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap;">
-      <div style="background:#E8F2EC;border-radius:10px;padding:10px 20px;text-align:center;">
-        <div style="font-size:22px;font-weight:700;color:#4A7C59;">${livres}</div>
-        <div style="font-size:11px;color:var(--stone-light);">Dias livres</div>
+    <div class="fp-card" style="margin-bottom:16px;">
+      <div class="fp-head">
+        <div><div class="fp-title">Instalações</div><div class="fp-sub">Próximos 45 dias úteis</div></div>
+        ${podeEditar ? `<button class="fp-btn ok" onclick="abrirModalAgendarInstalacao()">+ Agendar instalação</button>` : ''}
       </div>
-      <div style="background:#F2E8E8;border-radius:10px;padding:10px 20px;text-align:center;">
-        <div style="font-size:22px;font-weight:700;color:#B85A4A;">${ocupadosCont}</div>
-        <div style="font-size:11px;color:var(--stone-light);">Agendados</div>
+      <div class="fp-kpis">
+        <div class="fp-kpi"><div class="fp-kl">Dias livres</div><div class="fp-kv" style="color:#4A7C59;">${livres}</div><div class="fp-ks">disponíveis para agendar</div></div>
+        <div class="fp-kpi"><div class="fp-kl">Agendados</div><div class="fp-kv" style="color:#B85A4A;">${ocupadosCont}</div><div class="fp-ks">dias com instalação</div></div>
+        <div class="fp-kpi"><div class="fp-kl">Próxima</div><div class="fp-kv">${proxTxt}</div><div class="fp-ks">${proxSub}</div></div>
       </div>
     </div>
 
-    <div style="background:white;border-radius:16px;padding:20px;box-shadow:var(--shadow);margin-bottom:20px;">
-      <div class="agenda-cal-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">
-        ${diasSemana.map(d=>`<div style="text-align:center;font-size:11px;font-weight:700;color:var(--stone-light);text-transform:uppercase;">${d}</div>`).join('')}
+    <div class="fp-card" style="margin-bottom:16px;">
+      <div class="fp-head">
+        <div class="fp-title">Calendário</div>
+        <div class="ag-legend"><span><i style="background:#dfeadf;border:1px solid #c9dcc9;"></i>Livre</span><span><i style="background:#f3d9d4;border:1px solid #e3b9b1;"></i>Ocupado</span></div>
       </div>
-      ${semanas.map(sem => `
-      <div class="agenda-cal-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px;">
-        ${sem.map(dia => {
-          if (!dia) return '<div style="min-height:80px;"></div>'; // slot vazio
-          const dd = new Date(dia.data+'T12:00:00');
-          const isHoje = dateToStr(dd) === dateToStr(new Date());
-          const dow = dd.getDay();
-          const nomeDia = diasSemana[dow-1];
-          const bg = dia.pedido ? '#F2E8E8' : '#E8F2EC';
-          const cor = dia.pedido ? '#B85A4A' : '#4A7C59';
-          return `<div style="background:${bg};border-radius:10px;padding:10px;border:${isHoje?'2px solid var(--gold)':'1px solid transparent'};min-height:80px;">
-            <div style="font-size:10px;color:var(--stone-light);margin-bottom:2px;">${nomeDia}${isHoje?' • HOJE':''}</div>
-            <div style="font-size:16px;font-weight:700;color:${cor};margin-bottom:4px;">${dd.getDate()} ${meses[dd.getMonth()]}</div>
-            ${dia.pedido
-              ? `<div style="font-size:10px;font-weight:600;color:#B85A4A;">🔧 ${dia.pedido.cliente}</div><div style="font-size:10px;color:var(--stone-light);">${dia.pedido.peca||''}</div>`
-              : `<div style="font-size:10px;color:#4A7C59;">✓ Livre</div>`}
-          </div>`;
-        }).join('')}
-      </div>`).join('')}
+      <div class="ag-cal">
+        <div class="ag-grid5 agenda-cal-grid" style="margin-bottom:0;">
+          ${diasSemana.map(x=>`<div class="ag-dow">${x}</div>`).join('')}
+        </div>
+        ${semanas.map(sem => `
+        <div class="ag-grid5 agenda-cal-grid" style="margin-bottom:8px;">
+          ${sem.map(dia => {
+            if (!dia) return '<div></div>';
+            const dd = new Date(dia.data+'T12:00:00');
+            const isHj = dia.data === hojeStr;
+            return `<div class="ag-day ${dia.pedido?'oc':'lv'} ${isHj?'hj':''}">
+              <div><span class="ag-dn">${dd.getDate()}</span><span class="ag-dm">${meses[dd.getMonth()]}</span></div>
+              ${dia.pedido
+                ? `<div class="ag-who">${agEsc(dia.pedido.cliente||'—')}</div><div class="ag-what">${agEsc(dia.pedido.peca||'')}${dia.qtd>1?' · +'+(dia.qtd-1):''}</div>`
+                : `<div class="ag-free">Livre</div>`}
+            </div>`;
+          }).join('')}
+        </div>`).join('')}
+      </div>
     </div>
 
-    <div style="background:white;border-radius:16px;padding:20px;box-shadow:var(--shadow);">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div style="font-size:13px;font-weight:700;color:var(--stone);">🔧 Próximas Instalações</div>
-        ${podeEditar ? `<button onclick="abrirModalAgendarInstalacao()" 
-          style="background:var(--gold);color:white;border:none;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">
-          + Agendar Instalação
-        </button>` : ''}
-      </div>
-      ${(() => {
-        // getDiasOcupados já inclui instalações manuais — usar direto
-        const todas = ocupados
-          .filter(o => o.data >= dateToStr(hoje))
-          .sort((a,b) => a.data.localeCompare(b.data));
-
-        if (todas.length === 0) return '<div style="color:var(--stone-light);font-size:13px;">Nenhuma instalação agendada.</div>';
-
-        return todas.map(o => {
-          const dd = new Date(o.data+'T12:00:00');
-          const diasR = Math.ceil((dd-hoje)/(1000*60*60*24));
-          const dias = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-          const corDia = diasR<=3?'#B85A4A':diasR<=7?'#B8760A':'#4A7C59';
-          const btnResp = podeEditar ? '<button onclick="definirResponsavelInstalacao(\'' + (o.id||'') + '\',\'' + o.data + '\',\'' + o.tipo + '\')" style="background:#f0f0f0;border:1px solid #ddd;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;">👷 ' + (o.responsavel?'Trocar':'Definir') + ' responsável</button>' : '';
-        const btnExcluir = (podeEditar && o.tipo === 'manual') ? '<button onclick="excluirInstalacao(\'' + o.id + '\')" style="background:#FDEAEA;border:1px solid #B85A4A;color:#B85A4A;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;margin-left:4px;">🗑 Excluir</button>' : '';
-        const btnCorrigir = (podeEditar && o.tipo === 'pedido') ? '<button onclick="marcarComoSoEntrega(\'' + o.id + '\')" style="background:#FFF8E8;border:1px solid var(--gold);color:#8B6914;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;margin-left:4px;">🚚 É só entrega</button>' : '';
-        const btnReagendar = podeEditar ? '<button onclick="abrirReagendarInstalacao(this)" data-id="'+(o.id||'')+'" data-data="'+o.data+'" data-tipo="'+(o.tipo||'pedido')+'" style="background:#e8f4f7;border:1px solid #1e5f74;color:#1e5f74;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;margin-left:4px;">📅 Reagendar</button>' : '';
-        return '<div style="background:#f9f9f9;border-radius:10px;padding:12px 14px;margin-bottom:8px;border-left:3px solid '+corDia+';">'
-          + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">'
-          + '<div style="flex:1;">'
-          + '<div style="font-size:13px;font-weight:700;color:var(--stone);">'+(o.cliente||o.descricao||'—')+(o.id?' · '+o.id:'')+'</div>'
-          + '<div style="font-size:11px;color:#888;">'+(o.peca||o.tipo_servico||'')+(o.horario?' · '+o.horario:'')+'</div>'
-          + (o.endereco?'<div style="font-size:11px;color:#888;">📍 '+o.endereco+'</div>':'')
-          + (o.responsavel?'<div style="font-size:12px;color:#1e5f74;font-weight:600;margin-top:4px;">👷 '+o.responsavel+'</div>':'')
-          + '</div>'
-          + '<div style="text-align:right;flex-shrink:0;">'
-          + '<div style="font-size:14px;font-weight:700;color:'+corDia+';">'+dias[dd.getDay()]+', '+dd.getDate()+'/'+(dd.getMonth()+1)+'</div>'
-          + '<div style="font-size:11px;color:#888;">'+(diasR===0?'Hoje':diasR===1?'Amanhã':diasR+' dias')+'</div>'
-          + btnResp + btnReagendar + btnExcluir + btnCorrigir
-          + '</div></div></div>';
-        }).join('');
-      })()}
+    <div class="fp-card">
+      <div class="fp-head"><div><div class="fp-title">Próximas instalações</div><div class="fp-sub">${lista.length} agendada(s)</div></div></div>
+      ${lista.length ? linhas : '<div class="ag-none">Nenhuma instalação agendada.</div>'}
     </div>
   </div>`;
 }

@@ -1040,7 +1040,7 @@ function toggleFiltroAv() {
 <div class="notif" id="notif"></div>
 
 <script>
-const MF_VERSAO = '19/10 · v4.1 (equilíbrio, versões)'; // conferir em cada aparelho se já está com o arquivo novo
+const MF_VERSAO = '20/10 · v4.3 (financeiro)'; // conferir em cada aparelho se já está com o arquivo novo
 // Código curto deste aparelho/navegador (ex.: #A3F9). Fica guardado no navegador e aparece na lateral do
 // sistema, nos erros registrados e em cada orçamento gravado — assim sabemos QUAL aparelho fez o quê.
 function mfAparelho() {
@@ -2221,16 +2221,21 @@ function mfCustoChapaPedido(o, orcs) {
   itens.forEach(function (it) { if (it && it.calc && it.calc.custoMaterial != null) { chapa += parseFloat(it.calc.custoMaterial) || 0; achou = true; } });
   return { chapa: chapa, achou: achou };
 }
+// pedidos vendidos no período, pela data em que FECHARAM (só o original; a cópia "-P" de produção não conta)
+function mfVendidosPeriodo(ords, dtIni, dtFim) {
+  return (ords || []).filter(function (o) {
+    if (o.ref_fechado) return false;
+    if (!(o.num_pedido_fechado || IA_ETAPAS_VENDIDO.indexOf(o.stage) >= 0)) return false;
+    var dt = mfDataVendaPedido(o); return !!dt && dt >= dtIni && dt <= dtFim;
+  });
+}
 // vendas do período (pela data em que o pedido FECHOU) menos o custo da chapa, contra o custo da estrutura
 function mfPontoEquilibrio(ords, orcs, dtIni, dtFim) {
   var mensal = mfCustoEstruturaMensal();
   var a = String(dtIni || '').split('-'), b = String(dtFim || '').split('-');
   var meses = (a.length === 3 && b.length === 3) ? Math.max(1, (parseInt(b[0]) * 12 + parseInt(b[1])) - (parseInt(a[0]) * 12 + parseInt(a[1])) + 1) : 1;
   var estrutura = mensal * meses, vendas = 0, chapa = 0, qtd = 0, semChapa = 0;
-  (ords || []).forEach(function (o) {
-    if (o.ref_fechado) return;
-    if (!(o.num_pedido_fechado || IA_ETAPAS_VENDIDO.indexOf(o.stage) >= 0)) return;
-    var dt = mfDataVendaPedido(o); if (!dt || dt < dtIni || dt > dtFim) return;
+  mfVendidosPeriodo(ords, dtIni, dtFim).forEach(function (o) {
     var v = iaNum(o.valor), c = mfCustoChapaPedido(o, orcs);
     vendas += v; qtd++; if (c.achou) chapa += c.chapa; else semChapa++;
   });
@@ -5038,15 +5043,19 @@ function renderDashboard() {
     var dtIni = localStorage.getItem('dash_dt_ini') || (new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0')+'-01');
     var dtFim = localStorage.getItem('dash_dt_fim') || new Date().toISOString().substring(0,10);
 
+    // Orçamentos/pedidos CRIADOS no período (a cópia "-P" de produção não é um pedido novo: fica de fora)
     var pedidosPeriodo = orders.filter(function(o){
+      if (o.ref_fechado) return false;
       var dt = (o.created_at||'').substring(0,10);
       return dt >= dtIni && dt <= dtFim;
     });
-
-    var fechados = pedidosPeriodo.filter(function(o){ return o.stage==='fechado'||o.stage==='entregue'||o.stage==='pronto'; });
+    // Dos criados no período, quantos já fecharam (usado na taxa de conversão)
+    var fechadosDosCriados = pedidosPeriodo.filter(function(o){ return o.num_pedido_fechado || IA_ETAPAS_VENDIDO.indexOf(o.stage)>=0; });
+    // Vendas do período = pedidos que FECHARAM no período (pela data do fechamento) — mesma regra do ponto de equilíbrio
+    var fechados = mfVendidosPeriodo(orders, dtIni, dtFim);
     var totalFechado = fechados.reduce(function(s,o){return s+parseV(o);},0);
     var totalTodos   = pedidosPeriodo.reduce(function(s,o){return s+parseV(o);},0);
-    var taxaConv = pedidosPeriodo.length>0 ? (fechados.length/pedidosPeriodo.length*100) : 0;
+    var taxaConv = pedidosPeriodo.length>0 ? (fechadosDosCriados.length/pedidosPeriodo.length*100) : 0;
 
     // Ponto de equilíbrio — custo fixo mensal configurado
     var PE = mfPontoEquilibrio(orders, (typeof getOrcamentos==='function' ? getOrcamentos() : []), dtIni, dtFim);
@@ -5122,7 +5131,7 @@ function renderDashboard() {
       +'<div style="width:52px;height:52px;border-radius:14px;background:#e8f4f7;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;">📈</div>'
       +'<div><div style="font-size:12px;color:#888;margin-bottom:4px;">Taxa de Conversão</div>'
       +'<div style="font-size:36px;font-weight:900;color:#1e5f74;">'+taxaConv.toFixed(1)+'%</div>'
-      +'<div style="font-size:11px;color:#888;">'+fechados.length+' de '+pedidosPeriodo.length+' pedidos fechados</div>'
+      +'<div style="font-size:11px;color:#888;">'+fechadosDosCriados.length+' de '+pedidosPeriodo.length+' pedidos criados no período já fecharam</div>'
       +'</div></div>'
       +'<div style="background:white;border-radius:14px;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:20px;display:flex;align-items:center;gap:16px;">'
       +gaugeSVG
@@ -6862,19 +6871,27 @@ function selecionarTodosReceber() {
 }
 
 let _receberStatusFiltro = 'todos';
+let _receberBusca = '';      // o que foi digitado na busca do A Receber — fica mesmo depois de dar baixa
+let _crBusca = '';           // idem, na busca dos lançamentos manuais
+function _attrEsc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
 
 function filtrarReceberStatus(status, btn) {
   _receberStatusFiltro = status;
-  document.querySelectorAll('.chip-receber-status').forEach(b => {
-    b.classList.remove('chip-receber-ativo');
-    b.style.outline = 'none';
-  });
-  if (btn) { btn.classList.add('chip-receber-ativo'); btn.style.outline = '2px solid var(--gold)'; }
+  document.querySelectorAll('.chip-receber-status').forEach(b => b.classList.remove('chip-receber-ativo'));
+  if (btn) btn.classList.add('chip-receber-ativo');
+  aplicarFiltrosReceber();
+}
+
+function limparBuscaReceber() {
+  const i = document.getElementById('receber-busca'); if (i) i.value = '';
   aplicarFiltrosReceber();
 }
 
 function aplicarFiltrosReceber() {
-  const termo = (document.getElementById('receber-busca')?.value || '').toLowerCase().trim();
+  const inp = document.getElementById('receber-busca');
+  if (inp) _receberBusca = inp.value;
+  const termo = (inp ? inp.value : _receberBusca).toLowerCase().trim();
+  const bx = document.getElementById('receber-busca-limpar'); if (bx) bx.style.display = termo ? '' : 'none';
   const cards = document.querySelectorAll('.receber-card');
   let visiveis = 0;
   cards.forEach(card => {
@@ -9161,6 +9178,57 @@ async function salvarTransferencia() {
   renderFinanceiro();
 }
 
+(function () {
+  if (document.getElementById('fp-css')) return;
+  var st = document.createElement('style'); st.id = 'fp-css';
+  st.textContent = [
+    '.fp-card{background:#fff;border:1px solid #e6e1d6;border-radius:12px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.04)}',
+    '.fp-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 22px;border-bottom:1px solid #eee9de}',
+    '.fp-title{font-size:17px;font-weight:800;color:var(--stone);letter-spacing:-.2px}',
+    '.fp-sub{font-size:12px;color:#8a8577;margin-top:2px}',
+    '.fp-kpis{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid #eee9de}',
+    '.fp-kpi{padding:14px 22px;border-right:1px solid #eee9de}.fp-kpi:last-child{border-right:none}',
+    '.fp-kl{font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#8a8577}',
+    '.fp-kv{font-size:22px;font-weight:800;color:var(--stone);margin-top:3px;font-variant-numeric:tabular-nums;letter-spacing:-.3px}',
+    '.fp-ks{font-size:11.5px;color:#8a8577;margin-top:1px}',
+    '.fp-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 22px;background:#faf8f3;border-bottom:1px solid #eee9de}',
+    '.fp-search{position:relative;flex:1;min-width:230px}',
+    '.fp-search input{width:100%;box-sizing:border-box;padding:9px 34px 9px 12px;border:1px solid #d8d2c4;border-radius:8px;font-size:13px;background:#fff;outline:none}',
+    '.fp-search input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(184,150,90,.18)}',
+    '.fp-search button{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:#eee9de;color:#666;width:22px;height:22px;border-radius:50%;cursor:pointer;font-size:12px;line-height:1}',
+    '.chip-receber-status{background:#fff;color:#5b574c;border:1px solid #d8d2c4;padding:7px 14px;border-radius:999px;cursor:pointer;font-size:12px;font-weight:600}',
+    '.chip-receber-status:hover{border-color:var(--gold)}',
+    '.chip-receber-ativo{background:var(--stone);color:#fff;border-color:var(--stone)}',
+    '.fp-ghost{background:#fff;color:#4a463c;border:1px solid #d8d2c4;padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600}',
+    '.fp-ghost:hover{background:#f4f1e9}.fp-ghost.danger{color:#B85A4A;border-color:#ecc9c2}',
+    '.fp-alert{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 22px;background:#fff8ec;border-bottom:1px solid #f1e2c3;font-size:13px;color:#7a5a12;font-weight:600}',
+    '.fp-row{padding:16px 22px;border-bottom:1px solid #f0ece2;border-left:4px solid var(--fp-cor,#ccc)}',
+    '.fp-row:hover{background:#fcfbf8}',
+    '.fp-main{display:grid;grid-template-columns:22px minmax(190px,1.7fr) repeat(3,minmax(105px,1fr)) 92px;gap:12px;align-items:center}',
+    '.fp-cli{font-size:15px;font-weight:700;color:var(--stone);line-height:1.25}',
+    '.fp-meta{font-size:12px;color:#8a8577;margin-top:2px}',
+    '.fp-nl{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#9a9486}',
+    '.fp-nv{font-size:15px;font-weight:700;color:var(--stone);font-variant-numeric:tabular-nums;margin-top:2px}',
+    '.fp-badge{padding:4px 12px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap;justify-self:end;text-align:center}',
+    '.fp-bar{height:6px;background:#ebe7dd;border-radius:6px;overflow:hidden;margin:12px 0 0 34px}',
+    '.fp-bar>i{display:block;height:100%;border-radius:6px}',
+    '.fp-body{margin:12px 0 0 34px}',
+    '.fp-det{margin-top:10px;border:1px solid #e9e5da;border-radius:8px;background:#fcfbf8}',
+    '.fp-det>summary{cursor:pointer;padding:8px 12px;font-size:12px;font-weight:700;color:#5b574c;list-style:none}',
+    '.fp-det>summary::-webkit-details-marker{display:none}',
+    '.fp-det>summary:before{content:"▸ ";color:#9a9486}.fp-det[open]>summary:before{content:"▾ "}',
+    '.fp-det .fp-detin{padding:4px 12px 10px}',
+    '.fp-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:12px}',
+    '.fp-btn{background:#fff;color:#4a463c;border:1px solid #d8d2c4;padding:9px 14px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:700}',
+    '.fp-btn:hover{background:#f4f1e9}',
+    '.fp-btn.ok{background:#2E7D32;border-color:#2E7D32;color:#fff}.fp-btn.ok:hover{background:#27692b}',
+    '.fp-done{font-size:12.5px;color:#2E7D32;font-weight:700;text-align:right;margin-top:10px}',
+    '@media(max-width:820px){.fp-kpis{grid-template-columns:1fr}.fp-kpi{border-right:none;border-bottom:1px solid #eee9de}',
+    '.fp-main{grid-template-columns:22px 1fr 1fr}.fp-main .fp-cli-box{grid-column:2/4}.fp-bar,.fp-body{margin-left:0}.fp-row{padding:14px}}'
+  ].join('');
+  document.head.appendChild(st);
+})();
+
 async function renderFinanceiro() {
   const el = document.getElementById('financeiro-content');
   if (!el) return;
@@ -9577,41 +9645,45 @@ async function renderFinanceiro() {
 
     <!-- PAINEL A RECEBER -->
     <div id="fin-painel-receber" style="display:${abaFin==='receber'?'block':'none'}">
-      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
-        <div style="background:#8B6914;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-          <div style="font-size:14px;font-weight:700;">📋 A Receber — Pedidos Fechados</div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <div style="font-size:12px;opacity:.8;">${aReceber.length} pedido(s) · ${fmtV(totalAReceber)}</div>
-            <button onclick="selecionarTodosReceber()" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">☑ Selecionar</button>
-            <button onclick="removerSelecionadosReceber()" style="background:#FDEAEA;color:#B85A4A;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">🗑 Remover</button>
-          </div>
-        </div>
-        <div style="padding:10px 16px;border-bottom:1px solid var(--cream-dark);background:#fdfaf3;">
-          <input id="receber-busca" type="text" placeholder="🔍 Buscar por cliente ou nº do pedido..."
-            oninput="aplicarFiltrosReceber()"
-            style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;">
-        </div>
-        <div style="display:flex;gap:8px;padding:0 16px 10px;background:#fdfaf3;flex-wrap:wrap;">
-          <button onclick="filtrarReceberStatus('todos', this)" class="chip-receber-status chip-receber-ativo" style="background:var(--stone);color:white;border:none;padding:6px 14px;border-radius:16px;cursor:pointer;font-size:12px;font-weight:600;">Todos</button>
-          <button onclick="filtrarReceberStatus('devendo', this)" class="chip-receber-status" style="background:#fff3e0;color:#8B6914;border:1px solid #ffe0b2;padding:6px 14px;border-radius:16px;cursor:pointer;font-size:12px;font-weight:600;">🟠 Só quem ainda deve</button>
-          <button onclick="filtrarReceberStatus('recebido', this)" class="chip-receber-status" style="background:#f0fff4;color:#2E7D32;border:1px solid #c8ecd4;padding:6px 14px;border-radius:16px;cursor:pointer;font-size:12px;font-weight:600;">✅ Recebido</button>
-        </div>
+      <div class="fp-card">
         ${(() => {
-          let qtdDevendo = 0, totalFaltando = 0;
+          let totalPed = 0, totalRec = 0, qtdDevendo = 0, totalFaltando = 0;
           aReceber.forEach(o => {
             const v = parseValor(o);
             const bruto = transacoes.filter(t => t.pedido_id === o.id && t.tipo === 'entrada')
               .reduce((s,t) => s+(parseFloat(t.valor_bruto||t.valor)||0), 0);
             const saldo = v - bruto;
+            totalPed += v; totalRec += Math.min(v, bruto);
             if (saldo > 0.01) { qtdDevendo++; totalFaltando += saldo; }
           });
-          return qtdDevendo > 0 ? `
-          <div style="padding:12px 16px;background:#fff3e0;border-bottom:1px solid #ffe0b2;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-            <div style="font-size:13px;color:#8B6914;font-weight:700;">🟠 ${qtdDevendo} cliente(s) ainda devendo</div>
-            <div style="font-size:16px;font-weight:800;color:#B85A4A;">Total a receber: ${fmtV(totalFaltando)}</div>
-          </div>` : '';
+          const pctRec = totalPed > 0 ? Math.round(totalRec / totalPed * 100) : 0;
+          return `
+        <div class="fp-head">
+          <div>
+            <div class="fp-title">A Receber</div>
+            <div class="fp-sub">Pedidos fechados · ${aReceber.length} pedido(s)</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="fp-ghost" onclick="selecionarTodosReceber()">Selecionar</button>
+            <button class="fp-ghost danger" onclick="removerSelecionadosReceber()">Remover selecionados</button>
+          </div>
+        </div>
+        <div class="fp-kpis">
+          <div class="fp-kpi"><div class="fp-kl">Total dos pedidos</div><div class="fp-kv">${fmtV(totalPed)}</div><div class="fp-ks">${aReceber.length} pedido(s) fechado(s)</div></div>
+          <div class="fp-kpi"><div class="fp-kl">Já recebido</div><div class="fp-kv" style="color:#2E7D32;">${fmtV(totalRec)}</div><div class="fp-ks">${pctRec}% do total</div></div>
+          <div class="fp-kpi"><div class="fp-kl">A receber</div><div class="fp-kv" style="color:#B85A4A;">${fmtV(totalFaltando)}</div><div class="fp-ks">${qtdDevendo} cliente(s) ainda devendo</div></div>
+        </div>`;
         })()}
-        <div id="receber-nenhum-resultado" style="display:none;padding:30px;text-align:center;color:#888;">Nenhum pedido encontrado para esse filtro</div>
+        <div class="fp-toolbar">
+          <div class="fp-search">
+            <input id="receber-busca" type="text" placeholder="Buscar por cliente ou nº do pedido…" value="${_attrEsc(_receberBusca)}" oninput="aplicarFiltrosReceber()">
+            <button id="receber-busca-limpar" title="Limpar busca" onclick="limparBuscaReceber()" style="${_receberBusca?'':'display:none;'}">✕</button>
+          </div>
+          <button onclick="filtrarReceberStatus('todos', this)" class="chip-receber-status ${_receberStatusFiltro==='todos'?'chip-receber-ativo':''}">Todos</button>
+          <button onclick="filtrarReceberStatus('devendo', this)" class="chip-receber-status ${_receberStatusFiltro==='devendo'?'chip-receber-ativo':''}">Ainda devendo</button>
+          <button onclick="filtrarReceberStatus('recebido', this)" class="chip-receber-status ${_receberStatusFiltro==='recebido'?'chip-receber-ativo':''}">Recebido</button>
+        </div>
+        <div id="receber-nenhum-resultado" style="display:none;padding:30px;text-align:center;color:#8a8577;">Nenhum pedido encontrado para esse filtro</div>
         ${aReceber.length === 0 ? `<div style="padding:30px;text-align:center;color:#888;">Nenhum pedido aguardando recebimento</div>` :
         aReceber.map(o => {
           const valor = parseValor(o);
@@ -9624,118 +9696,85 @@ async function renderFinanceiro() {
           const statusCor = totalRecebido===0?'#8B6914':saldoPedido<=0?'#2E7D32':'#006382';
           const statusLabel = totalRecebido===0?'Pendente':saldoPedido<=0?'Recebido ✅':'Parcial';
           const statusKey = totalRecebido===0?'pendente':saldoPedido<=0?'recebido':'parcial';
+          const pct = valor>0 ? Math.min(100, Math.round(totalRecebido/valor*100)) : 0;
+          const corBarra = saldoPedido<=0 ? '#2E7D32' : '#006382';
+          const parcelasPrev = (o.parcelas_previstas||[]);
+          const hojeStr = new Date().toISOString().substring(0,10);
           return `
-          <div class="receber-card" data-busca="${(o.cliente||'').toLowerCase()} ${(o.id||'').toLowerCase()}" data-status="${statusKey}" style="padding:16px 20px;border-bottom:1px solid var(--cream-dark);">
-            <!-- Linha 1: Cliente + valor + status -->
-            <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
-              <input type="checkbox" class="chk-receber" data-id="${o.id}" style="width:18px;height:18px;cursor:pointer;accent-color:var(--gold);flex-shrink:0;margin-top:3px;">
-              <div style="flex:1;min-width:180px;">
-                <div style="font-size:15px;font-weight:700;color:var(--stone);">${o.cliente||'—'}</div>
-                <div style="font-size:12px;color:#888;margin-top:2px;">${o.id} · ${o.peca||''}</div>
-                ${o.vendedor?`<div style="font-size:11px;color:#006382;margin-top:2px;">👤 ${o.vendedor}</div>`:''}
+          <div class="receber-card fp-row" data-busca="${(o.cliente||'').toLowerCase()} ${(o.id||'').toLowerCase()}" data-status="${statusKey}" style="--fp-cor:${statusCor};">
+            <div class="fp-main">
+              <input type="checkbox" class="chk-receber" data-id="${o.id}" style="width:18px;height:18px;cursor:pointer;accent-color:var(--gold);">
+              <div class="fp-cli-box">
+                <div class="fp-cli">${o.cliente||'—'}</div>
+                <div class="fp-meta">${o.id}${o.peca?' · '+o.peca:''}${o.vendedor?' · '+o.vendedor:''}</div>
               </div>
-              <div style="text-align:right;">
-                <div style="font-size:11px;color:#888;">VALOR TOTAL</div>
-                <div style="font-size:18px;font-weight:800;color:var(--stone);">${fmtV(valor)}</div>
-              </div>
-              <span style="background:${statusCor}22;color:${statusCor};padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;align-self:center;">${statusLabel}</span>
+              <div><div class="fp-nl">Valor total</div><div class="fp-nv">${fmtV(valor)}</div></div>
+              <div><div class="fp-nl">Recebido</div><div class="fp-nv" style="color:#2E7D32;">${fmtV(totalRecebido)}</div></div>
+              <div><div class="fp-nl">Falta</div><div class="fp-nv" style="color:${saldoPedido>0.01?'#B85A4A':'#2E7D32'};">${fmtV(Math.max(0,saldoPedido))}</div></div>
+              <span class="fp-badge" style="background:${statusCor}1f;color:${statusCor};">${statusLabel}</span>
             </div>
+            ${valor>0?`<div class="fp-bar" title="${pct}% recebido"><i style="width:${pct}%;background:${corBarra};"></i></div>`:''}
 
-            <!-- Barra de progresso -->
-            ${valor>0?`
-            <div style="margin-bottom:10px;">
-              <div style="display:flex;justify-content:space-between;font-size:11px;color:#888;margin-bottom:4px;">
-                <span>Recebido: <b style="color:#2E7D32;">${fmtV(totalRecebido)}</b></span>
-                <span>Falta: <b style="color:${saldoPedido>0?'#B85A4A':'#2E7D32'};">${fmtV(Math.max(0,saldoPedido))}</b></span>
-              </div>
-              <div style="background:#e0e0e0;border-radius:20px;height:8px;overflow:hidden;">
-                <div style="width:${Math.min(100,Math.round(totalRecebido/valor*100))}%;height:100%;background:${saldoPedido<=0?'#2E7D32':'#006382'};border-radius:20px;transition:width .3s;"></div>
-              </div>
-              <div style="font-size:10px;color:#888;margin-top:2px;text-align:right;">${Math.min(100,Math.round(totalRecebido/valor*100))}% recebido</div>
+            ${parcelasPrev.length>0?`
+            <div class="fp-body">
+              <div class="fp-nl" style="margin-bottom:6px;">Condições de pagamento</div>
+              ${parcelasPrev.map((p,i) => {
+                const vencida = p.data && p.data < hojeStr && !p.pago;
+                const cor = p.pago ? '#2E7D32' : vencida ? '#B85A4A' : '#006382';
+                return `<div style="display:flex;align-items:center;gap:10px;padding:7px 12px;background:${p.pago?'#f0fff4':vencida?'#fff5f5':'#f8f7f3'};border-radius:8px;margin-bottom:4px;border-left:3px solid ${cor};">
+                  <div style="flex:1;"><span style="font-size:12.5px;font-weight:700;color:${cor};">${p.descricao||'Parcela '+(i+1)}</span>${p.data?`<span style="font-size:11px;color:#8a8577;margin-left:8px;">${fmtDt(p.data)}</span>`:''}${vencida?'<span style="font-size:11px;color:#B85A4A;margin-left:8px;font-weight:700;">vencida</span>':''}</div>
+                  <span style="font-size:13px;font-weight:700;color:${cor};font-variant-numeric:tabular-nums;">${fmtV(p.valor)}</span>
+                  ${!p.pago?`<button onclick="darBaixaParcela('${o.id}',${i},${p.valor},'${o.cliente}')" style="background:${cor};color:white;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11.5px;font-weight:700;">Dar baixa</button>`:`<span style="font-size:11.5px;color:#2E7D32;font-weight:700;">Pago</span>`}
+                </div>`;
+              }).join('')}
             </div>`:''}
 
-            <!-- Histórico de recebimentos -->
             ${recebimentos.length>0?`
-            <div style="background:#f5fdf5;border-radius:8px;padding:8px 12px;margin-bottom:10px;">
-              <div style="font-size:11px;font-weight:600;color:#2E7D32;margin-bottom:4px;">💰 Recebimentos registrados</div>
+            <details class="fp-det" style="margin-left:34px;">
+              <summary>Recebimentos registrados (${recebimentos.length}) · ${fmtV(totalBruto)}</summary>
+              <div class="fp-detin">
               ${recebimentos.map(r=>{
                 const bruto   = parseFloat(r.valor_bruto||r.valor)||0;
                 const liquido = parseFloat(r.valor)||0;
                 const taxa    = parseFloat(r.taxa_valor)||0;
                 const parc    = parseInt(r.parcelas)||1;
                 return `
-              <div style="border-bottom:1px solid #e8f5e8;padding:6px 0;margin-bottom:4px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;gap:8px;">
-                  <span>📅 ${fmtDt(r.data)} · <b>${r.forma||'—'}</b>${r.banco?' · '+r.banco:''}${parc>1?' · '+parc+'x':''}</span>
-                  <div style="display:flex;align-items:center;gap:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px;padding:7px 0;border-bottom:1px solid #eeeae0;">
+                  <span>${fmtDt(r.data)} · <b>${r.forma||'—'}</b>${r.banco?' · '+r.banco:''}${parc>1?' · '+parc+'x':''}</span>
+                  <div style="display:flex;align-items:center;gap:10px;">
                     <div style="text-align:right;">
-                      <div style="font-weight:700;color:#2E7D32;">+${fmtV(bruto)} bruto</div>
-                      ${taxa>0?`<div style="font-size:11px;color:#B85A4A;">- ${fmtV(taxa)} taxa → <b>${fmtV(liquido)} líquido</b></div>`:''}
+                      <div style="font-weight:700;color:#2E7D32;font-variant-numeric:tabular-nums;">+${fmtV(bruto)}</div>
+                      ${taxa>0?`<div style="font-size:11px;color:#B85A4A;">taxa − ${fmtV(taxa)} → líquido <b>${fmtV(liquido)}</b></div>`:''}
                     </div>
-                    <button onclick="editarTransacao('${r.id}')" title="Editar recebimento" style="background:#E8F4F7;border:none;color:#1e5f74;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:11px;flex-shrink:0;">✏️</button>
+                    <button onclick="editarTransacao('${r.id}')" title="Editar recebimento" style="background:#fff;border:1px solid #d8d2c4;color:#4a463c;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;">Editar</button>
                   </div>
-                </div>
-              </div>`; }).join('')}
-              ${totalTaxas>0?`<div style="font-size:11px;color:#B85A4A;text-align:right;padding-top:4px;border-top:1px solid #ddd;">Total em taxas: <b>- ${fmtV(totalTaxas)}</b> · Líquido na conta: <b style="color:#2E7D32;">${fmtV(totalLiquido)}</b></div>`:''}
-            </div>`:''}
+                </div>`; }).join('')}
+              ${totalTaxas>0?`<div style="font-size:11.5px;color:#B85A4A;text-align:right;padding-top:6px;">Total em taxas: <b>− ${fmtV(totalTaxas)}</b> · Líquido na conta: <b style="color:#2E7D32;">${fmtV(totalLiquido)}</b></div>`:''}
+              </div>
+            </details>`:''}
 
-            <!-- Parcelas previstas -->
-            ${(() => {
-              const parcelasPrev = (o.parcelas_previstas||[]);
-              if (parcelasPrev.length > 0) {
-                const hoje = new Date().toISOString().substring(0,10);
-                return `<div style="margin-bottom:10px;">
-                  <div style="font-size:11px;font-weight:700;color:#8B6914;margin-bottom:6px;">📅 CONDIÇÕES DE PAGAMENTO</div>
-                  ${parcelasPrev.map((p,i) => {
-                    const vencida = p.data && p.data < hoje && !p.pago;
-                    const cor = p.pago ? '#2E7D32' : vencida ? '#B85A4A' : '#006382';
-                    return `<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:${p.pago?'#f0fff4':vencida?'#fff5f5':'#f8f8f8'};border-radius:8px;margin-bottom:4px;border-left:3px solid ${cor};">
-                      <div style="flex:1;">
-                        <span style="font-size:12px;font-weight:700;color:${cor};">${p.descricao||'Parcela '+(i+1)}</span>
-                        ${p.data?`<span style="font-size:11px;color:#888;margin-left:6px;">📅 ${fmtDt(p.data)}</span>`:''}
-                      </div>
-                      <span style="font-size:13px;font-weight:700;color:${cor};">${fmtV(p.valor)}</span>
-                      ${!p.pago?`<button onclick="darBaixaParcela('${o.id}',${i},${p.valor},'${o.cliente}')"
-                        style="background:${cor};color:white;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;">
-                        💵 Baixa
-                      </button>`:`<span style="font-size:11px;color:#2E7D32;font-weight:600;">✅ Pago</span>`}
-                    </div>`;
-                  }).join('')}
-                </div>`;
-              }
-              return '';
-            })()}
-
-            <!-- Botões de ação -->
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              ${saldoPedido>0?`
-              <button onclick="abrirDefinirParcelas('${o.id}','${o.cliente}',${valor},${saldoPedido.toFixed(2)})"
-                style="background:#8B6914;color:white;border:none;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">
-                📅 Condição de Pagamento
-              </button>
-              <button onclick="abrirConfirmarRecebimento('${o.id}','${o.cliente}',${saldoPedido.toFixed(2)})"
-                style="flex:1;background:#2E7D32;color:white;border:none;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">
-                ✅ Registrar Recebimento
-              </button>`:`
-              <div style="text-align:center;font-size:13px;color:#2E7D32;font-weight:600;width:100%;">✅ Totalmente recebido!</div>`}
-            </div>
+            ${saldoPedido>0?`
+            <div class="fp-actions">
+              <button class="fp-btn" onclick="abrirDefinirParcelas('${o.id}','${o.cliente}',${valor},${saldoPedido.toFixed(2)})">Condição de pagamento</button>
+              <button class="fp-btn ok" onclick="abrirConfirmarRecebimento('${o.id}','${o.cliente}',${saldoPedido.toFixed(2)})">Registrar recebimento</button>
+            </div>`:`<div class="fp-done">✔ Totalmente recebido</div>`}
           </div>`;
         }).join('')}
       </div>
 
       <!-- CONTAS A RECEBER MANUAIS -->
-      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;margin-top:16px;">
-        <div style="background:#2E7D32;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
+      <div class="fp-card" style="margin-top:16px;">
+        <div class="fp-head">
           <div>
-            <div style="font-size:14px;font-weight:700;">💰 Contas a Receber — Lançamentos Manuais</div>
-            <div style="font-size:12px;opacity:.8;" id="cr-subtitulo">Carregando...</div>
+            <div class="fp-title">Contas a receber — lançamentos manuais</div>
+            <div class="fp-sub" id="cr-subtitulo">Carregando...</div>
           </div>
-          <button onclick="abrirModalContaReceber()" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Nova</button>
+          <button class="fp-btn ok" onclick="abrirModalContaReceber()">+ Nova</button>
         </div>
-        <div style="padding:10px 16px;border-bottom:1px solid #f0f0f0;">
-          <input id="cr-busca" type="text" placeholder="🔍 Buscar por cliente..." 
-            oninput="renderContasReceber(this.value)"
-            style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;">
+        <div class="fp-toolbar">
+          <div class="fp-search">
+            <input id="cr-busca" type="text" placeholder="Buscar por cliente…" value="${_attrEsc(_crBusca)}" oninput="renderContasReceber(this.value)">
+          </div>
         </div>
         <div id="cr-lista">Carregando...</div>
       </div>
@@ -9834,6 +9873,8 @@ async function renderFinanceiro() {
     </div>
 
   </div>`;
+
+  try { aplicarFiltrosReceber(); } catch (e) {}   // mantém a busca/filtro que estava aplicado
 
   // Re-aplica a aba ativa após renderizar para evitar painéis sobrepostos
   setTimeout(function() {
@@ -17275,7 +17316,11 @@ async function renderContasReceber(filtro) {
   if (!lista) return;
   const contas = await carregarContasReceber();
   // Aplica filtro de busca
-  const termoBusca = (filtro || document.getElementById('cr-busca')?.value || '').toLowerCase().trim();
+  const _crInp = document.getElementById('cr-busca');
+  if (_crInp && filtro === undefined) { /* redesenho: mantém o que está no campo */ }
+  else if (typeof filtro === 'string') _crBusca = filtro;
+  if (_crInp && typeof filtro !== 'string') _crBusca = _crInp.value;
+  const termoBusca = (typeof filtro === 'string' ? filtro : (_crInp ? _crInp.value : _crBusca) || '').toLowerCase().trim();
   const contasFiltradas = termoBusca ? contas.filter(c => (c.cliente||'').toLowerCase().includes(termoBusca) || (c.descricao||'').toLowerCase().includes(termoBusca)) : contas;
   const pendentes = contasFiltradas.filter(c => c.status === 'pendente');
   const totalPendente = pendentes.reduce((s,c) => s+(parseFloat(c.valor)||0), 0);

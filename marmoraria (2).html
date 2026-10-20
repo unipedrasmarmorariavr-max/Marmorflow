@@ -1040,7 +1040,7 @@ function toggleFiltroAv() {
 <div class="notif" id="notif"></div>
 
 <script>
-const MF_VERSAO = '20/10 · v4.3 (financeiro)'; // conferir em cada aparelho se já está com o arquivo novo
+const MF_VERSAO = '20/10 · v4.4 (financeiro completo)'; // conferir em cada aparelho se já está com o arquivo novo
 // Código curto deste aparelho/navegador (ex.: #A3F9). Fica guardado no navegador e aparece na lateral do
 // sistema, nos erros registrados e em cada orçamento gravado — assim sabemos QUAL aparelho fez o quê.
 function mfAparelho() {
@@ -9223,6 +9223,34 @@ async function salvarTransferencia() {
     '.fp-btn:hover{background:#f4f1e9}',
     '.fp-btn.ok{background:#2E7D32;border-color:#2E7D32;color:#fff}.fp-btn.ok:hover{background:#27692b}',
     '.fp-done{font-size:12.5px;color:#2E7D32;font-weight:700;text-align:right;margin-top:10px}',
+    '.fp-tabs{display:flex;gap:2px;border-bottom:1px solid #ddd6c6;overflow-x:auto;scrollbar-width:none}',
+    '.fp-tab{padding:11px 18px;border:none;background:transparent;color:#7a7568;font-size:13px;font-weight:600;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap;flex-shrink:0}',
+    '.fp-tab:hover{color:var(--stone)}.fp-tab-ativo{color:var(--stone);border-bottom-color:var(--gold);font-weight:800}',
+    '.fp-topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}',
+    '.fp-topbar .fp-actions-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}',
+    '.fp-btn.neg{background:#B85A4A;border-color:#B85A4A;color:#fff}.fp-btn.neg:hover{background:#a24e3f}',
+    '.fp-btn.sm{padding:6px 11px;font-size:12px}',
+    '.fp-alertbox{border:1px solid;border-radius:10px;padding:12px 16px;margin-bottom:10px;background:#fff}',
+    '.fp-alertbox.warn{border-color:#f0d9a3;background:#fffaf0}.fp-alertbox.danger{border-color:#efc4bd;background:#fff7f6}',
+    '.fp-alertbox .t{font-size:12.5px;font-weight:800;letter-spacing:.2px;margin-bottom:6px}',
+    '.fp-alertbox .r{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;font-size:13px;color:#4a463c;border-top:1px solid rgba(0,0,0,.05)}',
+    '.fp-kpis.auto{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}',
+    '.fp-kpis.auto .fp-kpi{border-bottom:none}',
+    '.fp-tx{display:grid;grid-template-columns:22px 34px minmax(160px,1fr) auto auto;gap:12px;align-items:center;padding:12px 22px;border-bottom:1px solid #f0ece2}',
+    '.fp-tx:hover{background:#fcfbf8}',
+    '.fp-ico{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800}',
+    '.fp-ico.in{background:#e8f4ea;color:#2E7D32}.fp-ico.out{background:#faebe8;color:#B85A4A}',
+    '.fp-desc{font-size:13.5px;font-weight:600;color:var(--stone)}',
+    '.fp-val{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}',
+    '.fp-link{background:#fff;border:1px solid #d8d2c4;color:#4a463c;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11.5px;font-weight:600}',
+    '.fp-link:hover{background:#f4f1e9}.fp-link.danger{color:#B85A4A;border-color:#ecc9c2}',
+    '.fp-tag{font-size:10.5px;font-weight:700;padding:2px 9px;border-radius:999px;background:#eeeae0;color:#6b665a;white-space:nowrap}',
+    '.fp-tag.red{background:#f6dcd7;color:#a24e3f}.fp-tag.amber{background:#fbeccb;color:#8a6410}.fp-tag.blue{background:#dcebf1;color:#1e5f74}',
+    '.fp-pay{display:grid;grid-template-columns:22px minmax(180px,1fr) auto auto;gap:12px;align-items:center;padding:14px 22px;border-bottom:1px solid #f0ece2;border-left:4px solid var(--fp-cor,transparent)}',
+    '.fp-pay:hover{background:#fcfbf8}',
+    '.fp-sec{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#8a8577;margin-bottom:8px}',
+    '.fp-pair{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f0ece2}.fp-pair:last-child{border-bottom:none}',
+    '@media(max-width:820px){.fp-tx{grid-template-columns:22px 34px 1fr}.fp-tx .fp-val,.fp-tx .fp-txbtn{grid-column:3}.fp-pay{grid-template-columns:22px 1fr}.fp-pay>*:nth-child(n+3){grid-column:2}}',
     '@media(max-width:820px){.fp-kpis{grid-template-columns:1fr}.fp-kpi{border-right:none;border-bottom:1px solid #eee9de}',
     '.fp-main{grid-template-columns:22px 1fr 1fr}.fp-main .fp-cli-box{grid-column:2/4}.fp-bar,.fp-body{margin-left:0}.fp-row{padding:14px}}'
   ].join('');
@@ -9513,32 +9541,31 @@ async function renderFinanceiro() {
   // Renderiza abas no container sticky (fora do scroll)
   const tabsContainer = document.getElementById('fin-tabs-sticky');
   if (tabsContainer) {
-    tabsContainer.innerHTML = `<div style="display:flex;gap:4px;border-bottom:2px solid var(--cream-dark);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
-      ${[['geral','📊 Lançamentos'],['receber','📋 A Receber'],['pagar','📤 Contas a Pagar'],['dividas','💳 Dívidas'],['comissoes','💼 Comissões']].map(([aba,label]) => `
-      <button onclick="finSwitchAba('${aba}')" id="fin-aba-${aba}"
-        style="padding:10px 16px;border:none;background:${abaFin===aba?'var(--gold)':'var(--cream-dark)'};color:${abaFin===aba?'white':'var(--stone)'};border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap;flex-shrink:0;">
-        ${label}
-      </button>`).join('')}
+    tabsContainer.innerHTML = `<div class="fp-tabs">
+      ${[['geral','Lançamentos'],['receber','A Receber'],['pagar','Contas a Pagar'],['dividas','Dívidas'],['comissoes','Comissões']].map(([aba,label]) => `
+      <button onclick="finSwitchAba('${aba}')" id="fin-aba-${aba}" class="fp-tab ${abaFin===aba?'fp-tab-ativo':''}">${label}</button>`).join('')}
     </div>`;
   }
 
   el.innerHTML = `
 
     <!-- AÇÕES RÁPIDAS -->
-    <div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-      <input type="month" class="form-input" style="padding:8px 12px;font-size:13px;width:160px;"
-        value="${filtroMes}" onchange="localStorage.setItem('fin_mes',this.value);renderFinanceiro()">
-      <button onclick="abrirModalTransacao('entrada')"
-        style="background:#2E7D32;color:white;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">+ Entrada</button>
-      <button onclick="abrirModalTransacao('saida')"
-        style="background:#B85A4A;color:white;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">+ Saída</button>
-      <button onclick="abrirModalContaPagar()"
-        style="background:#8B6914;color:white;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">+ Conta a Pagar</button>
-      <button onclick="abrirModalContaReceber()"
-        style="background:#2E7D32;color:white;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">+ A Receber</button>
-      <button onclick="abrirModalTransferencia()"
-        style="background:#555;color:white;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">🔄 Transferência</button>
+    <div class="fp-topbar">
+      <div>
+        <div class="fp-title" style="font-size:20px;">Financeiro</div>
+        <div class="fp-sub">Caixa, recebimentos e contas</div>
+      </div>
+      <div class="fp-actions-top">
+        <input type="month" class="form-input" style="padding:8px 12px;font-size:13px;width:150px;"
+          value="${filtroMes}" onchange="localStorage.setItem('fin_mes',this.value);renderFinanceiro()">
+        <button class="fp-btn ok" onclick="abrirModalTransacao('entrada')">+ Entrada</button>
+        <button class="fp-btn neg" onclick="abrirModalTransacao('saida')">+ Saída</button>
+        <button class="fp-btn" onclick="abrirModalContaPagar()">+ Conta a pagar</button>
+        <button class="fp-btn" onclick="abrirModalContaReceber()">+ A receber</button>
+        <button class="fp-btn" onclick="abrirModalTransferencia()">Transferência</button>
+      </div>
     </div>
+
 
     <!-- ALERTAS DE VENCIMENTO -->
     ${(() => {
@@ -9549,96 +9576,66 @@ async function renderFinanceiro() {
       if (!contasAlerta.length) return '';
       const venceHoje = contasAlerta.filter(c => c.vencimento === hojeAlerta);
       const vencidas = contasAlerta.filter(c => c.vencimento < hojeAlerta);
-      const fmtDtAlerta = d => d.substring(8,10)+'/'+d.substring(5,7)+'/'+d.substring(0,4);
-      let htmlAlerta = '<div style="margin-bottom:16px;">';
-      if (venceHoje.length) {
-        htmlAlerta += '<div style="background:#FFF3CD;border:1.5px solid #F0A500;border-radius:12px;padding:14px 18px;margin-bottom:10px;">';
-        htmlAlerta += '<div style="font-size:13px;font-weight:700;color:#8B6914;margin-bottom:8px;">⚠️ Vence Hoje ('+venceHoje.length+')</div>';
-        venceHoje.forEach(c => {
-          htmlAlerta += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #F0E0A0;">';
-          htmlAlerta += '<span style="font-size:13px;color:#555;">'+c.descricao+'</span>';
-          htmlAlerta += '<span style="font-size:13px;font-weight:700;color:#8B6914;">R$ '+parseFloat(c.valor).toLocaleString("pt-BR",{minimumFractionDigits:2})+'</span>';
-          htmlAlerta += '</div>';
-        });
-        htmlAlerta += '</div>';
-      }
-      if (vencidas.length) {
-        htmlAlerta += '<div style="background:#FFEBEE;border:1.5px solid #B85A4A;border-radius:12px;padding:14px 18px;">';
-        htmlAlerta += '<div style="font-size:13px;font-weight:700;color:#B85A4A;margin-bottom:8px;">🔴 Contas Vencidas ('+vencidas.length+')</div>';
-        vencidas.forEach(c => {
-          htmlAlerta += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #F5C0B8;">';
-          htmlAlerta += '<div><span style="font-size:13px;color:#555;">'+c.descricao+'</span>';
-          htmlAlerta += '<span style="font-size:11px;color:#B85A4A;margin-left:8px;">venceu '+fmtDtAlerta(c.vencimento)+'</span></div>';
-          htmlAlerta += '<span style="font-size:13px;font-weight:700;color:#B85A4A;">R$ '+parseFloat(c.valor).toLocaleString("pt-BR",{minimumFractionDigits:2})+'</span>';
-          htmlAlerta += '</div>';
-        });
-        htmlAlerta += '</div>';
-      }
-      htmlAlerta += '</div>';
-      return htmlAlerta;
+      const linha = (c, extra) => '<div class="r"><span>' + c.descricao + (extra || '') + '</span><b style="font-variant-numeric:tabular-nums;">' + fmtV(parseFloat(c.valor) || 0) + '</b></div>';
+      let h = '';
+      if (venceHoje.length) h += '<div class="fp-alertbox warn"><div class="t" style="color:#8a6410;">Vence hoje · ' + venceHoje.length + '</div>' + venceHoje.map(c => linha(c)).join('') + '</div>';
+      if (vencidas.length) h += '<div class="fp-alertbox danger"><div class="t" style="color:#a24e3f;">Contas vencidas · ' + vencidas.length + '</div>' + vencidas.map(c => linha(c, '<span style="font-size:11px;color:#a24e3f;margin-left:8px;">venceu em ' + fmtDt(c.vencimento) + '</span>')).join('') + '</div>';
+      return h;
     })()}
 
     <!-- PAINEL LANÇAMENTOS -->
     <div id="fin-painel-geral" style="display:${abaFin==='geral'?'block':'none'}">
 
       <!-- SALDO POR BANCO -->
-      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:16px 20px;margin-bottom:16px;border-left:5px solid ${saldoTotal>=0?'#2E7D32':'#B85A4A'};">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <div style="font-size:13px;font-weight:700;color:var(--stone);">🏦 Saldo por Banco</div>
-          <button onclick="abrirModalSaldoInicial()" style="background:#f0f0f0;color:#555;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">⚙️ Saldos iniciais</button>
+      <div class="fp-card" style="margin-bottom:16px;">
+        <div class="fp-head">
+          <div>
+            <div class="fp-title">Saldo por banco</div>
+            <div class="fp-sub">${!dataSaldoInicial ? '<span style="color:#B85A4A;">Saldos iniciais não definidos — clique em "Saldos iniciais"</span>' : 'Acumulado desde ' + fmtDt(dataSaldoInicial)}</div>
+          </div>
+          <button class="fp-ghost" onclick="abrirModalSaldoInicial()">Saldos iniciais</button>
         </div>
-        ${!dataSaldoInicial ? '<div style="font-size:11px;color:#B85A4A;margin-bottom:10px;">⚠️ Saldos iniciais não definidos — clique em ⚙️ Saldos iniciais</div>' : '<div style="font-size:11px;color:#888;margin-bottom:10px;">Desde ' + fmtDt(dataSaldoInicial) + '</div>'}
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;">
-          <div style="background:#f8f9fa;border-radius:10px;padding:12px;text-align:center;">
-            <div style="font-size:11px;color:#006382;font-weight:700;margin-bottom:4px;">🟢 Sicredi</div>
-            <div style="font-size:16px;font-weight:800;color:${saldoSicrediAtual>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoSicrediAtual)}</div>
-          </div>
-          <div style="background:#f8f9fa;border-radius:10px;padding:12px;text-align:center;">
-            <div style="font-size:11px;color:#1565C0;font-weight:700;margin-bottom:4px;">🔵 Caixa</div>
-            <div style="font-size:16px;font-weight:800;color:${saldoCaixaAtual>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoCaixaAtual)}</div>
-          </div>
-          <div style="background:#f8f9fa;border-radius:10px;padding:12px;text-align:center;">
-            <div style="font-size:11px;color:#2E7D32;font-weight:700;margin-bottom:4px;">💛 Mercado Pago</div>
-            <div style="font-size:16px;font-weight:800;color:${saldoMPAtual>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoMPAtual)}</div>
-          </div>
-          <div style="background:#f8f9fa;border-radius:10px;padding:12px;text-align:center;">
-            <div style="font-size:11px;color:#B8760A;font-weight:700;margin-bottom:4px;">💵 Dinheiro</div>
-            <div style="font-size:16px;font-weight:800;color:${saldoDinheiroAtual>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoDinheiroAtual)}</div>
-          </div>
-          <div style="background:${saldoTotal>=0?'#e8f5e9':'#ffebee'};border-radius:10px;padding:12px;text-align:center;border:2px solid ${saldoTotal>=0?'#2E7D32':'#B85A4A'};">
-            <div style="font-size:11px;color:#555;font-weight:700;margin-bottom:4px;">💰 TOTAL</div>
-            <div style="font-size:18px;font-weight:900;color:${saldoTotal>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoTotal)}</div>
-          </div>
+        <div class="fp-kpis auto">
+          <div class="fp-kpi"><div class="fp-kl">Sicredi</div><div class="fp-kv" style="font-size:19px;color:${saldoSicrediAtual>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoSicrediAtual)}</div></div>
+          <div class="fp-kpi"><div class="fp-kl">Caixa</div><div class="fp-kv" style="font-size:19px;color:${saldoCaixaAtual>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoCaixaAtual)}</div>${saldoCaixaAtual<0?'<div class="fp-ks" style="color:#B85A4A;">cheque especial</div>':''}</div>
+          <div class="fp-kpi"><div class="fp-kl">Mercado Pago</div><div class="fp-kv" style="font-size:19px;color:${saldoMPAtual>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoMPAtual)}</div></div>
+          <div class="fp-kpi"><div class="fp-kl">Dinheiro</div><div class="fp-kv" style="font-size:19px;color:${saldoDinheiroAtual>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoDinheiroAtual)}</div></div>
+          <div class="fp-kpi" style="background:${saldoTotal>=0?'#f3f9f4':'#fdf4f2'};"><div class="fp-kl">Total</div><div class="fp-kv" style="font-size:21px;color:${saldoTotal>=0?'#2E7D32':'#B85A4A'};">${fmtV(saldoTotal)}</div></div>
         </div>
       </div>
 
-      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
-        <div style="background:var(--stone);color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
-          <div style="font-size:14px;font-weight:700;">Lançamentos de ${filtroMes.substring(5,7)}/${filtroMes.substring(0,4)}</div>
-          <div style="display:flex;align-items:center;gap:12px;">
-            <div style="font-size:12px;opacity:.7;">${txMes.length} registros</div>
-            <button onclick="selecionarTodosLancamentos()" style="background:var(--cream-dark);color:var(--stone);border:none;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">☑ Selecionar Tudo</button>
-            <button onclick="apagarSelecionadosLancamentos()" style="background:#FDEAEA;color:#B85A4A;border:1px solid #B85A4A;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">🗑 Apagar Selecionados</button>
-            <button onclick="abrirModalLancamento()" style="background:var(--gold);color:white;border:none;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">+ Lançamento</button>
+      <div class="fp-card">
+        <div class="fp-head">
+          <div>
+            <div class="fp-title">Lançamentos de ${filtroMes.substring(5,7)}/${filtroMes.substring(0,4)}</div>
+            <div class="fp-sub">${txMes.length} registro(s)</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="fp-ghost" onclick="selecionarTodosLancamentos()">Selecionar tudo</button>
+            <button class="fp-ghost danger" onclick="apagarSelecionadosLancamentos()">Apagar selecionados</button>
+            <button class="fp-btn ok" onclick="abrirModalLancamento()">+ Lançamento</button>
           </div>
         </div>
-        ${txMes.length === 0 ? `<div style="padding:40px;text-align:center;color:#888;"><div style="font-size:32px;margin-bottom:12px;">📭</div><div>Nenhum lançamento neste mês</div></div>` :
+        <div class="fp-kpis">
+          <div class="fp-kpi"><div class="fp-kl">Entradas</div><div class="fp-kv" style="color:#2E7D32;">${fmtV(totalEntradas)}</div><div class="fp-ks">${entradas.length} lançamento(s)</div></div>
+          <div class="fp-kpi"><div class="fp-kl">Saídas</div><div class="fp-kv" style="color:#B85A4A;">${fmtV(totalSaidas)}</div><div class="fp-ks">${saidas.length} lançamento(s)</div></div>
+          <div class="fp-kpi"><div class="fp-kl">Resultado do mês</div><div class="fp-kv" style="color:${saldo>=0?'#2E7D32':'#B85A4A'};">${saldo>=0?'+':'−'}${fmtV(Math.abs(saldo))}</div><div class="fp-ks">${saldo>=0?'As entradas cobriram as saídas':'As saídas superaram as entradas'}</div></div>
+        </div>
+        ${txMes.length === 0 ? `<div style="padding:40px;text-align:center;color:#8a8577;">Nenhum lançamento neste mês</div>` :
         txMes.map(t => `
-        <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--cream-dark);">
+        <div class="fp-tx">
           <input type="checkbox" class="chk-lancamento" data-id="${t.id}" style="width:18px;height:18px;cursor:pointer;accent-color:var(--gold);">
-          <div style="width:36px;height:36px;border-radius:50%;background:${t.tipo==='entrada'?'#f0fff4':'#fff5f5'};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">
-            ${t.tipo==='entrada'?'↑':'↓'}
+          <div class="fp-ico ${t.tipo==='entrada'?'in':'out'}">${t.tipo==='entrada'?'↑':'↓'}</div>
+          <div>
+            <div class="fp-desc">${t.descricao||'—'}</div>
+            <div class="fp-meta">${fmtDt(t.data)}${t.banco?' · '+t.banco:''}${t.categoria?' · '+t.categoria:''}${t.forma?' · '+t.forma:''}</div>
+            ${(t.valor_bruto && Math.abs((parseFloat(t.valor_bruto)||0) - (parseFloat(t.valor)||0)) > 0.001) ? `<div style="font-size:11px;color:#B85A4A;margin-top:2px;">Bruto: ${fmtV(t.valor_bruto)} · Taxa: − ${fmtV((parseFloat(t.valor_bruto)||0)-(parseFloat(t.valor)||0))}</div>` : ''}
           </div>
-          <div style="flex:1;">
-            <div style="font-size:13px;font-weight:600;color:var(--stone);">${t.descricao||'—'}</div>
-            <div style="font-size:11px;color:#888;">${fmtDt(t.data)}${t.banco?' · '+t.banco:''}${t.categoria?' · '+t.categoria:''}${t.forma?' · '+t.forma:''}</div>
-            ${(t.valor_bruto && Math.abs((parseFloat(t.valor_bruto)||0) - (parseFloat(t.valor)||0)) > 0.001) ? `<div style="font-size:11px;color:#B85A4A;margin-top:2px;">Bruto: ${fmtV(t.valor_bruto)} · Taxa: - ${fmtV((parseFloat(t.valor_bruto)||0)-(parseFloat(t.valor)||0))}</div>` : ''}
+          <div class="fp-val" style="color:${t.tipo==='entrada'?'#2E7D32':'#B85A4A'};">${t.tipo==='entrada'?'+':'−'}${fmtV(t.valor)}</div>
+          <div class="fp-txbtn" style="display:flex;gap:6px;">
+            <button class="fp-link" onclick="editarTransacao('${t.id}')">Editar</button>
+            <button class="fp-link danger" onclick="deletarTransacao('${t.id}')">Excluir</button>
           </div>
-          <div style="font-size:15px;font-weight:700;color:${t.tipo==='entrada'?'#2E7D32':'#B85A4A'};">
-            ${t.tipo==='entrada'?'+':'-'}${fmtV(t.valor)}
-          </div>
-          <button onclick="editarTransacao('${t.id}')" style="background:#E8F4F7;border:none;color:#1e5f74;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">✏️</button>
-          <button onclick="deletarTransacao('${t.id}')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;">🗑</button>
         </div>`).join('')}
       </div>
     </div>
@@ -9782,81 +9779,70 @@ async function renderFinanceiro() {
 
     <!-- PAINEL CONTAS A PAGAR -->
     <div id="fin-painel-pagar" style="display:${abaFin==='pagar'?'block':'none'}">
-      ${contasVencidas.length>0?`
-      <div style="background:#fff5f5;border:2px solid #B85A4A;border-radius:12px;padding:14px 20px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">
-        <span style="font-size:24px;">⚠️</span>
-        <div>
-          <div style="font-weight:700;color:#B85A4A;">${contasVencidas.length} conta(s) vencida(s)!</div>
-          <div style="font-size:13px;color:#888;">Total: ${fmtV(contasVencidas.reduce((s,c)=>s+(parseFloat(c.valor)||0),0))}</div>
-        </div>
-      </div>`:''}
-
-      <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
-        <div style="background:#5B4A8B;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-          <div style="font-size:14px;font-weight:700;">📤 Contas a Pagar</div>
+      <div class="fp-card">
+        <div class="fp-head">
+          <div>
+            <div class="fp-title">Contas a pagar</div>
+            <div class="fp-sub">${contasPendentes.length} pendente(s)</div>
+          </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button onclick="selecionarTodasContas()" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">☑ Selecionar</button>
-            <button onclick="apagarSelecionadasContas()" style="background:#FDEAEA;color:#B85A4A;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">🗑 Apagar</button>
-            <button onclick="abrirModalContaPagar()" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Nova</button>
+            <button class="fp-ghost" onclick="selecionarTodasContas()">Selecionar</button>
+            <button class="fp-ghost danger" onclick="apagarSelecionadasContas()">Apagar selecionadas</button>
+            <button class="fp-btn ok" onclick="abrirModalContaPagar()">+ Nova</button>
           </div>
         </div>
-        ${contasPendentes.length===0?`<div style="padding:40px;text-align:center;color:#888;"><div style="font-size:32px;margin-bottom:12px;">✅</div><div>Nenhuma conta pendente!</div></div>`:
+        <div class="fp-kpis">
+          <div class="fp-kpi"><div class="fp-kl">Total pendente</div><div class="fp-kv">${fmtV(contasPendentes.reduce((s,c)=>s+(parseFloat(c.valor)||0),0))}</div><div class="fp-ks">${contasPendentes.length} conta(s)</div></div>
+          <div class="fp-kpi"><div class="fp-kl">A pagar em ${filtroMes.substring(5,7)}/${filtroMes.substring(0,4)}</div><div class="fp-kv">${fmtV(totalAPagar)}</div><div class="fp-ks">${contasMes.length} conta(s) no mês</div></div>
+          <div class="fp-kpi"><div class="fp-kl">Vencidas</div><div class="fp-kv" style="color:${contasVencidas.length>0?'#B85A4A':'#2E7D32'};">${fmtV(contasVencidas.reduce((s,c)=>s+(parseFloat(c.valor)||0),0))}</div><div class="fp-ks" style="color:${contasVencidas.length>0?'#B85A4A':'#8a8577'};">${contasVencidas.length>0?contasVencidas.length+' conta(s) vencida(s)':'nenhuma conta vencida'}</div></div>
+        </div>
+        ${contasPendentes.length===0?`<div style="padding:40px;text-align:center;color:#8a8577;">Nenhuma conta pendente</div>`:
         contasPendentes.slice().sort((a,b)=>(a.vencimento||'9999-99-99').localeCompare(b.vencimento||'9999-99-99')).map(c => {
           const hoje = new Date().toISOString().substring(0,10);
           const semData = !c.vencimento;
           const vencida = !semData && c.vencimento < hoje;
           const hojeVence = !semData && c.vencimento === hoje;
           const diasVenc = semData ? 0 : Math.ceil((new Date(c.vencimento+'T12:00:00')-new Date())/(1000*60*60*24));
+          const corLin = hojeVence ? '#F59E0B' : vencida ? '#B85A4A' : 'transparent';
           return `
-          <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--cream-dark);
-            background:${vencida?'#fff8f8':hojeVence?'#fffde7':'white'};
-            border-left:${hojeVence?'4px solid #F59E0B':vencida?'4px solid #B85A4A':'4px solid transparent'};">
-            <input type="checkbox" class="chk-conta" data-id="${c.id}" style="width:18px;height:18px;cursor:pointer;accent-color:var(--gold);flex-shrink:0;">
-            <div style="flex:1;">
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-                <span style="font-size:14px;font-weight:700;color:var(--stone);">${c.descricao}</span>
-                ${c.categoria?`<span style="font-size:11px;background:#f0f0f0;padding:2px 8px;border-radius:10px;color:#666;">${c.categoria}</span>`:''}
-                ${semData?`<span style="font-size:11px;background:#e0e0e0;color:#666;padding:2px 8px;border-radius:10px;font-weight:600;">📌 SEM DATA</span>`:''}
-                ${hojeVence?`<span style="font-size:11px;background:#F59E0B;color:white;padding:2px 8px;border-radius:10px;font-weight:700;animation:pulse 1s infinite;">🔔 VENCE HOJE</span>`:''}
-                ${vencida?`<span style="font-size:11px;background:#B85A4A;color:white;padding:2px 8px;border-radius:10px;font-weight:700;">⚠️ VENCIDA</span>`:''}
-                ${c.recorrencia==='mensal'?`<span style="font-size:10px;color:#006382;">🔄 Mensal</span>`:''}
-                ${c.recorrencia==='semanal'?`<span style="font-size:10px;color:#006382;">🔄 Semanal</span>`:''}
+          <div class="fp-pay" style="--fp-cor:${corLin};${vencida?'background:#fffafa;':hojeVence?'background:#fffdf5;':''}">
+            <input type="checkbox" class="chk-conta" data-id="${c.id}" style="width:18px;height:18px;cursor:pointer;accent-color:var(--gold);">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <span class="fp-desc" style="font-size:14px;font-weight:700;">${c.descricao}</span>
+                ${c.categoria?`<span class="fp-tag">${c.categoria}</span>`:''}
+                ${semData?`<span class="fp-tag">sem data</span>`:''}
+                ${hojeVence?`<span class="fp-tag amber">vence hoje</span>`:''}
+                ${vencida?`<span class="fp-tag red">vencida</span>`:''}
+                ${c.recorrencia==='mensal'?`<span class="fp-tag blue">mensal</span>`:''}
+                ${c.recorrencia==='semanal'?`<span class="fp-tag blue">semanal</span>`:''}
               </div>
-              <div style="font-size:12px;color:${vencida?'#B85A4A':hojeVence?'#8B6914':'#888'};">
-                ${semData?'📌 Sem data definida — só pra constar':vencida?'⚠️ Venceu em '+fmtDt(c.vencimento):hojeVence?'⏰ Vence hoje!':'📅 Vence em '+fmtDt(c.vencimento)}
-                ${!semData&&!vencida&&!hojeVence&&diasVenc>0?` (${diasVenc} dias)`:''}
-                ${c.banco?' · '+c.banco:''}
+              <div class="fp-meta" style="color:${vencida?'#B85A4A':hojeVence?'#8a6410':'#8a8577'};">
+                ${semData?'Sem data definida — só para constar':vencida?'Venceu em '+fmtDt(c.vencimento):hojeVence?'Vence hoje':'Vence em '+fmtDt(c.vencimento)}${!semData&&!vencida&&!hojeVence&&diasVenc>0?` (${diasVenc} dias)`:''}${c.banco?' · '+c.banco:''}
               </div>
-              ${c.obs?`<div style="font-size:11px;color:#888;margin-top:2px;">💬 ${c.obs}</div>`:''}
+              ${c.obs?`<div class="fp-meta">${c.obs}</div>`:''}
             </div>
-            <div style="text-align:right;min-width:100px;">
-              <div style="font-size:18px;font-weight:800;color:#B85A4A;">${fmtV(c.valor)}</div>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:6px;">
-              <button onclick="pagarConta('${c.id}')"
-                style="background:#2E7D32;color:white;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">✓ Pagar</button>
-              <div style="display:flex;gap:4px;">
-                <button onclick="abrirModalContaPagar('${c.id}')" style="background:var(--cream-dark);border:none;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:11px;flex:1;">✏️</button>
-                <button onclick="excluirContaPagar('${c.id}')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:11px;flex:1;">🗑</button>
-              </div>
+            <div class="fp-val" style="color:#B85A4A;font-size:17px;">${fmtV(c.valor)}</div>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <button class="fp-btn ok sm" onclick="pagarConta('${c.id}')">Pagar</button>
+              <button class="fp-link" onclick="abrirModalContaPagar('${c.id}')">Editar</button>
+              <button class="fp-link danger" onclick="excluirContaPagar('${c.id}')">Excluir</button>
             </div>
           </div>`;
         }).join('')}
       </div>
 
       ${contas.filter(c=>c.status==='pago'&&(c.dataPagamento||'').substring(0,7)===filtroMes).length>0?`
-      <details style="margin-top:16px;">
-        <summary style="cursor:pointer;padding:10px 16px;background:#f5f5f5;border-radius:8px;font-size:13px;font-weight:600;color:#888;">
-          Pagas em ${filtroMes.substring(5,7)}/${filtroMes.substring(0,4)} (${contas.filter(c=>c.status==='pago'&&(c.dataPagamento||'').substring(0,7)===filtroMes).length})
-        </summary>
-        <div style="background:white;border-radius:0 0 12px 12px;padding:8px;margin-top:2px;box-shadow:var(--shadow);">
+      <details class="fp-det" style="margin-top:16px;background:#fff;">
+        <summary>Pagas em ${filtroMes.substring(5,7)}/${filtroMes.substring(0,4)} (${contas.filter(c=>c.status==='pago'&&(c.dataPagamento||'').substring(0,7)===filtroMes).length})</summary>
+        <div class="fp-detin">
           ${contas.filter(c=>c.status==='pago'&&(c.dataPagamento||'').substring(0,7)===filtroMes).map(c=>`
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--cream-dark);">
+          <div class="fp-pair">
             <div>
-              <div style="font-size:13px;font-weight:600;color:#888;text-decoration:line-through;">${c.descricao}</div>
-              <div style="font-size:11px;color:#888;">Pago em ${fmtDt(c.dataPagamento)} · ${c.bancoPago||c.banco||''}</div>
+              <div class="fp-desc" style="color:#8a8577;text-decoration:line-through;">${c.descricao}</div>
+              <div class="fp-meta">Pago em ${fmtDt(c.dataPagamento)} · ${c.bancoPago||c.banco||''}</div>
             </div>
-            <div style="font-size:14px;font-weight:700;color:#2E7D32;">✅ ${fmtV(c.valorPago||c.valor)}</div>
+            <div class="fp-val" style="color:#2E7D32;">${fmtV(c.valorPago||c.valor)}</div>
           </div>`).join('')}
         </div>
       </details>`:''}
@@ -9883,7 +9869,7 @@ async function renderFinanceiro() {
       const panel = document.getElementById('fin-painel-'+a);
       const btn = document.getElementById('fin-aba-'+a);
       if (panel) panel.style.display = a===abaAtiva?'block':'none';
-      if (btn) { btn.style.background = a===abaAtiva?'var(--gold)':'var(--cream-dark)'; btn.style.color = a===abaAtiva?'white':'var(--stone)'; }
+      if (btn) btn.classList.toggle('fp-tab-ativo', a===abaAtiva);
     });
     if (abaAtiva === 'receber') renderContasReceber();
     if (abaAtiva === 'dividas') renderDividas();
@@ -9997,10 +9983,10 @@ async function renderDividas() {
   const hoje = new Date().toISOString().substring(0,10);
 
   if (!dividas.length) {
-    el.innerHTML = '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:40px;text-align:center;">'
-      + '<div style="font-size:40px;margin-bottom:12px;">✅</div>'
-      + '<div style="font-size:16px;font-weight:700;color:#2E7D32;margin-bottom:16px;">Nenhuma dívida cadastrada</div>'
-      + '<button onclick="abrirModalDivida()" style="background:var(--gold);color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">+ Cadastrar Dívida</button>'
+    el.innerHTML = '<div class="fp-card" style="padding:44px;text-align:center;">'
+      + '<div class="fp-title" style="margin-bottom:4px;">Nenhuma dívida cadastrada</div>'
+      + '<div class="fp-sub" style="margin-bottom:16px;">Financiamentos e dívidas aparecem aqui, agrupados por parcela.</div>'
+      + '<button class="fp-btn ok" onclick="abrirModalDivida()">+ Cadastrar dívida</button>'
       + '</div>';
     return;
   }
@@ -10016,14 +10002,14 @@ async function renderDividas() {
   });
 
   el.innerHTML = `
-    <!-- TOTAL EM ABERTO -->
-    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:20px;margin-bottom:16px;border-left:5px solid #B85A4A;">
-      <div style="font-size:11px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">💳 Total de Dívidas em Aberto</div>
-      <div style="font-size:28px;font-weight:900;color:#B85A4A;">${fmtV(totalAberto)}</div>
-    </div>
-
-    <!-- LISTA -->
-    <div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;">
+    <div class="fp-card">
+      <div class="fp-head">
+        <div><div class="fp-title">Dívidas</div><div class="fp-sub">${Object.keys(grupos).length} dívida(s) cadastrada(s)</div></div>
+        <button class="fp-btn ok" onclick="abrirModalDivida()">+ Nova dívida</button>
+      </div>
+      <div class="fp-kpis" style="grid-template-columns:1fr;">
+        <div class="fp-kpi"><div class="fp-kl">Total em aberto</div><div class="fp-kv" style="color:#B85A4A;font-size:26px;">${fmtV(totalAberto)}</div></div>
+      </div>
       ${Object.entries(grupos).map(([base, contas]) => {
         const pagas = contas.filter(c=>c.status==='pago').length;
         const total = contas.length;
@@ -10031,18 +10017,16 @@ async function renderDividas() {
         const proxVenc = contas.filter(c=>c.status!=='pago'&&c.vencimento).sort((a,b)=>a.vencimento.localeCompare(b.vencimento))[0];
         const vencida = proxVenc && proxVenc.vencimento < hoje;
         const quitada = valorAberto === 0;
-
-        return `<div style="padding:14px 20px;border-bottom:1px solid #f5f5f5;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-          <div>
-            <div style="font-size:14px;font-weight:700;color:#333;">${base}</div>
-            ${total>1?`<div style="font-size:11px;color:#888;">${pagas}/${total} parcelas pagas</div>`:''}
-            ${proxVenc?`<div style="font-size:11px;color:${vencida?'#B85A4A':'#888'};">📅 ${fmtDt(proxVenc.vencimento)}${vencida?' ⚠️':''}</div>`:''}
+        const pct = total > 0 ? Math.round(pagas / total * 100) : 0;
+        return `<div class="fp-row" style="--fp-cor:${quitada?'#2E7D32':vencida?'#B85A4A':'#d8d2c4'};display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+          <div style="min-width:200px;flex:1;">
+            <div class="fp-cli">${base}</div>
+            ${total>1?`<div class="fp-meta">${pagas} de ${total} parcelas pagas</div><div class="fp-bar" style="margin:8px 0 0;max-width:280px;"><i style="width:${pct}%;background:#2E7D32;"></i></div>`:''}
+            ${proxVenc?`<div class="fp-meta" style="color:${vencida?'#B85A4A':'#8a8577'};">Próximo vencimento: ${fmtDt(proxVenc.vencimento)}${vencida?' · vencida':''}</div>`:''}
           </div>
           <div style="text-align:right;">
-            ${quitada
-              ? `<div style="font-size:13px;font-weight:700;color:#2E7D32;">✅ Quitada</div>`
-              : `<div style="font-size:16px;font-weight:800;color:#B85A4A;">${fmtV(valorAberto)}</div>`
-            }
+            ${quitada ? `<span class="fp-badge" style="background:#e8f4ea;color:#2E7D32;">Quitada</span>`
+              : `<div class="fp-nl">Em aberto</div><div class="fp-nv" style="font-size:17px;color:#B85A4A;">${fmtV(valorAberto)}</div>`}
           </div>
         </div>`;
       }).join('')}
@@ -10056,10 +10040,6 @@ function renderRelatorioComissoes() {
   const cfg = getComissaoConfig();
   const parceiros = getParceiros();
   const origensExcluidas = cfg.origensExcluidas || ['arquiteto','construtora'];
-
-  // Filtro de mês
-  const hoje = new Date();
-  const mesAtual = hoje.toISOString().substring(0,7);
 
   const fmtV = v => 'R$ ' + (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
   const parseV = o => parseFloat((o.valor||'0').toString().replace(',','.').replace(/[^0-9.]/g,''))||0;
@@ -10079,11 +10059,11 @@ function renderRelatorioComissoes() {
   const mesesOrdenados = Object.keys(meses).sort().reverse().slice(0,6);
 
   if (mesesOrdenados.length === 0) {
-    el.innerHTML = '<div style="padding:40px;text-align:center;color:#888;">Nenhum pedido fechado encontrado.</div>';
+    el.innerHTML = '<div class="fp-card" style="padding:40px;text-align:center;color:#8a8577;">Nenhum pedido fechado encontrado.</div>';
     return;
   }
 
-  let html = '<div style="margin-bottom:16px;">';
+  let html = '';
 
   mesesOrdenados.forEach(mes => {
     const pedidosMes = meses[mes];
@@ -10105,7 +10085,6 @@ function renderRelatorioComissoes() {
     pedidosMes.forEach(o => {
       const origem = (o.origem||'').toLowerCase();
       const origemNome = o.origemNome || '';
-      // Verifica se é de algum parceiro cadastrado
       parceiros.forEach(p => {
         if (origemNome && origemNome.toLowerCase().includes(p.nome.toLowerCase()) ||
             origem.includes(p.tipo)) {
@@ -10117,65 +10096,48 @@ function renderRelatorioComissoes() {
       });
     });
 
-    // Monta HTML do mês
-    html += '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:16px;">'
-      + '<div style="background:var(--stone);color:white;padding:14px 20px;font-size:14px;font-weight:700;">'
-      + '💼 Comissões — ' + labelMes
+    const vendedoresList = Object.entries(vendedoresMap);
+    const parceirosList = Object.entries(parceirosMap);
+    let totalInterno = 0; vendedoresList.forEach(([nome, tv]) => { const cv = (cfg.vendedores||[]).find(v => v.nome === nome); totalInterno += tv * (cv?.percentual || 1) / 100; });
+    let totalParc = 0; parceirosList.forEach(([nome, info]) => { totalParc += info.total * info.percentual / 100; });
+
+    html += '<div class="fp-card" style="margin-bottom:16px;">'
+      + '<div class="fp-head"><div><div class="fp-title">Comissões — ' + labelMes.charAt(0).toUpperCase() + labelMes.slice(1) + '</div>'
+      + '<div class="fp-sub">' + pedidosMes.length + ' pedido(s) fechado(s)</div></div></div>'
+      + '<div class="fp-kpis" style="grid-template-columns:1fr 1fr;">'
+      + '<div class="fp-kpi"><div class="fp-kl">Vendedores internos</div><div class="fp-kv" style="color:#2E7D32;">' + fmtV(totalInterno) + '</div></div>'
+      + '<div class="fp-kpi"><div class="fp-kl">Parceiros externos</div><div class="fp-kv" style="color:#8B6914;">' + fmtV(totalParc) + '</div></div>'
       + '</div>';
 
-    // Vendedores internos
-    html += '<div style="padding:16px;border-bottom:1px solid var(--cream-dark);">'
-      + '<div style="font-size:12px;font-weight:700;color:var(--stone);text-transform:uppercase;margin-bottom:10px;">Vendedores Internos</div>';
-
-    const vendedoresList = Object.entries(vendedoresMap);
+    html += '<div style="padding:16px 22px;border-bottom:1px solid #eee9de;"><div class="fp-sec">Vendedores internos</div>';
     if (vendedoresList.length === 0) {
-      html += '<div style="font-size:13px;color:#888;">Nenhum pedido elegível para comissão neste mês.</div>';
+      html += '<div class="fp-meta">Nenhum pedido elegível para comissão neste mês.</div>';
     } else {
       vendedoresList.forEach(([nome, totalVendido]) => {
         const cfgVendedor = (cfg.vendedores||[]).find(v => v.nome === nome);
         const pct = cfgVendedor?.percentual || 1;
         const comissao = totalVendido * pct / 100;
-        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--cream-dark);">'
-          + '<div>'
-          + '<div style="font-size:13px;font-weight:700;color:var(--stone);">' + nome + '</div>'
-          + '<div style="font-size:11px;color:#888;">' + fmtV(totalVendido) + ' vendido × ' + pct + '%</div>'
-          + '</div>'
-          + '<div style="text-align:right;">'
-          + '<div style="font-size:15px;font-weight:800;color:#2E7D32;">' + fmtV(comissao) + '</div>'
-          + '<div style="font-size:10px;color:#888;">a pagar</div>'
-          + '</div>'
-          + '</div>';
+        html += '<div class="fp-pair"><div><div class="fp-desc">' + nome + '</div>'
+          + '<div class="fp-meta">' + fmtV(totalVendido) + ' vendido × ' + pct + '%</div></div>'
+          + '<div style="text-align:right;"><div class="fp-val" style="color:#2E7D32;">' + fmtV(comissao) + '</div><div class="fp-meta">a pagar</div></div></div>';
       });
     }
     html += '</div>';
 
-    // Parceiros externos
-    const parceirosList = Object.entries(parceirosMap);
-    html += '<div style="padding:16px;">'
-      + '<div style="font-size:12px;font-weight:700;color:var(--stone);text-transform:uppercase;margin-bottom:10px;">Parceiros Externos</div>';
-
+    html += '<div style="padding:16px 22px;"><div class="fp-sec">Parceiros externos</div>';
     if (parceirosList.length === 0) {
-      html += '<div style="font-size:13px;color:#888;">Nenhuma venda via parceiro cadastrado neste mês.</div>';
+      html += '<div class="fp-meta">Nenhuma venda via parceiro cadastrado neste mês.</div>';
     } else {
       parceirosList.forEach(([nome, info]) => {
         const comissao = info.total * info.percentual / 100;
-        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--cream-dark);">'
-          + '<div>'
-          + '<div style="font-size:13px;font-weight:700;color:var(--stone);">' + nome + '</div>'
-          + '<div style="font-size:11px;color:#888;">' + fmtV(info.total) + ' × ' + info.percentual + '%'
-          + (info.pix ? ' · PIX: ' + info.pix : '') + '</div>'
-          + '</div>'
-          + '<div style="text-align:right;">'
-          + '<div style="font-size:15px;font-weight:800;color:#8B6914;">' + fmtV(comissao) + '</div>'
-          + '<div style="font-size:10px;color:#888;">após receber do cliente</div>'
-          + '</div>'
-          + '</div>';
+        html += '<div class="fp-pair"><div><div class="fp-desc">' + nome + '</div>'
+          + '<div class="fp-meta">' + fmtV(info.total) + ' × ' + info.percentual + '%' + (info.pix ? ' · PIX: ' + info.pix : '') + '</div></div>'
+          + '<div style="text-align:right;"><div class="fp-val" style="color:#8B6914;">' + fmtV(comissao) + '</div><div class="fp-meta">após receber do cliente</div></div></div>';
       });
     }
     html += '</div></div>';
   });
 
-  html += '</div>';
   el.innerHTML = html;
 }
 
@@ -10184,7 +10146,7 @@ function finSwitchAba(aba) {
   ['geral','receber','pagar','dividas','analise','comissoes'].forEach(a => {
     const btn = document.getElementById('fin-aba-'+a);
     const panel = document.getElementById('fin-painel-'+a);
-    if (btn) { btn.style.background = a===aba?'var(--gold)':'var(--cream-dark)'; btn.style.color = a===aba?'white':'var(--stone)'; }
+    if (btn) btn.classList.toggle('fp-tab-ativo', a===aba);
     if (panel) panel.style.display = a===aba?'block':'none';
   });
   if (aba === 'receber') setTimeout(renderContasReceber, 200);

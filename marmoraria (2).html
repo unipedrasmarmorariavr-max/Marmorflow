@@ -1034,7 +1034,7 @@ function toggleFiltroAv() {
 <div class="notif" id="notif"></div>
 
 <script>
-const MF_VERSAO = '21/10 · v4.7 (telas profissionais)'; // conferir em cada aparelho se já está com o arquivo novo
+const MF_VERSAO = '23/10 · v5.0 (salvamento: chave de pedido duplicada)'; // conferir em cada aparelho se já está com o arquivo novo
 // Código curto deste aparelho/navegador (ex.: #A3F9). Fica guardado no navegador e aparece na lateral do
 // sistema, nos erros registrados e em cada orçamento gravado — assim sabemos QUAL aparelho fez o quê.
 function mfAparelho() {
@@ -11499,7 +11499,7 @@ async function concluirMedicao(id) {
 
   document.getElementById('detail-footer').innerHTML = `
     <button class="btn-secondary" onclick="closeModal('modal-detail')">Cancelar</button>
-    <button onclick="finalizarMedicao()" style="background:#2E7D32;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">
+    <button id="btn-finalizar-medicao" onclick="finalizarMedicao()" style="background:#2E7D32;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">
       ✅ Concluir e Enviar para Orçamento
     </button>`;
 
@@ -11791,7 +11791,20 @@ function coletarFotosMedicao(tipo) {
   return _fotosTemp[tipo] || [];
 }
 
+// Trava contra clique repetido: sem isso, cada toque no botão criava um pedido novo (duplicava no Kanban)
 async function finalizarMedicao() {
+  if (window._finalizandoMed) return;
+  window._finalizandoMed = true;
+  const btn = document.getElementById('btn-finalizar-medicao');
+  if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
+  try { await _finalizarMedicaoInterno(); }
+  finally {
+    window._finalizandoMed = false;
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+  }
+}
+
+async function _finalizarMedicaoInterno() {
   const medId = document.getElementById('med-concluir-id')?.value;
 
   // Coleta tipos selecionados
@@ -11826,14 +11839,30 @@ async function finalizarMedicao() {
 
   // Fotos já foram comprimidas ao adicionar via adicionarFotoMedicao — lê direto do _fotosTemp
   showLoading('Lendo fotos...');
+  let desfazerReserva = async function(){};
+  let pedidoCriado = false;
   try {
     sessionStorage.removeItem('mf_fotos_temp'); // limpa backup após uso
     const fotosCroqui = coletarFotosMedicao('croqui');
     const fotosLocal  = coletarFotosMedicao('local');
 
+    // Reserva a medição ANTES de criar o pedido: só quem conseguir marcar como concluída cria o pedido.
+    // Se outro toque/aparelho já concluiu, não cria de novo.
+    showLoading('Reservando medição...');
+    const statusAntes = m.Status || 'pendente';
+    const rs = await getSB().from('medicoes').update({ Status: 'concluido' })
+      .eq('id', medId).or('Status.is.null,Status.neq.concluido').select();
+    if (rs.error) { hideLoading(); showNotif('Erro: ' + rs.error.message, 'error'); return; }
+    if (!rs.data || !rs.data.length) {
+      hideLoading(); closeModal('modal-detail'); await renderAgendaMedicao();
+      showNotif('Esta medição já foi concluída — o pedido já foi criado.', 'error');
+      return;
+    }
+    desfazerReserva = async function(){ try { await getSB().from('medicoes').update({ Status: statusAntes }).eq('id', medId); } catch(e) {} };
+
     showLoading('Gerando ID...');
     const novoId = await nextId();
-    if (!novoId) { hideLoading(); alert('Não consegui falar com o servidor para gerar o número do pedido.\n\nA medição NÃO foi concluída. Confira a internet e tente de novo em instantes.'); return; }
+    if (!novoId) { hideLoading(); await desfazerReserva(); alert('Não consegui falar com o servidor para gerar o número do pedido.\n\nA medição NÃO foi concluída. Confira a internet e tente de novo em instantes.'); return; }
     showLoading('Salvando pedido...');
 
     const novoPedido = {
@@ -11857,11 +11886,13 @@ async function finalizarMedicao() {
     hideLoading();
 
     if (error) {
+      await desfazerReserva();
       showNotif('Erro ao criar pedido: ' + error.message, 'error');
       return;
     }
 
     if (data) {
+      pedidoCriado = true;
       orders.unshift(data);
       await getSB().from('medicoes').update({
         Status: 'concluido',
@@ -11874,6 +11905,7 @@ async function finalizarMedicao() {
     }
   } catch(e) {
     hideLoading();
+    if (!pedidoCriado) await desfazerReserva();
     showNotif('Erro: ' + e.message, 'error');
   }
 }
@@ -13076,6 +13108,7 @@ function _atualizarCacheLocal(orcs) {
 // (ao abrir ou ao gravar). Serve pra perceber quando OUTRO aparelho/pessoa salvou depois.
 let _orcVersaoBanco = null;
 let _orcConflitoDetectado = false; // a última tentativa de gravar foi barrada por conflito
+let _orcUltimoErro = '';        // motivo técnico da última falha de gravação (aparece no aviso)
 let _orcAutosavePausado = false;   // conflito não resolvido: o salvamento automático fica parado
 
 async function salvarOrcamento(orc, forcar) {
@@ -13107,20 +13140,51 @@ async function salvarOrcamento(orc, forcar) {
         return false;
       }
     }
-    const { error } = await getSB().from('orcamentos').upsert(row, { onConflict: 'id' });
+    // Grava e confere. Falha passageira (internet oscilando, banco lento) tenta de novo até 3 vezes
+    // antes de desistir — o alerta de "ERRO GRAVE" só aparece se as 3 tentativas falharem.
+    let error = null, conferido = null, errConf = null;
+    let chaveAjustada = false;
+    for (let tentativa = 1; tentativa <= 3; tentativa++) {
+      error = null; conferido = null; errConf = null;
+      try {
+        const r1 = await getSB().from('orcamentos').upsert(row, { onConflict: 'id' });
+        error = (r1 && r1.error) ? r1.error : null;
+        if (!error) {
+          // Confirmação extra: relê o registro pra garantir que realmente ficou gravado
+          // (não só que o upsert não retornou erro) — evita perda de dados silenciosa.
+          const r2 = await getSB().from('orcamentos').select('id,updated_at').eq('id', orc.id).maybeSingle();
+          conferido = r2 ? r2.data : null; errConf = (r2 && r2.error) ? r2.error : null;
+        }
+      } catch (eTent) { error = { message: (eTent && eTent.message) ? eTent.message : String(eTent) }; }
+      if (!error && !errConf && conferido) break;
+      // O banco só aceita UM orçamento por "chave de pedido". Se já existe uma linha antiga com a chave
+      // deste pedido (de outro registro), NÃO apagamos nem sobrescrevemos ela: este orçamento passa a
+      // usar uma chave própria (única) e grava normalmente. Nada se perde.
+      if (error && !chaveAjustada && (error.code === '23505' || /pedido_key/i.test(String(error.message || '')))) {
+        chaveAjustada = true;
+        const novaChave = 'ORC_' + (orc.pedidoId || '') + '_' + orc.id;
+        registrarErroSistema('conflito_chave', 'Chave de pedido já existia em outra linha — usando chave própria', 'pedido ' + orc.pedidoId + ' | chave: ' + novaChave);
+        row.pedido_key = novaChave;
+        try { row.dados = Object.assign({}, row.dados, { pedidoKey: novaChave }); } catch(eK) {}
+        orc.pedidoKey = novaChave;
+        tentativa--; // não conta como tentativa perdida
+        continue;
+      }
+      if (tentativa < 3) await new Promise(function(r){ setTimeout(r, tentativa * 1200); });
+    }
     if (error) {
-      console.error('Erro ao salvar orçamento:', error.message);
-      registrarErroSistema('salvar_orcamento', 'Falha ao gravar: ' + error.message, 'pedido ' + orc.pedidoId);
+      _orcUltimoErro = String(error.message || error) + (error.code ? ' (' + error.code + ')' : '');
+      console.error('Erro ao salvar orçamento:', _orcUltimoErro);
+      registrarErroSistema('salvar_orcamento', 'Falha ao gravar (3 tentativas): ' + _orcUltimoErro, 'pedido ' + orc.pedidoId);
       return false;
     }
-    // Confirmação extra: relê o registro pra garantir que realmente ficou gravado
-    // (não só que o upsert não retornou erro) — evita perda de dados silenciosa.
-    const { data: conferido, error: errConf } = await getSB().from('orcamentos').select('id,updated_at').eq('id', orc.id).maybeSingle();
     if (errConf || !conferido) {
+      _orcUltimoErro = 'gravou mas não conseguiu confirmar: ' + (errConf ? errConf.message : 'registro não encontrado');
       console.error('Falha ao confirmar gravação do orçamento após upsert:', errConf || 'registro não encontrado');
       registrarErroSistema('salvar_orcamento', 'Gravou mas não conseguiu confirmar', 'pedido ' + orc.pedidoId + ' | ' + (errConf ? errConf.message : 'registro não encontrado'));
       return false;
     }
+    _orcUltimoErro = '';
     if (ehOAberto) _orcVersaoBanco = conferido.updated_at;
     const orcs = getOrcamentos();
     const idx = orcs.findIndex(o => o.id === orc.id);
@@ -13129,6 +13193,7 @@ async function salvarOrcamento(orc, forcar) {
     return true;
   } catch(e) {
     console.error('Erro ao salvar orçamento:', e);
+    _orcUltimoErro = 'exceção: ' + (e && e.message ? e.message : e);
     registrarErroSistema('salvar_orcamento', 'Exceção ao salvar: ' + (e && e.message ? e.message : e), 'pedido ' + orc.pedidoId);
     return false;
   }
@@ -13679,7 +13744,7 @@ async function abrirTelaOrcamentoPedido(id) {
   // Garantir que cliente e chave sempre refletem o pedido atual
   orcamentoAtual.cliente = order.cliente || '';
   orcamentoAtual.pedidoId = idOrc;
-  orcamentoAtual.pedidoKey = orcKey;
+  if (!String(orcamentoAtual.pedidoKey || '').startsWith(orcKey)) orcamentoAtual.pedidoKey = orcKey; // mantém chave própria se já adotada
 
   // Resetar valorNegociado se não tem itens calculados
   const temItensCalculados = orcamentoAtual.itens?.some(it => it.calc?.precoFinal > 0);
@@ -14840,7 +14905,7 @@ async function salvarOrcamentoPedido(silencioso) {
     // tivesse dado tudo certo, e os itens/medidas preenchidos se perdem de verdade.
     console.error('FALHA AO SALVAR ORÇAMENTO NO BANCO — pedido:', orcamentoAtual.pedidoId);
     _orcMostrarStatus('⚠️ NÃO SALVO — verifique a internet. Seus dados estão guardados neste navegador.', '#FF8A80');
-    alert('❌ ERRO GRAVE: o orçamento NÃO foi salvo no banco de dados!\n\nNão saia desta tela. Tente clicar em Salvar novamente. Se o erro persistir, tire um print e avise antes de continuar — os dados preenchidos podem se perder.');
+    alert('❌ ERRO GRAVE: o orçamento NÃO foi salvo no banco de dados!\n\nNão saia desta tela. Tente clicar em Salvar novamente. Se o erro persistir, tire um print e avise antes de continuar — os dados preenchidos podem se perder.\n\nMotivo técnico (para o print): ' + (_orcUltimoErro || 'sem detalhe') + '\nO sistema já tentou 3 vezes.');
     return false;
   }
   _orcBaseline = _orcSnapshot(); // gravado com sucesso: este é o novo estado de referência

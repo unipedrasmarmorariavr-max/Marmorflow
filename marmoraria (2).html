@@ -1034,7 +1034,7 @@ function toggleFiltroAv() {
 <div class="notif" id="notif"></div>
 
 <script>
-const MF_VERSAO = '24/10 · v6.0 (encarregado organiza a produção)'; // conferir em cada aparelho se já está com o arquivo novo
+const MF_VERSAO = '24/10 · v6.1 (equipe: vários funcionários na obra)'; // conferir em cada aparelho se já está com o arquivo novo
 // Código curto deste aparelho/navegador (ex.: #A3F9). Fica guardado no navegador e aparece na lateral do
 // sistema, nos erros registrados e em cada orçamento gravado — assim sabemos QUAL aparelho fez o quê.
 function mfAparelho() {
@@ -1504,9 +1504,35 @@ function _meuNomeProd() {
 }
 function _ehGestorProd() { return currentUser === 'producao' || currentUser === 'dono'; }
 function _prevMsEtapa(order, tempos) { return (order && order.stage === 'corte') ? tempos.serrador : tempos.acabador; }
-function _prodIniciado(prod) { return !!(prod && prod.log && prod.log.length > 0); }
-function _prodPausado(prod) { return _prodIniciado(prod) && prod.log[prod.log.length-1].tipo === 'pausa'; }
-function _iconeProd(prod) { return !_prodIniciado(prod) ? '🕒' : (_prodPausado(prod) ? '⏸' : '▶'); }
+// Modelo: prod_status = { perfil, prevMs, designadoPor, equipe:[{nome, log:[...], concluido?}] }
+// (obras antigas tinham só nome+log: viram uma equipe de 1 pessoa ao ler)
+function _escH(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function _enc(n) { return encodeURIComponent(n == null ? '' : n); }
+function _dec(n) { try { return decodeURIComponent(n || ''); } catch(e) { return n || ''; } }
+function _normProd(p) {
+  if (!p || typeof p !== 'object') return p;
+  if (!Array.isArray(p.equipe)) {
+    p.equipe = p.nome ? [{ nome: p.nome, log: Array.isArray(p.log) ? p.log : [], historico_nomes: p.historico_nomes || [] }] : [];
+  }
+  return p;
+}
+function _espelhar(p) { // mantém nome/log do 1º membro por compatibilidade
+  p.nome = p.equipe.map(function(m){return m.nome;}).join(', ');
+  p.log = p.equipe.length ? p.equipe[0].log : [];
+  return p;
+}
+function _membro(p, nome) { return (p && p.equipe) ? (p.equipe.find(function(m){return m.nome === nome;}) || null) : null; }
+function _mIniciado(m) { return !!(m && m.log && m.log.length > 0); }
+function _mPausado(m) { return _mIniciado(m) && m.log[m.log.length-1].tipo === 'pausa'; }
+function _mConcluido(m) { return !!(m && m.concluido); }
+function _mRodando(m) { return _mIniciado(m) && !_mPausado(m) && !_mConcluido(m); }
+function _mTempo(m) { return calcTempoUtil((m && m.log) || []); }
+function _tempoTotal(p) { return (p && p.equipe ? p.equipe : []).reduce(function(a, m){ return a + _mTempo(m); }, 0); }
+function _prodIniciado(p) { return !!(p && p.equipe && p.equipe.some(_mIniciado)); }
+function _prodRodando(p) { return !!(p && p.equipe && p.equipe.some(_mRodando)); }
+function _prodPausado(p) { return _prodIniciado(p) && !_prodRodando(p); }
+function _iconeProd(p) { return !_prodIniciado(p) ? '🕒' : (_prodRodando(p) ? '▶' : '⏸'); }
+function _icoMembro(m) { return _mConcluido(m) ? '✔' : (!_mIniciado(m) ? '🕒' : (_mPausado(m) ? '⏸' : '▶')); }
 
 // ── ACABADORES ────────────────────────────────────────────────
 function getAcabadores() {
@@ -1626,7 +1652,8 @@ function getProdKey(orderId) {
   return 'mf_prod_' + orderId;
 }
 
-function getProdStatus(order) {
+function getProdStatus(order) { return _normProd(_getProdStatusRaw(order)); }
+function _getProdStatusRaw(order) {
   // Prioridade: campo prod_status do objeto order (vem do Supabase via loadOrders)
   if (order && order.prod_status) {
     try {
@@ -1644,6 +1671,7 @@ function getProdStatus(order) {
 }
 
 async function saveProdStatus(orderId, data) {
+  try { if (data && data.equipe) _espelhar(data); } catch(e) {}
   // Salva em memória imediatamente
   var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
   if (order) order.prod_status = data;
@@ -1704,84 +1732,90 @@ function renderProdBotoes(order, prod) {
     var meuNome = _meuNomeProd();
     var ehGestor = _ehGestorProd();
     var estagio = currentUser === 'serrador' ? 'corte' : 'acabamento';
-    // Só mostra botões de produção em corte e acabamento
     if (order.stage !== 'corte' && order.stage !== 'acabamento') return '';
     if (!ehGestor && order.stage !== estagio) return '';
 
     var html = '';
-    var tempos = getTemposPrevistosOrcamento(order.id);
+    var oid = order.id;
+    var tempos = getTemposPrevistosOrcamento(oid);
     var prevMs = _prevMsEtapa(order, tempos);
     var btnBase = 'width:100%;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;';
 
     // ── Sem ninguém ainda
-    if (!prod) {
+    if (!prod || !prod.equipe || !prod.equipe.length) {
       if (ehGestor) {
-        html += '<button onclick="prodAbrirDesignar(\''+order.id+'\',event)" style="'+btnBase+'background:#1e5f74;color:white;padding:10px;">👷 Designar funcionário</button>';
-        html += '<button onclick="prodPegar(\''+order.id+'\',event)" style="'+btnBase+'background:#f0f0f0;color:#555;border:1px solid #ddd;font-size:12px;font-weight:600;">✋ Eu mesmo faço</button>';
+        html += '<button onclick="prodAbrirDesignar(\''+oid+'\',event,\'novo\')" style="'+btnBase+'background:#1e5f74;color:white;padding:10px;">👷 Designar funcionário</button>';
+        html += '<button onclick="prodPegar(\''+oid+'\',event)" style="'+btnBase+'background:#f0f0f0;color:#555;border:1px solid #ddd;font-size:12px;font-weight:600;">✋ Eu mesmo faço</button>';
       } else {
         var prevStr = prevMs > 0 ? ' · previsto: '+fmtTempo(prevMs) : '';
-        html += '<button onclick="prodPegar(\''+order.id+'\',event)" style="width:100%;background:#1a2332;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">✋ Pegar esta obra'+prevStr+'</button>';
+        html += '<button onclick="prodPegar(\''+oid+'\',event)" style="width:100%;background:#1a2332;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">✋ Pegar esta obra'+prevStr+'</button>';
       }
       return html;
     }
 
-    // ── Já tem alguém
-    var iniciado = _prodIniciado(prod);
-    var isPausado = _prodPausado(prod);
-    var isMeu = prod.nome === meuNome || (currentUser === 'serrador' && prod.nome === 'Serrador');
-    var tempoMs = calcTempoUtil(prod.log || []);
-    var pct = prevMs > 0 ? Math.min(150, Math.round(tempoMs/prevMs*100)) : 0;
+    var membros = prod.equipe;
+    var total = _tempoTotal(prod);
+    var pct = prevMs > 0 ? Math.min(150, Math.round(total/prevMs*100)) : 0;
     var barColor = pct < 85 ? '#2E7D32' : pct < 100 ? '#F59E0B' : '#B85A4A';
+    var meu = _membro(prod, meuNome) || (currentUser === 'serrador' ? _membro(prod, 'Serrador') : null);
 
-    // O encarregado/dono já vê o resumo no cartão; os demais veem o quadro completo
-    if (!ehGestor) {
-      html += '<div style="background:'+(isMeu?'#e8f4f7':'#fff3e0')+';border-radius:8px;padding:10px 12px;margin-bottom:6px;">'
-        +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
-        +'<span style="font-size:18px;">'+_iconeProd(prod)+'</span>'
-        +'<div style="flex:1;min-width:0;">'
-        +'<div style="font-size:13px;font-weight:700;color:#1a2332;">'+prod.nome+'</div>'
-        +'<div style="display:flex;align-items:center;gap:6px;margin-top:3px;">'
-        +(prevMs>0?'<span style="font-size:12px;color:#888;">'+fmtTempo(prevMs)+'</span><span style="color:#ccc;">|</span>':'')
-        +'<span id="tempo-'+order.id+'" style="font-size:15px;font-weight:800;color:'+(isPausado?'#888':barColor)+';font-variant-numeric:tabular-nums;">'+fmtCronometro(tempoMs)+'</span>'
-        +(isPausado?'<span style="font-size:11px;color:#888;">pausado</span>':'')
-        +(!iniciado?'<span style="font-size:11px;color:#8a6d00;font-weight:600;">aguardando iniciar</span>':'')
-        +'</div></div>'
-        +(prevMs>0&&iniciado?'<div style="font-size:12px;font-weight:700;color:'+barColor+';">'+pct+'%</div>':'')
-        +'</div>'
-        +(prevMs>0&&iniciado?'<div style="background:#e0e0e0;border-radius:4px;height:4px;overflow:hidden;"><div style="background:'+barColor+';width:'+Math.min(100,pct)+'%;height:100%;border-radius:4px;"></div></div>':'')
-        +'</div>';
-    }
-
-    // ── Encarregado / Dono: organiza a produção
+    // ── Encarregado / Dono: organiza a equipe da obra
     if (ehGestor) {
-      if (!iniciado) {
-        html += '<div style="font-size:11px;color:#8a6d00;background:#FFF8E1;border-radius:6px;padding:6px 8px;margin-bottom:6px;">🕒 Designado para <b>'+prod.nome+'</b> — aguardando iniciar</div>';
-        html += '<button onclick="prodIniciar(\''+order.id+'\',event)" style="'+btnBase+'background:#2E7D32;color:white;">▶ Iniciar agora</button>';
-      } else if (isPausado) {
-        html += '<button onclick="prodRetomar(\''+order.id+'\',event)" style="'+btnBase+'background:#8B6914;color:white;">▶ Retomar</button>';
-      } else {
-        html += '<button onclick="prodPausar(\''+order.id+'\',event)" style="'+btnBase+'background:#555;color:white;">⏸ Pausar</button>';
-      }
-      html += '<div style="display:flex;gap:6px;margin-bottom:4px;">'
-        +'<button onclick="prodAbrirDesignar(\''+order.id+'\',event)" style="flex:1;background:#f0f0f0;color:#333;border:1px solid #ddd;border-radius:8px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;">🔄 Trocar funcionário</button>'
-        +'<button onclick="prodTirarDesignacao(\''+order.id+'\',event)" style="background:#fff0f0;color:#B85A4A;border:1px solid #f3cfcf;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:600;cursor:pointer;" title="Tirar designação">✕</button>'
-        +'</div>';
-      html += '<button onclick="prodConcluir(\''+order.id+'\',event)" style="'+btnBase+'background:#2E7D32;color:white;">'+(order.stage==='corte'?'✂️ Corte Concluído':'✅ Acabamento Concluído')+'</button>';
+      html += '<div style="margin-bottom:6px;">';
+      membros.forEach(function(m) {
+        var e = _enc(m.nome);
+        var acao = '';
+        if (_mConcluido(m)) acao = '<span style="font-size:11px;color:#2E7D32;font-weight:700;">concluído</span>';
+        else if (!_mIniciado(m)) acao = '<button onclick="prodIniciar(\''+oid+'\',event,\''+e+'\')" style="background:#2E7D32;color:white;border:none;border-radius:6px;padding:5px 9px;font-size:11.5px;font-weight:700;cursor:pointer;">▶ Iniciar</button>';
+        else if (_mPausado(m)) acao = '<button onclick="prodRetomar(\''+oid+'\',event,\''+e+'\')" style="background:#8B6914;color:white;border:none;border-radius:6px;padding:5px 9px;font-size:11.5px;font-weight:700;cursor:pointer;">▶ Retomar</button>';
+        else acao = '<button onclick="prodPausar(\''+oid+'\',event,\''+e+'\')" style="background:#555;color:white;border:none;border-radius:6px;padding:5px 9px;font-size:11.5px;font-weight:700;cursor:pointer;">⏸ Pausar</button>';
+        html += '<div style="display:flex;align-items:center;gap:6px;background:#f4f8fa;border-radius:8px;padding:6px 8px;margin-bottom:4px;">'
+          +'<span>'+_icoMembro(m)+'</span>'
+          +'<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:700;color:#1a2332;">'+_escH(m.nome)+'</div>'
+          +'<div style="font-size:11px;color:#888;font-variant-numeric:tabular-nums;">'+(_mIniciado(m)?'⏱ <span data-mtempo="'+oid+'|'+e+'">'+fmtCronometro(_mTempo(m))+'</span>':'aguardando')+'</div></div>'
+          +acao
+          +(_mConcluido(m) ? '' : '<button onclick="prodAbrirDesignar(\''+oid+'\',event,\'trocar\',\''+e+'\')" title="Trocar por outro funcionário" style="background:#f0f0f0;border:1px solid #ddd;border-radius:6px;padding:4px 7px;font-size:12px;cursor:pointer;">🔄</button>')
+          +'<button onclick="prodRemoverMembro(\''+oid+'\',event,\''+e+'\')" title="Tirar da obra" style="background:#fff0f0;color:#B85A4A;border:1px solid #f3cfcf;border-radius:6px;padding:4px 7px;font-size:12px;cursor:pointer;">✕</button>'
+          +'</div>';
+      });
+      html += '</div>';
+      html += '<button onclick="prodAbrirDesignar(\''+oid+'\',event,\'adicionar\')" style="'+btnBase+'background:#e8f4f7;color:#1e5f74;border:1px dashed #1e5f74;font-size:12px;">＋ Adicionar funcionário</button>';
+      html += '<button onclick="prodConcluirEtapa(\''+oid+'\',event)" style="'+btnBase+'background:#2E7D32;color:white;">'+(order.stage==='corte'?'✂️ Corte Concluído':'✅ Acabamento Concluído')+(membros.length>1?' (todos)':'')+'</button>';
       return html;
     }
 
-    // ── Serrador / Acabador
-    if (isMeu) {
-      if (!iniciado) {
-        html += '<button onclick="prodIniciar(\''+order.id+'\',event)" style="'+btnBase+'background:#2E7D32;color:white;padding:11px;">▶ Iniciar</button>';
+    // ── Serrador / Acabador: quadro da equipe + a parte dele
+    html += '<div style="background:'+(meu?'#e8f4f7':'#fff3e0')+';border-radius:8px;padding:10px 12px;margin-bottom:6px;">';
+    membros.forEach(function(m) {
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'
+        +'<span style="font-size:15px;">'+_icoMembro(m)+'</span>'
+        +'<span style="flex:1;font-size:13px;font-weight:700;color:#1a2332;">'+_escH(m.nome)+(m === meu ? ' (você)' : '')+'</span>'
+        +'<span style="font-size:12px;color:#666;font-variant-numeric:tabular-nums;">'+(_mIniciado(m)?'<span data-mtempo="'+oid+'|'+_enc(m.nome)+'">'+fmtCronometro(_mTempo(m))+'</span>':'—')+'</span></div>';
+    });
+    html += '<div style="display:flex;align-items:center;gap:6px;border-top:1px solid rgba(0,0,0,.08);padding-top:6px;margin-top:4px;">'
+      +'<span style="font-size:11px;color:#888;">'+(membros.length>1?'Total da obra':'Tempo')+'</span>'
+      +(prevMs>0?'<span style="font-size:12px;color:#888;">· previsto '+fmtTempo(prevMs)+'</span>':'')
+      +'<span id="tempo-'+oid+'" style="margin-left:auto;font-size:15px;font-weight:800;color:'+barColor+';font-variant-numeric:tabular-nums;">'+fmtCronometro(total)+'</span>'
+      +(prevMs>0&&_prodIniciado(prod)?'<span style="font-size:12px;font-weight:700;color:'+barColor+';">'+pct+'%</span>':'')
+      +'</div>'
+      +(prevMs>0&&_prodIniciado(prod)?'<div style="background:#e0e0e0;border-radius:4px;height:4px;overflow:hidden;margin-top:6px;"><div style="background:'+barColor+';width:'+Math.min(100,pct)+'%;height:100%;border-radius:4px;"></div></div>':'')
+      +'</div>';
+
+    if (meu) {
+      var outrosPend = membros.some(function(m){ return m !== meu && !_mConcluido(m); });
+      if (_mConcluido(meu)) {
+        html += '<div style="font-size:12px;color:#2E7D32;background:#EAF5EA;border-radius:8px;padding:8px 10px;margin-bottom:4px;font-weight:600;">✔ Você concluiu sua parte — aguardando os demais</div>';
+      } else if (!_mIniciado(meu)) {
+        html += '<button onclick="prodIniciar(\''+oid+'\',event)" style="'+btnBase+'background:#2E7D32;color:white;padding:11px;">▶ Iniciar</button>';
       } else {
         if (currentUser === 'acabador') {
-          var outrosNomes = getAcabadores().filter(function(n){return n !== prod.nome;});
+          var outrosNomes = getAcabadores().filter(function(n){ return !_membro(prod, n); });
           if (outrosNomes.length > 0) {
-            html += '<button onclick="prodPassarPara(\''+order.id+'\',event)" style="width:100%;background:#f0f0f0;color:#555;border:1px solid #ddd;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:4px;">🔄 Passar para outro acabador</button>';
+            html += '<button onclick="prodPassarPara(\''+oid+'\',event)" style="width:100%;background:#f0f0f0;color:#555;border:1px solid #ddd;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:4px;">🔄 Passar para outro acabador</button>';
           }
         }
-        html += '<button onclick="prodConcluir(\''+order.id+'\',event)" style="'+btnBase+'background:#2E7D32;color:white;">'+(currentUser==='serrador'?'✂️ Corte Concluído':'✅ Acabamento Concluído')+'</button>';
+        var rotulo = outrosPend ? '✅ Concluir minha parte' : (currentUser === 'serrador' ? '✂️ Corte Concluído' : '✅ Acabamento Concluído');
+        html += '<button onclick="prodConcluir(\''+oid+'\',event)" style="'+btnBase+'background:#2E7D32;color:white;">'+rotulo+'</button>';
       }
     }
     return html;
@@ -1799,24 +1833,21 @@ function iniciarTimerProd() {
       var orderId = el.id.replace('tempo-','');
       var orderAtual = orders ? orders.find(function(o){return o.id===orderId;}) : null;
       var prod = orderAtual ? getProdStatus(orderAtual) : null;
-      if (!prod || !prod.log) return;
-      var isPausado = prod.log[prod.log.length-1] && prod.log[prod.log.length-1].tipo === 'pausa';
-      if (isPausado) return;
-      var ms = calcTempoUtil(prod.log);
-      var tempos = getTemposPrevistosOrcamento(orderId);
-      var prevMs = _prevMsEtapa(orderAtual, tempos);
+      if (!prod || !_prodRodando(prod)) return;
+      var ms = _tempoTotal(prod);
+      var prevMs = _prevMsEtapa(orderAtual, getTemposPrevistosOrcamento(orderId));
       var pct = prevMs > 0 ? Math.min(150, Math.round(ms/prevMs*100)) : 0;
-      var barColor = pct < 85 ? '#2E7D32' : pct < 100 ? '#F59E0B' : '#B85A4A';
-      el.textContent = fmtCronometro(ms);
-      el.style.color = barColor;
+      el.textContent = (el.getAttribute('data-prefixo') || '') + fmtCronometro(ms);
+      if (!el.hasAttribute('data-semcor')) el.style.color = pct < 85 ? '#2E7D32' : pct < 100 ? '#F59E0B' : '#B85A4A';
     });
-    // Painel da equipe (encarregado/dono): cronômetros ao vivo
-    document.querySelectorAll('[data-eq-tempo]').forEach(function(el) {
-      var oid = el.getAttribute('data-eq-tempo');
-      var ord = orders ? orders.find(function(o){return o.id===oid;}) : null;
+    // tempo de cada funcionário
+    document.querySelectorAll('[data-mtempo]').forEach(function(el) {
+      var partes = (el.getAttribute('data-mtempo') || '').split('|');
+      var ord = orders ? orders.find(function(o){return o.id===partes[0];}) : null;
       var pr = ord ? getProdStatus(ord) : null;
-      if (!pr || !pr.log || !pr.log.length || _prodPausado(pr)) return;
-      el.textContent = fmtCronometro(calcTempoUtil(pr.log));
+      var m = pr ? _membro(pr, _dec(partes[1])) : null;
+      if (!m || !_mRodando(m)) return;
+      el.textContent = fmtCronometro(_mTempo(m));
     });
   }, 1000);
 }
@@ -1824,58 +1855,36 @@ function iniciarTimerProd() {
 
 function prodPassarPara(orderId, e) {
   if (e) e.stopPropagation();
-  var prod = getProdStatus({id: orderId});
+  var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+  var prod = order ? getProdStatus(order) : null;
   if (!prod) return;
-
   var meuNome = getNomeAcabador();
-  var outros = getAcabadores().filter(function(n){return n !== meuNome;});
-  if (!outros.length) { showNotif('Não há outros acabadores cadastrados','error'); return; }
-
-  var old = document.getElementById('modal-passar-para');
-  if (old) old.remove();
-
+  var outros = getAcabadores().filter(function(n){ return !_membro(prod, n); });
+  if (!outros.length) { showNotif('Não há outros acabadores disponíveis','error'); return; }
+  var old = document.getElementById('modal-passar-para'); if (old) old.remove();
   var modal = document.createElement('div');
   modal.id = 'modal-passar-para';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
   modal.innerHTML = '<div style="background:white;border-radius:16px;padding:24px;max-width:320px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">'
     +'<div style="font-size:16px;font-weight:800;color:#1a2332;margin-bottom:6px;">🔄 Passar para outro</div>'
     +'<div style="font-size:13px;color:#888;margin-bottom:16px;">Selecione quem vai continuar esta obra</div>'
-    +'<div style="display:flex;flex-direction:column;gap:8px;">'
-    +outros.map(function(nome){
-      return '<button onclick="prodConfirmarPassagem(\''+orderId+'\',\''+nome+'\')" '
-        +'style="background:#f8f9fa;border:2px solid #e0e0e0;border-radius:10px;padding:14px;font-size:15px;font-weight:700;color:#1a2332;cursor:pointer;width:100%;">'
-        +nome+'</button>';
-    }).join('')
-    +'<button onclick="document.getElementById(\'modal-passar-para\').remove()" '
-      +'style="background:none;border:none;color:#888;font-size:13px;cursor:pointer;padding:8px;">Cancelar</button>'
-    +'</div></div>';
+    +'<div id="passar-lista" style="display:flex;flex-direction:column;gap:8px;"></div>'
+    +'<button id="passar-cancel" style="background:none;border:none;color:#888;font-size:13px;cursor:pointer;padding:8px;width:100%;margin-top:6px;">Cancelar</button></div>';
   document.body.appendChild(modal);
+  var lista = modal.querySelector('#passar-lista');
+  outros.forEach(function(nome){
+    var b = document.createElement('button');
+    b.textContent = nome;
+    b.style.cssText = 'background:#f8f9fa;border:2px solid #e0e0e0;border-radius:10px;padding:14px;font-size:15px;font-weight:700;color:#1a2332;cursor:pointer;width:100%;';
+    b.onclick = function(){ modal.remove(); prodConfirmarPassagem(orderId, nome); };
+    lista.appendChild(b);
+  });
+  modal.querySelector('#passar-cancel').onclick = function(){ modal.remove(); };
 }
 
 async function prodConfirmarPassagem(orderId, novoNome) {
-  var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
-  var prod = getProdStatus(order || {id:orderId});
-  if (!prod) return;
-
-  var agora = new Date().toISOString();
-  var tempoAteAgora = calcTempoUtil(prod.log);
-
-  prod.log.push({ tipo:'pausa', ts: agora, motivo:'passagem', para: novoNome });
-  prod.log.push({ tipo:'retomada', ts: agora, responsavel: novoNome });
-
-  prod.historico_nomes = prod.historico_nomes || [];
-  prod.historico_nomes.push({ nome: prod.nome, tempoMs: tempoAteAgora });
-  prod.nome = novoNome;
-
-  showLoading('Salvando...');
-  await saveProdStatus(orderId, prod);
-  hideLoading();
-
-  var modal = document.getElementById('modal-passar-para');
-  if (modal) modal.remove();
-
-  showNotif('Obra passada para '+novoNome+' ✓','success');
-  renderKanban();
+  await prodDesignar(orderId, novoNome, 'trocar', getNomeAcabador());
+  var modal = document.getElementById('modal-passar-para'); if (modal) modal.remove();
 }
 
 async function prodPegar(orderId, e) {
@@ -1884,17 +1893,12 @@ async function prodPegar(orderId, e) {
   var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
   if (!order) { showNotif('Pedido não encontrado','error'); return; }
   var prod = getProdStatus(order);
-  if (prod) { showNotif('Esta obra já está com '+prod.nome,'error'); return; }
-
-  // Calcula tempos previstos do orçamento
+  if (prod && prod.equipe.length) { showNotif('Esta obra já está com '+prod.nome,'error'); return; }
   var tempos = getTemposPrevistosOrcamento(orderId);
-  var prevMs = _prevMsEtapa(order, tempos);
-
   var data = {
-    nome: meuNome,
     perfil: currentUser,
-    prevMs: prevMs,
-    log: [{ tipo:'inicio', ts: new Date().toISOString() }]
+    prevMs: _prevMsEtapa(order, tempos),
+    equipe: [{ nome: meuNome, log: [{ tipo:'inicio', ts: new Date().toISOString() }] }]
   };
   showLoading('Salvando...');
   await saveProdStatus(orderId, data);
@@ -1904,71 +1908,89 @@ async function prodPegar(orderId, e) {
   iniciarTimerProd();
 }
 
-// Encarregado/Dono escolhe quem vai fazer o serviço (serrador em Corte, acabador em Acabamento)
-function prodAbrirDesignar(orderId, e) {
+// Encarregado/Dono escolhe quem faz o serviço. modo: 'novo' | 'adicionar' | 'trocar'
+function prodAbrirDesignar(orderId, e, modo, membroEnc) {
   if (e) e.stopPropagation();
   var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
   if (!order) return;
-  var atual = getProdStatus(order);
+  var prod = getProdStatus(order);
+  var temEquipe = !!(prod && prod.equipe.length);
+  modo = modo || (temEquipe ? 'adicionar' : 'novo');
+  if (modo === 'novo' && temEquipe) modo = 'adicionar';
+  var deNome = _dec(membroEnc);
   var etapaCorte = order.stage === 'corte';
-  var nomes = etapaCorte ? getSerradores() : getAcabadores();
+  var nomes = (etapaCorte ? getSerradores() : getAcabadores()).filter(function(n){ return !(prod && _membro(prod, n)); });
+  var titulo = modo === 'adicionar' ? '＋ Adicionar funcionário' : modo === 'trocar' ? '🔄 Trocar ' + _escH(deNome) : '👷 Designar funcionário';
   var old = document.getElementById('modal-designar'); if (old) old.remove();
   var m = document.createElement('div');
   m.id = 'modal-designar';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
   m.innerHTML = '<div style="background:white;border-radius:16px;padding:24px;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">'
-    +'<div style="font-size:16px;font-weight:800;color:#1a2332;margin-bottom:4px;">👷 '+(atual?'Trocar funcionário':'Designar funcionário')+'</div>'
-    +'<div style="font-size:13px;color:#888;margin-bottom:4px;">'+(order.ref_fechado||order.id)+' — '+(order.cliente||'')+'</div>'
-    +'<div style="font-size:12px;color:#666;margin-bottom:14px;">Etapa: <b>'+(etapaCorte?'Corte':'Acabamento')+'</b>'+(atual?' · hoje: <b>'+atual.nome+'</b>':'')+'</div>'
+    +'<div style="font-size:16px;font-weight:800;color:#1a2332;margin-bottom:4px;">'+titulo+'</div>'
+    +'<div style="font-size:13px;color:#888;margin-bottom:4px;">'+_escH(order.ref_fechado||order.id)+' — '+_escH(order.cliente||'')+'</div>'
+    +'<div style="font-size:12px;color:#666;margin-bottom:14px;">Etapa: <b>'+(etapaCorte?'Corte':'Acabamento')+'</b>'+(temEquipe?' · na obra: <b>'+_escH(prod.nome)+'</b>':'')+'</div>'
     +'<div id="designar-lista" style="display:flex;flex-direction:column;gap:8px;"></div>'
     +'<button id="designar-cancel" style="margin-top:10px;width:100%;background:none;border:none;color:#888;font-size:13px;cursor:pointer;padding:8px;">Cancelar</button></div>';
   document.body.appendChild(m);
   var lista = m.querySelector('#designar-lista');
   nomes.forEach(function(nome){
     var b = document.createElement('button');
-    b.textContent = nome + (atual && atual.nome === nome ? '  (atual)' : '');
-    b.style.cssText = 'background:#f8f9fa;border:2px solid '+(atual && atual.nome === nome ? '#1e5f74' : '#e0e0e0')+';border-radius:10px;padding:13px;font-size:15px;font-weight:700;color:#1a2332;cursor:pointer;width:100%;';
-    b.onclick = function(){ m.remove(); prodDesignar(orderId, nome); };
+    b.textContent = nome;
+    b.style.cssText = 'background:#f8f9fa;border:2px solid #e0e0e0;border-radius:10px;padding:13px;font-size:15px;font-weight:700;color:#1a2332;cursor:pointer;width:100%;';
+    b.onclick = function(){ m.remove(); prodDesignar(orderId, nome, modo, deNome); };
     lista.appendChild(b);
   });
-  if (!nomes.length) lista.innerHTML = '<div style="font-size:13px;color:#B85A4A;">Nenhum funcionário cadastrado. Cadastre em Configurações → '+(etapaCorte?'Serradores':'Acabadores')+'.</div>';
+  if (!nomes.length) lista.innerHTML = '<div style="font-size:13px;color:#B85A4A;">Não há mais funcionários para escolher. Cadastre em Configurações → '+(etapaCorte?'Serradores':'Acabadores')+'.</div>';
   m.querySelector('#designar-cancel').onclick = function(){ m.remove(); };
   m.addEventListener('mousedown', function(ev){ if (ev.target === m) m.remove(); });
 }
 
-async function prodDesignar(orderId, nome) {
+async function prodDesignar(orderId, nome, modo, deNome) {
   var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
   if (!order) { showNotif('Pedido não encontrado','error'); return; }
-  var atual = getProdStatus(order);
-  if (atual && atual.nome === nome) { showNotif(nome+' já está com esta obra','error'); return; }
-  if (atual && _prodIniciado(atual)) {
-    // já estava em andamento: passa o bastão, mantendo o tempo corrido
-    await prodConfirmarPassagem(orderId, nome);
-    return;
+  var prod = getProdStatus(order);
+  var agora = new Date().toISOString();
+  if (prod && _membro(prod, nome)) { showNotif(nome+' já está nesta obra','error'); return; }
+  var msg;
+  if (!prod || !prod.equipe.length) {
+    var tempos = getTemposPrevistosOrcamento(orderId);
+    prod = { perfil: order.stage === 'corte' ? 'serrador' : 'acabador', prevMs: _prevMsEtapa(order, tempos), designadoPor: currentUser, designadoEm: agora,
+             equipe: [{ nome: nome, log: [], designadoEm: agora }] };
+    msg = 'Designado para '+nome+' ✓';
+  } else if (modo === 'trocar' && deNome && _membro(prod, deNome)) {
+    var velho = _membro(prod, deNome);
+    if (!_mIniciado(velho)) {
+      velho.nome = nome; velho.designadoEm = agora;      // ainda não tinha começado: só troca o nome
+      msg = nome+' no lugar de '+deNome+' ✓';
+    } else {
+      // já tinha trabalhado: o tempo dele fica registrado e o novo começa a contar
+      if (_mPausado(velho) === false) velho.log.push({ tipo:'fim', ts: agora, motivo:'passagem', para: nome });
+      velho.concluido = agora; velho.passouPara = nome;
+      prod.equipe.push({ nome: nome, log: [{ tipo:'inicio', ts: agora, de: deNome }], designadoEm: agora });
+      msg = 'Obra passada de '+deNome+' para '+nome+' ✓';
+    }
+  } else {
+    prod.equipe.push({ nome: nome, log: [], designadoEm: agora });
+    prod.designadoPor = prod.designadoPor || currentUser;
+    msg = nome+' adicionado à obra ✓';
   }
-  var tempos = getTemposPrevistosOrcamento(orderId);
-  var data = atual ? Object.assign({}, atual, { nome: nome, designadoPor: currentUser, designadoEm: new Date().toISOString() }) : {
-    nome: nome,
-    perfil: order.stage === 'corte' ? 'serrador' : 'acabador',
-    prevMs: _prevMsEtapa(order, tempos),
-    designadoPor: currentUser,
-    designadoEm: new Date().toISOString(),
-    log: []   // só começa a contar quando o funcionário clicar em Iniciar
-  };
   showLoading('Salvando...');
-  await saveProdStatus(orderId, data);
+  await saveProdStatus(orderId, prod);
   hideLoading();
-  showNotif('Designado para '+nome+' ✓','success');
+  showNotif(msg, 'success');
   renderKanban();
+  iniciarTimerProd();
 }
 
-async function prodIniciar(orderId, e) {
+async function prodIniciar(orderId, e, nomeEnc) {
   if (e) e.stopPropagation();
   var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
   var prod = order ? getProdStatus(order) : null;
   if (!prod) return;
-  if (_prodIniciado(prod)) return;
-  prod.log = [{ tipo:'inicio', ts: new Date().toISOString() }];
+  var nome = nomeEnc ? _dec(nomeEnc) : _meuNomeProd();
+  var m = _membro(prod, nome) || (currentUser === 'serrador' ? _membro(prod, 'Serrador') : null);
+  if (!m || _mIniciado(m)) return;
+  m.log = [{ tipo:'inicio', ts: new Date().toISOString() }];
   showLoading('Salvando...');
   await saveProdStatus(orderId, prod);
   hideLoading();
@@ -1977,28 +1999,13 @@ async function prodIniciar(orderId, e) {
   iniciarTimerProd();
 }
 
-async function prodTirarDesignacao(orderId, e) {
+async function prodPausar(orderId, e, nomeEnc) {
   if (e) e.stopPropagation();
   var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
   var prod = order ? getProdStatus(order) : null;
-  if (!prod) return;
-  var aviso = _prodIniciado(prod)
-    ? 'Tirar "' + prod.nome + '" desta obra?\n\nO tempo já corrido (' + fmtTempo(calcTempoUtil(prod.log)) + ') será DESCARTADO.'
-    : 'Tirar a designação de "' + prod.nome + '"?';
-  if (!confirm(aviso)) return;
-  showLoading('Salvando...');
-  await limparProdStatus(orderId);
-  hideLoading();
-  showNotif('Designação removida','success');
-  renderKanban();
-}
-
-async function prodPausar(orderId, e) {
-  if (e) e.stopPropagation();
-  var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
-  var prod = getProdStatus(order || {id:orderId});
-  if (!prod) return;
-  prod.log.push({ tipo:'pausa', ts: new Date().toISOString() });
+  var m = prod ? _membro(prod, _dec(nomeEnc)) : null;
+  if (!m || !_mRodando(m)) return;
+  m.log.push({ tipo:'pausa', ts: new Date().toISOString() });
   showLoading('Salvando...');
   await saveProdStatus(orderId, prod);
   hideLoading();
@@ -2006,12 +2013,13 @@ async function prodPausar(orderId, e) {
   renderKanban();
 }
 
-async function prodRetomar(orderId, e) {
+async function prodRetomar(orderId, e, nomeEnc) {
   if (e) e.stopPropagation();
   var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
-  var prod = getProdStatus(order || {id:orderId});
-  if (!prod) return;
-  prod.log.push({ tipo:'retomada', ts: new Date().toISOString() });
+  var prod = order ? getProdStatus(order) : null;
+  var m = prod ? _membro(prod, _dec(nomeEnc)) : null;
+  if (!m || !_mPausado(m) || _mConcluido(m)) return;
+  m.log.push({ tipo:'retomada', ts: new Date().toISOString() });
   showLoading('Salvando...');
   await saveProdStatus(orderId, prod);
   hideLoading();
@@ -2020,39 +2028,82 @@ async function prodRetomar(orderId, e) {
   iniciarTimerProd();
 }
 
+async function prodRemoverMembro(orderId, e, nomeEnc) {
+  if (e) e.stopPropagation();
+  var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+  var prod = order ? getProdStatus(order) : null;
+  var nome = _dec(nomeEnc);
+  var m = prod ? _membro(prod, nome) : null;
+  if (!m) return;
+  var aviso = _mIniciado(m)
+    ? 'Tirar "' + nome + '" desta obra?\n\nO tempo dele (' + fmtTempo(_mTempo(m)) + ') será DESCARTADO.'
+    : 'Tirar "' + nome + '" desta obra?';
+  if (!confirm(aviso)) return;
+  prod.equipe = prod.equipe.filter(function(x){ return x !== m; });
+  showLoading('Salvando...');
+  if (!prod.equipe.length) await limparProdStatus(orderId);
+  else await saveProdStatus(orderId, prod);
+  hideLoading();
+  showNotif(nome+' saiu da obra','success');
+  renderKanban();
+  if (prod.equipe.length && prod.equipe.every(_mConcluido)) await _avancarEtapa(order, prod);
+}
+
+// Fecha a etapa: tempo total registrado no aviso, pedido segue para a próxima coluna
+async function _avancarEtapa(order, prod) {
+  var proximoStage = order.stage === 'corte' ? 'acabamento' : 'pronto';
+  var total = _tempoTotal(prod);
+  showLoading('Salvando...');
+  var res = await getSB().from('pedidos').update({ stage: proximoStage, prod_status: null }).eq('id', order.id);
+  hideLoading();
+  if (res.error) { showNotif('Erro: '+res.error.message,'error'); return false; }
+  order.stage = proximoStage; order.prod_status = null;
+  try { localStorage.removeItem(getProdKey(order.id)); } catch(e){}
+  showNotif('Concluído! Tempo total: '+fmtTempo(total)+' ✓','success');
+  renderKanban();
+  return true;
+}
+
+// Funcionário conclui a PARTE dele; quando o último conclui, a etapa avança
 async function prodConcluir(orderId, e) {
   if (e) e.stopPropagation();
   var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
-  var prod = getProdStatus(order || {id:orderId});
-  if (!prod) return;
-  if (!confirm('Confirmar conclusão?')) return;
-
+  var prod = order ? getProdStatus(order) : null;
+  if (!order || !prod) return;
+  var meuNome = _meuNomeProd();
+  var m = _membro(prod, meuNome) || (currentUser === 'serrador' ? _membro(prod, 'Serrador') : null);
+  if (!m) { showNotif('Você não está nesta obra','error'); return; }
+  var outrosPend = prod.equipe.some(function(x){ return x !== m && !_mConcluido(x); });
+  if (!confirm(outrosPend ? 'Concluir a SUA parte nesta obra?\n\nA obra só avança quando o último funcionário concluir.' : 'Confirmar conclusão?')) return;
   var agora = new Date().toISOString();
-  var ultimo = prod.log[prod.log.length-1];
-  if (ultimo && ultimo.tipo !== 'pausa') {
-    prod.log.push({ tipo:'fim', ts: agora });
-  }
-  var tempoUtil = calcTempoUtil(prod.log);
-  prod.tempoUtilMs = tempoUtil;
-  prod.concluido = agora;
-
-  var proximoStage = order ? (order.stage === 'corte' ? 'acabamento' : 'pronto') : (currentUser === 'serrador' ? 'acabamento' : 'pronto');
-
+  if (_mIniciado(m) && !_mPausado(m)) m.log.push({ tipo:'fim', ts: agora });
+  m.concluido = agora;
+  if (prod.equipe.every(_mConcluido)) { await _avancarEtapa(order, prod); return; }
   showLoading('Salvando...');
-  // Move stage e limpa prod_status
-  var res = await getSB().from('pedidos').update({
-    stage: proximoStage,
-    prod_status: null
-  }).eq('id', orderId);
+  await saveProdStatus(orderId, prod);
   hideLoading();
-
-  if (res.error) { showNotif('Erro: '+res.error.message,'error'); return; }
-
-  if (order) { order.stage = proximoStage; order.prod_status = null; }
-  try { localStorage.removeItem(getProdKey(orderId)); } catch(e){}
-  showNotif('Concluído! Tempo: '+fmtTempo(tempoUtil)+' ✓','success');
+  showNotif('Sua parte foi concluída ✓','success');
   renderKanban();
 }
+
+// Encarregado/Dono: conclui a etapa inteira, por todos os funcionários
+async function prodConcluirEtapa(orderId, e) {
+  if (e) e.stopPropagation();
+  var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+  var prod = order ? getProdStatus(order) : null;
+  if (!order || !prod) return;
+  var pend = prod.equipe.filter(function(x){ return !_mConcluido(x); });
+  if (!confirm(pend.length > 1 ? 'Concluir a etapa para TODOS os ' + pend.length + ' funcionários?' : 'Confirmar conclusão?')) return;
+  var agora = new Date().toISOString();
+  prod.equipe.forEach(function(m) {
+    if (_mConcluido(m)) return;
+    if (_mIniciado(m) && !_mPausado(m)) m.log.push({ tipo:'fim', ts: agora });
+    m.concluido = agora;
+  });
+  await _avancarEtapa(order, prod);
+}
+
+async function prodTirarDesignacao(orderId, e) { return prodRemoverMembro(orderId, e, _enc((getProdStatus((orders||[]).find(function(o){return o.id===orderId;})||{}) || {}).nome || '')); }
 
 async function concluirCorte(id, e) {
   if (e) e.stopPropagation();
@@ -3424,8 +3475,9 @@ function renderPainelEquipe() {
   const semFunc = [], porNome = {};
   ativos.forEach(o => {
     const pr = getProdStatus(o);
-    if (pr && pr.nome) { (porNome[pr.nome] = porNome[pr.nome] || []).push({ o, pr }); }
-    else semFunc.push(o);
+    const membros = pr && pr.equipe ? pr.equipe.filter(m => !_mConcluido(m)) : [];
+    if (membros.length) membros.forEach(m => { (porNome[m.nome] = porNome[m.nome] || []).push({ o, pr, m }); });
+    else if (!(pr && pr.equipe && pr.equipe.length)) semFunc.push(o);
   });
 
   const pessoas = [];
@@ -3433,26 +3485,30 @@ function renderPainelEquipe() {
   getAcabadores().forEach(n => pessoas.push({ nome: n, papel: 'Acabamento' }));
   Object.keys(porNome).forEach(n => { if (!pessoas.some(p => p.nome === n)) pessoas.push({ nome: n, papel: 'Outro' }); });
 
-  const linhaJob = ({ o, pr }) => {
-    const ini = _prodIniciado(pr), paus = _prodPausado(pr);
-    const ms = calcTempoUtil(pr.log || []);
+  const linhaJob = ({ o, pr, m }) => {
+    const ini = _mIniciado(m), paus = _mPausado(m);
+    const ms = _mTempo(m);
     const prev = _prevMsEtapa(o, getTemposPrevistosOrcamento(o.id));
-    const pct = (prev > 0 && ini) ? Math.round(ms / prev * 100) : 0;
-    const cor = !ini ? '#8a6d00' : paus ? '#888' : (pct < 85 ? '#2E7D32' : pct < 100 ? '#B8860B' : '#B85A4A');
+    const total = _tempoTotal(pr);
+    const pct = (prev > 0 && _prodIniciado(pr)) ? Math.round(total / prev * 100) : 0;
+    const cor = !ini ? '#8a6d00' : paus ? '#888' : '#1a2332';
+    const equipeN = pr.equipe.filter(x => !_mConcluido(x)).length;
     return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:4px 0;font-size:12.5px;">'
-      + '<span>' + _iconeProd(pr) + '</span>'
-      + '<span style="font-weight:700;color:#1a2332;">' + esc(o.cliente) + '</span>'
-      + '<span style="color:#8a8577;">' + esc(o.ref_fechado || o.id) + ' · ' + (o.stage === 'corte' ? 'Corte' : 'Acabamento') + '</span>'
+      + '<span>' + _icoMembro(m) + '</span>'
+      + '<span style="font-weight:700;color:#1a2332;">' + _escH(o.cliente) + '</span>'
+      + '<span style="color:#8a8577;">' + _escH(o.ref_fechado || o.id) + ' · ' + (o.stage === 'corte' ? 'Corte' : 'Acabamento') + (equipeN > 1 ? ' · equipe de ' + equipeN : '') + '</span>'
       + '<span style="margin-left:auto;font-weight:800;color:' + cor + ';font-variant-numeric:tabular-nums;">'
-      + (ini ? '<span data-eq-tempo="' + esc(o.id) + '">' + fmtCronometro(ms) + '</span>' + (prev > 0 ? ' <span style="font-weight:600;color:#8a8577;">/ ' + fmtTempo(prev) + ' (' + pct + '%)</span>' : '') + (paus ? ' <span style="font-weight:600;">pausado</span>' : '') : 'aguardando iniciar')
-      + '</span></div>';
+      + (ini ? '<span data-mtempo="' + o.id + '|' + _enc(m.nome) + '">' + fmtCronometro(ms) + '</span>' + (paus ? ' <span style="font-weight:600;">pausado</span>' : '') : 'aguardando iniciar')
+      + '</span>'
+      + (prev > 0 && _prodIniciado(pr) ? '<span style="flex-basis:100%;text-align:right;font-size:11px;color:' + (pct < 85 ? '#4A7C59' : pct < 100 ? '#B8860B' : '#B85A4A') + ';">obra: ' + fmtTempo(total) + ' de ' + fmtTempo(prev) + ' (' + pct + '%)</span>' : '')
+      + '</div>';
   };
 
   const cards = pessoas.map(p => {
     const jobs = porNome[p.nome] || [];
     return '<div style="background:white;border:1px solid #ece7da;border-left:4px solid ' + (jobs.length ? '#1e5f74' : '#cfd8cf') + ';border-radius:10px;padding:10px 12px;">'
       + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:' + (jobs.length ? '4' : '0') + 'px;">'
-      + '<span style="font-weight:800;color:#1a2332;font-size:14px;">' + esc(p.nome) + '</span>'
+      + '<span style="font-weight:800;color:#1a2332;font-size:14px;">' + _escH(p.nome) + '</span>'
       + '<span style="font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#8a8577;">' + p.papel + '</span>'
       + '<span style="margin-left:auto;font-size:11.5px;font-weight:700;color:' + (jobs.length ? '#1e5f74' : '#4A7C59') + ';">' + (jobs.length ? jobs.length + ' obra(s)' : 'Livre') + '</span></div>'
       + jobs.map(linhaJob).join('') + '</div>';
@@ -3461,9 +3517,9 @@ function renderPainelEquipe() {
   const semHtml = semFunc.length
     ? '<div style="margin-top:12px;"><div style="font-size:12px;font-weight:800;color:#B8860B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Sem funcionário (' + semFunc.length + ')</div>'
       + semFunc.map(o => '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #f0ece2;font-size:12.5px;">'
-          + '<span style="font-weight:700;color:#1a2332;">' + esc(o.cliente) + '</span>'
-          + '<span style="color:#8a8577;">' + esc(o.ref_fechado || o.id) + ' · ' + (o.stage === 'corte' ? 'Corte' : 'Acabamento') + '</span>'
-          + '<button onclick="prodAbrirDesignar(\'' + String(o.id).replace(/'/g, '') + '\',event)" style="margin-left:auto;background:#1e5f74;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;">Designar</button></div>').join('')
+          + '<span style="font-weight:700;color:#1a2332;">' + _escH(o.cliente) + '</span>'
+          + '<span style="color:#8a8577;">' + _escH(o.ref_fechado || o.id) + ' · ' + (o.stage === 'corte' ? 'Corte' : 'Acabamento') + '</span>'
+          + '<button onclick="prodAbrirDesignar(\'' + String(o.id).replace(/'/g, '') + '\',event,\'novo\')" style="margin-left:auto;background:#1e5f74;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;">Designar</button></div>').join('')
       + '</div>'
     : '';
 
@@ -3624,8 +3680,8 @@ function createCard(o) {
     <div class="card-client">${o.cliente}</div>
     <div class="card-desc">${o.peca||''}${o.material?' · '+o.material:''}</div>
     ${showValor?`<div class="card-valor">R$ ${o.valor}</div>`:''}
-    ${(podeGerenciarProd && prod && prod.nome) ? `<div style="background:#e8f4f7;border-radius:8px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px;"><span>${_iconeProd(prod)}</span><div><div style="font-size:12px;font-weight:700;color:#1a2332;">${prod.nome}</div><div id="tempo-${o.id}" style="font-size:11px;color:#888;">${_prodIniciado(prod)?'⏱ '+fmtCronometro(calcTempoUtil(prod.log)):'aguardando iniciar'}</div></div></div>` : ''}
-    ${(!podeGerenciarProd && prodInfo && prodInfo.nome) ? `<div style="background:#e8f4f7;border-radius:6px;padding:5px 8px;margin-bottom:4px;display:flex;align-items:center;gap:6px;font-size:12px;"><span>${prodInfo.log&&prodInfo.log[prodInfo.log.length-1]&&prodInfo.log[prodInfo.log.length-1].tipo==='pausa'?'⏸':'▶'}</span><span style="font-weight:700;color:#1a2332;">${prodInfo.nome}</span><span id="tempo-${o.id}" style="color:#888;">⏱ ${fmtCronometro(calcTempoUtil(prodInfo.log))}</span></div>` : ''}
+    ${(podeGerenciarProd && prod && prod.equipe && prod.equipe.length) ? `<div style="background:#e8f4f7;border-radius:8px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px;"><span>${_iconeProd(prod)}</span><div><div style="font-size:12px;font-weight:700;color:#1a2332;">${prod.equipe.length>1?prod.equipe.length+' funcionários':_escH(prod.nome)}</div><div id="tempo-${o.id}" data-prefixo="${prod.equipe.length>1?'Total ⏱ ':'⏱ '}" data-semcor style="font-size:11px;color:#888;">${_prodIniciado(prod)?(prod.equipe.length>1?'Total ⏱ ':'⏱ ')+fmtCronometro(_tempoTotal(prod)):'aguardando iniciar'}</div></div></div>` : ''}
+    ${(!podeGerenciarProd && prodInfo && prodInfo.equipe && prodInfo.equipe.length) ? `<div style="background:#e8f4f7;border-radius:6px;padding:5px 8px;margin-bottom:4px;display:flex;align-items:center;gap:6px;font-size:12px;"><span>${_iconeProd(prodInfo)}</span><span style="font-weight:700;color:#1a2332;">${_escH(prodInfo.nome)}</span><span id="tempo-${o.id}" data-semcor style="color:#888;">⏱ ${fmtCronometro(_tempoTotal(prodInfo))}</span></div>` : ''}
     ${(isProdUser || podeGerenciarProd) ? renderProdBotoes(o, prod) : ''}
     ${btnsPronto}
     <div class="card-footer">

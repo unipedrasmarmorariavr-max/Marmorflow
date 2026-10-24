@@ -1034,7 +1034,7 @@ function toggleFiltroAv() {
 <div class="notif" id="notif"></div>
 
 <script>
-const MF_VERSAO = '24/10 · v5.9 (perfil Encarregado)'; // conferir em cada aparelho se já está com o arquivo novo
+const MF_VERSAO = '24/10 · v6.0 (encarregado organiza a produção)'; // conferir em cada aparelho se já está com o arquivo novo
 // Código curto deste aparelho/navegador (ex.: #A3F9). Fica guardado no navegador e aparece na lateral do
 // sistema, nos erros registrados e em cada orçamento gravado — assim sabemos QUAL aparelho fez o quê.
 function mfAparelho() {
@@ -1462,6 +1462,52 @@ async function nextId() {
 // ============ TABS ============
 
 // ── SIDEBAR ──────────────────────────────────────────────────────────────────
+// ── SERRADORES ────────────────────────────────────────────────
+function getSerradores() {
+  try { var l = JSON.parse(localStorage.getItem('mf_serradores') || 'null'); if (Array.isArray(l) && l.length) return l; } catch(e) {}
+  return ['Reginaldo'];
+}
+function getNomeSerrador() {
+  var l = getSerradores(), n = localStorage.getItem('mf_serrador_nome') || '';
+  if (n && l.indexOf(n) >= 0) return n;
+  return l.length === 1 ? l[0] : (n || 'Serrador');
+}
+function mostrarSelecaoSerrador() {
+  var nomes = getSerradores();
+  var old = document.getElementById('modal-sel-serrador'); if (old) old.remove();
+  var modal = document.createElement('div');
+  modal.id = 'modal-sel-serrador';
+  modal.style.cssText = 'position:fixed;inset:0;background:linear-gradient(135deg,#1a2332 0%,#2d3e55 100%);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
+  modal.innerHTML = '<div style="background:white;border-radius:20px;padding:32px 24px;max-width:360px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">'
+    +'<div style="font-size:48px;margin-bottom:12px;">🪚</div>'
+    +'<div style="font-size:20px;font-weight:800;color:#1a2332;margin-bottom:6px;">Corte</div>'
+    +'<div style="font-size:14px;color:#888;margin-bottom:24px;">Quem é você?</div>'
+    +'<div id="sel-serrador-lista" style="display:flex;flex-direction:column;gap:10px;"></div>'
+    +'<button id="sel-serrador-voltar" style="margin-top:16px;background:none;border:none;color:#888;font-size:13px;cursor:pointer;">← Voltar</button></div>';
+  document.body.appendChild(modal);
+  var lista = modal.querySelector('#sel-serrador-lista');
+  nomes.forEach(function(nome){
+    var b = document.createElement('button');
+    b.textContent = nome;
+    b.style.cssText = 'background:#f8f9fa;border:2px solid #e0e0e0;border-radius:12px;padding:14px;font-size:16px;font-weight:700;color:#1a2332;cursor:pointer;';
+    b.onclick = function(){ localStorage.setItem('mf_serrador_nome', nome); window._serradorOk = true; modal.remove(); ativarSessao('serrador'); };
+    lista.appendChild(b);
+  });
+  modal.querySelector('#sel-serrador-voltar').onclick = function(){ modal.remove(); document.getElementById('login-screen').style.display = 'flex'; };
+}
+
+// ── PRODUÇÃO: quem faz o quê ──────────────────────────────────
+function _meuNomeProd() {
+  if (currentUser === 'acabador') return getNomeAcabador();
+  if (currentUser === 'serrador') return getNomeSerrador();
+  return currentUser === 'dono' ? 'Dono' : 'Encarregado';
+}
+function _ehGestorProd() { return currentUser === 'producao' || currentUser === 'dono'; }
+function _prevMsEtapa(order, tempos) { return (order && order.stage === 'corte') ? tempos.serrador : tempos.acabador; }
+function _prodIniciado(prod) { return !!(prod && prod.log && prod.log.length > 0); }
+function _prodPausado(prod) { return _prodIniciado(prod) && prod.log[prod.log.length-1].tipo === 'pausa'; }
+function _iconeProd(prod) { return !_prodIniciado(prod) ? '🕒' : (_prodPausado(prod) ? '⏸' : '▶'); }
+
 // ── ACABADORES ────────────────────────────────────────────────
 function getAcabadores() {
   try { return JSON.parse(localStorage.getItem('mf_acabadores') || '["Paulo","Bras","Ronaldo","Ademir","Arnaldo"]'); } catch(e) { return ['Paulo','Bras','Ronaldo','Ademir','Arnaldo']; }
@@ -1544,8 +1590,8 @@ function getTemposPrevistosOrcamento(orderId) {
     var prod = order ? getProdStatus(order) : null;
     if (prod && prod.prevMs > 0) {
       return {
-        serrador: currentUser === 'serrador' ? prod.prevMs : 0,
-        acabador: currentUser === 'acabador' ? prod.prevMs : 0
+        serrador: (order && order.stage === 'corte') ? prod.prevMs : 0,
+        acabador: (order && order.stage !== 'corte') ? prod.prevMs : 0
       };
     }
 
@@ -1655,113 +1701,89 @@ function fmtCronometro(ms) {
 
 function renderProdBotoes(order, prod) {
   try {
-    var meuNome = currentUser === 'acabador' ? getNomeAcabador() : 'Serrador';
+    var meuNome = _meuNomeProd();
+    var ehGestor = _ehGestorProd();
     var estagio = currentUser === 'serrador' ? 'corte' : 'acabamento';
-    var podeGerenciar = currentUser === 'producao' || currentUser === 'dono';
     // Só mostra botões de produção em corte e acabamento
     if (order.stage !== 'corte' && order.stage !== 'acabamento') return '';
-    if (!podeGerenciar && order.stage !== estagio) return '';
+    if (!ehGestor && order.stage !== estagio) return '';
 
     var html = '';
-
-  if (!prod) {
-    // Busca tempo previsto do orçamento
     var tempos = getTemposPrevistosOrcamento(order.id);
-    var prevMs = currentUser === 'serrador' ? tempos.serrador : tempos.acabador;
-    var prevStr = prevMs > 0 ? ' · previsto: '+fmtTempo(prevMs) : '';
-    html += '<button onclick="prodPegar(\''+order.id+'\',event)" '
-      +'style="width:100%;background:#1a2332;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
-      +'✋ Pegar esta obra'+prevStr+'</button>';
-    return html;
-  }
+    var prevMs = _prevMsEtapa(order, tempos);
+    var btnBase = 'width:100%;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;';
 
-  // Já tem alguém
-  var temposP = getTemposPrevistosOrcamento(order.id);
-  var prevMs2 = currentUser === 'serrador' ? temposP.serrador : temposP.acabador;
-  var tempoMs = calcTempoUtil(prod.log);
-  var isPausado = prod.log.length > 0 && (prod.log[prod.log.length-1].tipo === 'pausa');
-  var isMeu = prod.nome === meuNome;
-
-  // Calcula porcentagem do previsto
-  var pct = prevMs2 > 0 ? Math.min(150, Math.round(tempoMs/prevMs2*100)) : 0;
-  var barColor = pct < 85 ? '#2E7D32' : pct < 100 ? '#F59E0B' : '#B85A4A';
-  var prevStr = prevMs2 > 0 ? fmtTempo(prevMs2)+' / ' : '';
-
-  // Badge de quem pegou + cronômetro
-  html += '<div style="background:'+(isMeu?'#e8f4f7':'#fff3e0')+';border-radius:8px;padding:10px 12px;margin-bottom:6px;">'
-    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
-    +'<span style="font-size:18px;">'+(isPausado?'⏸':'▶')+'</span>'
-    +'<div style="flex:1;min-width:0;">'
-    +'<div style="font-size:13px;font-weight:700;color:#1a2332;">'+prod.nome+'</div>'
-    +'<div style="display:flex;align-items:center;gap:6px;margin-top:3px;">'
-    +(prevMs2>0?'<span style="font-size:12px;color:#888;">'+fmtTempo(prevMs2)+'</span><span style="color:#ccc;">|</span>':'')
-    +'<span id="tempo-'+order.id+'" style="font-size:15px;font-weight:800;color:'+(isPausado?'#888':barColor)+';font-variant-numeric:tabular-nums;">'+fmtCronometro(tempoMs)+'</span>'
-    +(isPausado?'<span style="font-size:11px;color:#888;">pausado</span>':'')
-    +'</div>'
-    +'</div>'
-    +(prevMs2>0?'<div style="font-size:12px;font-weight:700;color:'+barColor+';">'+pct+'%</div>':'')
-    +'</div>'
-    +(prevMs2>0?'<div style="background:#e0e0e0;border-radius:4px;height:4px;overflow:hidden;">'
-      +'<div style="background:'+barColor+';width:'+Math.min(100,pct)+'%;height:100%;border-radius:4px;"></div>'
-      +'</div>':'')
-    +'</div>';
-
-  var podeGerenciarGlobal = currentUser === 'producao' || currentUser === 'dono';
-
-  // Gerentes veem pausar/retomar em qualquer pedido em produção
-  if (!isMeu && podeGerenciarGlobal && prod) {
-    if (isPausado) {
-      html += '<button onclick="prodRetomar(\''+order.id+'\',event)" '
-        +'style="width:100%;background:#8B6914;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
-        +'▶ Retomar</button>';
-    } else {
-      html += '<button onclick="prodPausar(\''+order.id+'\',event)" '
-        +'style="width:100%;background:#555;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
-        +'⏸ Pausar</button>';
+    // ── Sem ninguém ainda
+    if (!prod) {
+      if (ehGestor) {
+        html += '<button onclick="prodAbrirDesignar(\''+order.id+'\',event)" style="'+btnBase+'background:#1e5f74;color:white;padding:10px;">👷 Designar funcionário</button>';
+        html += '<button onclick="prodPegar(\''+order.id+'\',event)" style="'+btnBase+'background:#f0f0f0;color:#555;border:1px solid #ddd;font-size:12px;font-weight:600;">✋ Eu mesmo faço</button>';
+      } else {
+        var prevStr = prevMs > 0 ? ' · previsto: '+fmtTempo(prevMs) : '';
+        html += '<button onclick="prodPegar(\''+order.id+'\',event)" style="width:100%;background:#1a2332;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">✋ Pegar esta obra'+prevStr+'</button>';
+      }
+      return html;
     }
-  }
 
-  if (isMeu) {
-    var podeGerenciar = currentUser === 'producao' || currentUser === 'dono';
-    if (isPausado) {
-      // Só gerentes podem retomar
-      if (podeGerenciar) {
-        html += '<button onclick="prodRetomar(\''+order.id+'\',event)" '
-          +'style="width:100%;background:#8B6914;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
-          +'▶ Retomar</button>';
+    // ── Já tem alguém
+    var iniciado = _prodIniciado(prod);
+    var isPausado = _prodPausado(prod);
+    var isMeu = prod.nome === meuNome || (currentUser === 'serrador' && prod.nome === 'Serrador');
+    var tempoMs = calcTempoUtil(prod.log || []);
+    var pct = prevMs > 0 ? Math.min(150, Math.round(tempoMs/prevMs*100)) : 0;
+    var barColor = pct < 85 ? '#2E7D32' : pct < 100 ? '#F59E0B' : '#B85A4A';
+
+    // O encarregado/dono já vê o resumo no cartão; os demais veem o quadro completo
+    if (!ehGestor) {
+      html += '<div style="background:'+(isMeu?'#e8f4f7':'#fff3e0')+';border-radius:8px;padding:10px 12px;margin-bottom:6px;">'
+        +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+        +'<span style="font-size:18px;">'+_iconeProd(prod)+'</span>'
+        +'<div style="flex:1;min-width:0;">'
+        +'<div style="font-size:13px;font-weight:700;color:#1a2332;">'+prod.nome+'</div>'
+        +'<div style="display:flex;align-items:center;gap:6px;margin-top:3px;">'
+        +(prevMs>0?'<span style="font-size:12px;color:#888;">'+fmtTempo(prevMs)+'</span><span style="color:#ccc;">|</span>':'')
+        +'<span id="tempo-'+order.id+'" style="font-size:15px;font-weight:800;color:'+(isPausado?'#888':barColor)+';font-variant-numeric:tabular-nums;">'+fmtCronometro(tempoMs)+'</span>'
+        +(isPausado?'<span style="font-size:11px;color:#888;">pausado</span>':'')
+        +(!iniciado?'<span style="font-size:11px;color:#8a6d00;font-weight:600;">aguardando iniciar</span>':'')
+        +'</div></div>'
+        +(prevMs>0&&iniciado?'<div style="font-size:12px;font-weight:700;color:'+barColor+';">'+pct+'%</div>':'')
+        +'</div>'
+        +(prevMs>0&&iniciado?'<div style="background:#e0e0e0;border-radius:4px;height:4px;overflow:hidden;"><div style="background:'+barColor+';width:'+Math.min(100,pct)+'%;height:100%;border-radius:4px;"></div></div>':'')
+        +'</div>';
+    }
+
+    // ── Encarregado / Dono: organiza a produção
+    if (ehGestor) {
+      if (!iniciado) {
+        html += '<div style="font-size:11px;color:#8a6d00;background:#FFF8E1;border-radius:6px;padding:6px 8px;margin-bottom:6px;">🕒 Designado para <b>'+prod.nome+'</b> — aguardando iniciar</div>';
+        html += '<button onclick="prodIniciar(\''+order.id+'\',event)" style="'+btnBase+'background:#2E7D32;color:white;">▶ Iniciar agora</button>';
+      } else if (isPausado) {
+        html += '<button onclick="prodRetomar(\''+order.id+'\',event)" style="'+btnBase+'background:#8B6914;color:white;">▶ Retomar</button>';
+      } else {
+        html += '<button onclick="prodPausar(\''+order.id+'\',event)" style="'+btnBase+'background:#555;color:white;">⏸ Pausar</button>';
       }
-      // Passar para outro — apenas acabadores
-      if (currentUser === 'acabador') {
-        var outrosNomes = getAcabadores().filter(function(n){return n !== prod.nome;});
-        if (outrosNomes.length > 0) {
-          html += '<button onclick="prodPassarPara(\''+order.id+'\',event)" '
-            +'style="width:100%;background:#f0f0f0;color:#555;border:1px solid #ddd;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:4px;">'
-            +'🔄 Passar para outro acabador</button>';
+      html += '<div style="display:flex;gap:6px;margin-bottom:4px;">'
+        +'<button onclick="prodAbrirDesignar(\''+order.id+'\',event)" style="flex:1;background:#f0f0f0;color:#333;border:1px solid #ddd;border-radius:8px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;">🔄 Trocar funcionário</button>'
+        +'<button onclick="prodTirarDesignacao(\''+order.id+'\',event)" style="background:#fff0f0;color:#B85A4A;border:1px solid #f3cfcf;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:600;cursor:pointer;" title="Tirar designação">✕</button>'
+        +'</div>';
+      html += '<button onclick="prodConcluir(\''+order.id+'\',event)" style="'+btnBase+'background:#2E7D32;color:white;">'+(order.stage==='corte'?'✂️ Corte Concluído':'✅ Acabamento Concluído')+'</button>';
+      return html;
+    }
+
+    // ── Serrador / Acabador
+    if (isMeu) {
+      if (!iniciado) {
+        html += '<button onclick="prodIniciar(\''+order.id+'\',event)" style="'+btnBase+'background:#2E7D32;color:white;padding:11px;">▶ Iniciar</button>';
+      } else {
+        if (currentUser === 'acabador') {
+          var outrosNomes = getAcabadores().filter(function(n){return n !== prod.nome;});
+          if (outrosNomes.length > 0) {
+            html += '<button onclick="prodPassarPara(\''+order.id+'\',event)" style="width:100%;background:#f0f0f0;color:#555;border:1px solid #ddd;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:4px;">🔄 Passar para outro acabador</button>';
+          }
         }
-      }
-    } else {
-      // Só gerentes podem pausar
-      if (podeGerenciar) {
-        html += '<button onclick="prodPausar(\''+order.id+'\',event)" '
-          +'style="width:100%;background:#555;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
-          +'⏸ Pausar</button>';
-      }
-      // Passar para outro — apenas acabadores (sem pausar)
-      if (currentUser === 'acabador') {
-        var outrosNomes2 = getAcabadores().filter(function(n){return n !== prod.nome;});
-        if (outrosNomes2.length > 0) {
-          html += '<button onclick="prodPassarPara(\''+order.id+'\',event)" '
-            +'style="width:100%;background:#f0f0f0;color:#555;border:1px solid #ddd;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:4px;">'
-            +'🔄 Passar para outro acabador</button>';
-        }
+        html += '<button onclick="prodConcluir(\''+order.id+'\',event)" style="'+btnBase+'background:#2E7D32;color:white;">'+(currentUser==='serrador'?'✂️ Corte Concluído':'✅ Acabamento Concluído')+'</button>';
       }
     }
-    // Concluir — todos podem
-    html += '<button onclick="prodConcluir(\''+order.id+'\',event)" '
-      +'style="width:100%;background:#2E7D32;color:white;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px;">'
-      +(currentUser==='serrador'?'✂️ Corte Concluído':'✅ Acabamento Concluído')+'</button>';
-  }
-
     return html;
   } catch(e) {
     console.error('renderProdBotoes error:', e);
@@ -1782,11 +1804,19 @@ function iniciarTimerProd() {
       if (isPausado) return;
       var ms = calcTempoUtil(prod.log);
       var tempos = getTemposPrevistosOrcamento(orderId);
-      var prevMs = currentUser === 'serrador' ? tempos.serrador : tempos.acabador;
+      var prevMs = _prevMsEtapa(orderAtual, tempos);
       var pct = prevMs > 0 ? Math.min(150, Math.round(ms/prevMs*100)) : 0;
       var barColor = pct < 85 ? '#2E7D32' : pct < 100 ? '#F59E0B' : '#B85A4A';
       el.textContent = fmtCronometro(ms);
       el.style.color = barColor;
+    });
+    // Painel da equipe (encarregado/dono): cronômetros ao vivo
+    document.querySelectorAll('[data-eq-tempo]').forEach(function(el) {
+      var oid = el.getAttribute('data-eq-tempo');
+      var ord = orders ? orders.find(function(o){return o.id===oid;}) : null;
+      var pr = ord ? getProdStatus(ord) : null;
+      if (!pr || !pr.log || !pr.log.length || _prodPausado(pr)) return;
+      el.textContent = fmtCronometro(calcTempoUtil(pr.log));
     });
   }, 1000);
 }
@@ -1850,7 +1880,7 @@ async function prodConfirmarPassagem(orderId, novoNome) {
 
 async function prodPegar(orderId, e) {
   if (e) e.stopPropagation();
-  var meuNome = currentUser === 'acabador' ? getNomeAcabador() : 'Serrador';
+  var meuNome = _meuNomeProd();
   var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
   if (!order) { showNotif('Pedido não encontrado','error'); return; }
   var prod = getProdStatus(order);
@@ -1858,7 +1888,7 @@ async function prodPegar(orderId, e) {
 
   // Calcula tempos previstos do orçamento
   var tempos = getTemposPrevistosOrcamento(orderId);
-  var prevMs = currentUser === 'serrador' ? tempos.serrador : tempos.acabador;
+  var prevMs = _prevMsEtapa(order, tempos);
 
   var data = {
     nome: meuNome,
@@ -1872,6 +1902,95 @@ async function prodPegar(orderId, e) {
   showNotif('Obra pega! Cronômetro iniciado ✓','success');
   renderKanban();
   iniciarTimerProd();
+}
+
+// Encarregado/Dono escolhe quem vai fazer o serviço (serrador em Corte, acabador em Acabamento)
+function prodAbrirDesignar(orderId, e) {
+  if (e) e.stopPropagation();
+  var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+  if (!order) return;
+  var atual = getProdStatus(order);
+  var etapaCorte = order.stage === 'corte';
+  var nomes = etapaCorte ? getSerradores() : getAcabadores();
+  var old = document.getElementById('modal-designar'); if (old) old.remove();
+  var m = document.createElement('div');
+  m.id = 'modal-designar';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
+  m.innerHTML = '<div style="background:white;border-radius:16px;padding:24px;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">'
+    +'<div style="font-size:16px;font-weight:800;color:#1a2332;margin-bottom:4px;">👷 '+(atual?'Trocar funcionário':'Designar funcionário')+'</div>'
+    +'<div style="font-size:13px;color:#888;margin-bottom:4px;">'+(order.ref_fechado||order.id)+' — '+(order.cliente||'')+'</div>'
+    +'<div style="font-size:12px;color:#666;margin-bottom:14px;">Etapa: <b>'+(etapaCorte?'Corte':'Acabamento')+'</b>'+(atual?' · hoje: <b>'+atual.nome+'</b>':'')+'</div>'
+    +'<div id="designar-lista" style="display:flex;flex-direction:column;gap:8px;"></div>'
+    +'<button id="designar-cancel" style="margin-top:10px;width:100%;background:none;border:none;color:#888;font-size:13px;cursor:pointer;padding:8px;">Cancelar</button></div>';
+  document.body.appendChild(m);
+  var lista = m.querySelector('#designar-lista');
+  nomes.forEach(function(nome){
+    var b = document.createElement('button');
+    b.textContent = nome + (atual && atual.nome === nome ? '  (atual)' : '');
+    b.style.cssText = 'background:#f8f9fa;border:2px solid '+(atual && atual.nome === nome ? '#1e5f74' : '#e0e0e0')+';border-radius:10px;padding:13px;font-size:15px;font-weight:700;color:#1a2332;cursor:pointer;width:100%;';
+    b.onclick = function(){ m.remove(); prodDesignar(orderId, nome); };
+    lista.appendChild(b);
+  });
+  if (!nomes.length) lista.innerHTML = '<div style="font-size:13px;color:#B85A4A;">Nenhum funcionário cadastrado. Cadastre em Configurações → '+(etapaCorte?'Serradores':'Acabadores')+'.</div>';
+  m.querySelector('#designar-cancel').onclick = function(){ m.remove(); };
+  m.addEventListener('mousedown', function(ev){ if (ev.target === m) m.remove(); });
+}
+
+async function prodDesignar(orderId, nome) {
+  var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+  if (!order) { showNotif('Pedido não encontrado','error'); return; }
+  var atual = getProdStatus(order);
+  if (atual && atual.nome === nome) { showNotif(nome+' já está com esta obra','error'); return; }
+  if (atual && _prodIniciado(atual)) {
+    // já estava em andamento: passa o bastão, mantendo o tempo corrido
+    await prodConfirmarPassagem(orderId, nome);
+    return;
+  }
+  var tempos = getTemposPrevistosOrcamento(orderId);
+  var data = atual ? Object.assign({}, atual, { nome: nome, designadoPor: currentUser, designadoEm: new Date().toISOString() }) : {
+    nome: nome,
+    perfil: order.stage === 'corte' ? 'serrador' : 'acabador',
+    prevMs: _prevMsEtapa(order, tempos),
+    designadoPor: currentUser,
+    designadoEm: new Date().toISOString(),
+    log: []   // só começa a contar quando o funcionário clicar em Iniciar
+  };
+  showLoading('Salvando...');
+  await saveProdStatus(orderId, data);
+  hideLoading();
+  showNotif('Designado para '+nome+' ✓','success');
+  renderKanban();
+}
+
+async function prodIniciar(orderId, e) {
+  if (e) e.stopPropagation();
+  var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+  var prod = order ? getProdStatus(order) : null;
+  if (!prod) return;
+  if (_prodIniciado(prod)) return;
+  prod.log = [{ tipo:'inicio', ts: new Date().toISOString() }];
+  showLoading('Salvando...');
+  await saveProdStatus(orderId, prod);
+  hideLoading();
+  showNotif('Iniciado ▶','success');
+  renderKanban();
+  iniciarTimerProd();
+}
+
+async function prodTirarDesignacao(orderId, e) {
+  if (e) e.stopPropagation();
+  var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+  var prod = order ? getProdStatus(order) : null;
+  if (!prod) return;
+  var aviso = _prodIniciado(prod)
+    ? 'Tirar "' + prod.nome + '" desta obra?\n\nO tempo já corrido (' + fmtTempo(calcTempoUtil(prod.log)) + ') será DESCARTADO.'
+    : 'Tirar a designação de "' + prod.nome + '"?';
+  if (!confirm(aviso)) return;
+  showLoading('Salvando...');
+  await limparProdStatus(orderId);
+  hideLoading();
+  showNotif('Designação removida','success');
+  renderKanban();
 }
 
 async function prodPausar(orderId, e) {
@@ -1917,7 +2036,7 @@ async function prodConcluir(orderId, e) {
   prod.tempoUtilMs = tempoUtil;
   prod.concluido = agora;
 
-  var proximoStage = currentUser === 'serrador' ? 'acabamento' : 'pronto';
+  var proximoStage = order ? (order.stage === 'corte' ? 'acabamento' : 'pronto') : (currentUser === 'serrador' ? 'acabamento' : 'pronto');
 
   showLoading('Salvando...');
   // Move stage e limpa prod_status
@@ -3286,6 +3405,77 @@ function renderKanban(filter='') {
     board.appendChild(col);
     filtered.forEach(o=>col.querySelector('.cards-area').appendChild(createCard(o)));
   });
+  try { renderPainelEquipe(); } catch(e) { console.error('painel equipe:', e); }
+}
+
+// ── PAINEL DA EQUIPE (Encarregado / Dono): quem está em qual pedido e há quanto tempo ──
+function renderPainelEquipe() {
+  const board = document.getElementById('kanban-board');
+  if (!board) return;
+  let box = document.getElementById('painel-equipe');
+  if (!_ehGestorProd() || _kanbanAba !== 'producao') { if (box) box.remove(); return; }
+  if (!box) { box = document.createElement('div'); box.id = 'painel-equipe'; board.parentNode.insertBefore(box, board); }
+
+  let aberto = true; try { aberto = localStorage.getItem('mf_painel_equipe') !== 'fechado'; } catch(e) {}
+  const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  // um registro por pedido (cópias -P / -P-P contam como o mesmo)
+  const ativos = _umPorPedido(orders.filter(o => (o.stage === 'corte' || o.stage === 'acabamento') && !isArquivado(o)), o => o.id);
+  const semFunc = [], porNome = {};
+  ativos.forEach(o => {
+    const pr = getProdStatus(o);
+    if (pr && pr.nome) { (porNome[pr.nome] = porNome[pr.nome] || []).push({ o, pr }); }
+    else semFunc.push(o);
+  });
+
+  const pessoas = [];
+  getSerradores().forEach(n => pessoas.push({ nome: n, papel: 'Corte' }));
+  getAcabadores().forEach(n => pessoas.push({ nome: n, papel: 'Acabamento' }));
+  Object.keys(porNome).forEach(n => { if (!pessoas.some(p => p.nome === n)) pessoas.push({ nome: n, papel: 'Outro' }); });
+
+  const linhaJob = ({ o, pr }) => {
+    const ini = _prodIniciado(pr), paus = _prodPausado(pr);
+    const ms = calcTempoUtil(pr.log || []);
+    const prev = _prevMsEtapa(o, getTemposPrevistosOrcamento(o.id));
+    const pct = (prev > 0 && ini) ? Math.round(ms / prev * 100) : 0;
+    const cor = !ini ? '#8a6d00' : paus ? '#888' : (pct < 85 ? '#2E7D32' : pct < 100 ? '#B8860B' : '#B85A4A');
+    return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:4px 0;font-size:12.5px;">'
+      + '<span>' + _iconeProd(pr) + '</span>'
+      + '<span style="font-weight:700;color:#1a2332;">' + esc(o.cliente) + '</span>'
+      + '<span style="color:#8a8577;">' + esc(o.ref_fechado || o.id) + ' · ' + (o.stage === 'corte' ? 'Corte' : 'Acabamento') + '</span>'
+      + '<span style="margin-left:auto;font-weight:800;color:' + cor + ';font-variant-numeric:tabular-nums;">'
+      + (ini ? '<span data-eq-tempo="' + esc(o.id) + '">' + fmtCronometro(ms) + '</span>' + (prev > 0 ? ' <span style="font-weight:600;color:#8a8577;">/ ' + fmtTempo(prev) + ' (' + pct + '%)</span>' : '') + (paus ? ' <span style="font-weight:600;">pausado</span>' : '') : 'aguardando iniciar')
+      + '</span></div>';
+  };
+
+  const cards = pessoas.map(p => {
+    const jobs = porNome[p.nome] || [];
+    return '<div style="background:white;border:1px solid #ece7da;border-left:4px solid ' + (jobs.length ? '#1e5f74' : '#cfd8cf') + ';border-radius:10px;padding:10px 12px;">'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:' + (jobs.length ? '4' : '0') + 'px;">'
+      + '<span style="font-weight:800;color:#1a2332;font-size:14px;">' + esc(p.nome) + '</span>'
+      + '<span style="font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#8a8577;">' + p.papel + '</span>'
+      + '<span style="margin-left:auto;font-size:11.5px;font-weight:700;color:' + (jobs.length ? '#1e5f74' : '#4A7C59') + ';">' + (jobs.length ? jobs.length + ' obra(s)' : 'Livre') + '</span></div>'
+      + jobs.map(linhaJob).join('') + '</div>';
+  }).join('');
+
+  const semHtml = semFunc.length
+    ? '<div style="margin-top:12px;"><div style="font-size:12px;font-weight:800;color:#B8860B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Sem funcionário (' + semFunc.length + ')</div>'
+      + semFunc.map(o => '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #f0ece2;font-size:12.5px;">'
+          + '<span style="font-weight:700;color:#1a2332;">' + esc(o.cliente) + '</span>'
+          + '<span style="color:#8a8577;">' + esc(o.ref_fechado || o.id) + ' · ' + (o.stage === 'corte' ? 'Corte' : 'Acabamento') + '</span>'
+          + '<button onclick="prodAbrirDesignar(\'' + String(o.id).replace(/'/g, '') + '\',event)" style="margin-left:auto;background:#1e5f74;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;">Designar</button></div>').join('')
+      + '</div>'
+    : '';
+
+  const ocupados = pessoas.filter(p => (porNome[p.nome] || []).length).length;
+  box.innerHTML = '<div style="background:#faf8f2;border:1px solid #ece7da;border-radius:14px;padding:14px 16px;margin-bottom:14px;">'
+    + '<div style="display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="try{localStorage.setItem(\'mf_painel_equipe\',' + (aberto ? "'fechado'" : "'aberto'") + ')}catch(e){};renderPainelEquipe()">'
+    + '<span style="font-size:15px;font-weight:800;color:#1a2332;">👷 Equipe em produção</span>'
+    + '<span style="font-size:12px;color:#8a8577;">' + ocupados + ' de ' + pessoas.length + ' ocupados' + (semFunc.length ? ' · ' + semFunc.length + ' obra(s) sem funcionário' : '') + '</span>'
+    + '<span style="margin-left:auto;font-size:12px;color:#8a8577;">' + (aberto ? '▲ recolher' : '▼ abrir') + '</span></div>'
+    + (aberto ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-top:12px;">' + cards + '</div>' + semHtml : '')
+    + '</div>';
+  iniciarTimerProd();
 }
 
 function toggleCardMenu(id, e) {
@@ -3434,7 +3624,7 @@ function createCard(o) {
     <div class="card-client">${o.cliente}</div>
     <div class="card-desc">${o.peca||''}${o.material?' · '+o.material:''}</div>
     ${showValor?`<div class="card-valor">R$ ${o.valor}</div>`:''}
-    ${(podeGerenciarProd && prod && prod.nome) ? `<div style="background:#e8f4f7;border-radius:8px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px;"><span>${prod.log&&prod.log[prod.log.length-1]&&prod.log[prod.log.length-1].tipo==='pausa'?'⏸':'▶'}</span><div><div style="font-size:12px;font-weight:700;color:#1a2332;">${prod.nome}</div><div id="tempo-${o.id}" style="font-size:11px;color:#888;">⏱ ${fmtCronometro(calcTempoUtil(prod.log))}</div></div></div>` : ''}
+    ${(podeGerenciarProd && prod && prod.nome) ? `<div style="background:#e8f4f7;border-radius:8px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px;"><span>${_iconeProd(prod)}</span><div><div style="font-size:12px;font-weight:700;color:#1a2332;">${prod.nome}</div><div id="tempo-${o.id}" style="font-size:11px;color:#888;">${_prodIniciado(prod)?'⏱ '+fmtCronometro(calcTempoUtil(prod.log)):'aguardando iniciar'}</div></div></div>` : ''}
     ${(!podeGerenciarProd && prodInfo && prodInfo.nome) ? `<div style="background:#e8f4f7;border-radius:6px;padding:5px 8px;margin-bottom:4px;display:flex;align-items:center;gap:6px;font-size:12px;"><span>${prodInfo.log&&prodInfo.log[prodInfo.log.length-1]&&prodInfo.log[prodInfo.log.length-1].tipo==='pausa'?'⏸':'▶'}</span><span style="font-weight:700;color:#1a2332;">${prodInfo.nome}</span><span id="tempo-${o.id}" style="color:#888;">⏱ ${fmtCronometro(calcTempoUtil(prodInfo.log))}</span></div>` : ''}
     ${(isProdUser || podeGerenciarProd) ? renderProdBotoes(o, prod) : ''}
     ${btnsPronto}
@@ -4825,6 +5015,11 @@ function ativarSessao(perfil) {
   // Acabador — sempre pede o nome ao entrar
   if (perfil === 'acabador') {
     mostrarSelecaoAcabador();
+    return true;
+  }
+  // Serrador — só pergunta o nome quando há mais de um cadastrado
+  if (perfil === 'serrador' && getSerradores().length > 1 && !window._serradorOk) {
+    mostrarSelecaoSerrador();
     return true;
   }
 
@@ -16559,7 +16754,48 @@ function renderAcabadores() {
     +'<button onclick="adicionarAcabador()" style="background:var(--gold);color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">+ Adicionar</button>'
     +'</div>'
     +'</div>';
-  el.innerHTML = html;
+  el.innerHTML = html + '<div id="serradores-content"></div>';
+  renderSerradores('serradores-content');
+}
+
+function renderSerradores(containerId) {
+  var el = document.getElementById(containerId); if (!el) return;
+  var nomes = getSerradores();
+  var esc = function(t){ return String(t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  el.innerHTML = '<div style="background:white;border-radius:14px;box-shadow:var(--shadow);padding:24px;margin-top:16px;">'
+    +'<div style="font-size:15px;font-weight:700;color:var(--stone);margin-bottom:4px;">🪚 Serradores</div>'
+    +'<div style="font-size:13px;color:#888;margin-bottom:20px;">Nomes que o Encarregado escolhe ao designar um corte (e que aparecem ao entrar como Serrador, PIN 6666, se houver mais de um)</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">'
+    + nomes.map(function(nome, i){
+        return '<div style="display:flex;align-items:center;gap:10px;background:#f8f9fa;border-radius:8px;padding:10px 14px;">'
+          +'<span style="flex:1;font-size:14px;font-weight:600;color:var(--stone);">'+esc(nome)+'</span>'
+          +'<button onclick="removerSerrador('+i+')" style="background:#FDEAEA;border:none;color:#B85A4A;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">🗑 Remover</button></div>';
+      }).join('')
+    +'</div>'
+    +'<div style="display:flex;gap:8px;">'
+    +'<input id="novo-serrador-input" class="form-input" placeholder="Nome do novo serrador..." style="flex:1;">'
+    +'<button onclick="adicionarSerrador()" style="background:var(--gold);color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">+ Adicionar</button></div></div>';
+}
+function adicionarSerrador() {
+  var input = document.getElementById('novo-serrador-input');
+  var nome = input ? input.value.trim() : '';
+  if (!nome) { showNotif('Digite um nome!','error'); return; }
+  var nomes = getSerradores();
+  if (nomes.indexOf(nome) >= 0) { showNotif('Nome já cadastrado!','error'); return; }
+  nomes.push(nome);
+  localStorage.setItem('mf_serradores', JSON.stringify(nomes));
+  showNotif(nome+' adicionado! ✓','success');
+  renderAcabadores();
+}
+function removerSerrador(idx) {
+  var nomes = getSerradores();
+  var nome = nomes[idx];
+  if (nomes.length <= 1) { showNotif('Precisa ficar pelo menos um serrador.','error'); return; }
+  if (!confirm('Remover "'+nome+'" da lista?')) return;
+  nomes.splice(idx, 1);
+  localStorage.setItem('mf_serradores', JSON.stringify(nomes));
+  showNotif(nome+' removido!','success');
+  renderAcabadores();
 }
 
 function adicionarAcabador() {

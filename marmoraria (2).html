@@ -1034,7 +1034,7 @@ function toggleFiltroAv() {
 <div class="notif" id="notif"></div>
 
 <script>
-const MF_VERSAO = '24/10 · v5.6 (botão Reagendar corrigido)'; // conferir em cada aparelho se já está com o arquivo novo
+const MF_VERSAO = '24/10 · v5.7 (agenda: enviar resto para aguardando)'; // conferir em cada aparelho se já está com o arquivo novo
 // Código curto deste aparelho/navegador (ex.: #A3F9). Fica guardado no navegador e aparece na lateral do
 // sistema, nos erros registrados e em cada orçamento gravado — assim sabemos QUAL aparelho fez o quê.
 function mfAparelho() {
@@ -11051,6 +11051,80 @@ async function marcarComoComInstalacao(pedidoId) {
   showNotif('✅ Voltou para instalação.', 'success');
 }
 
+// ── Enviar em massa para "Aguardando agendamento" ────────────────────────────
+function _temBackupAguardando() { try { return !!localStorage.getItem('mf_backup_aguardando'); } catch(e) { return false; } }
+
+function _calcEnvioAguardando(corte) {
+  if (!corte) return [];
+  const hoje = agHojeStr();
+  const vistos = new Set();
+  return getDiasOcupados().filter(x => x.tipo === 'pedido' && x.data > corte && x.data >= hoje)
+    .filter(x => { const b = String(x.id||'').replace(/-P$/, ''); if (vistos.has(b)) return false; vistos.add(b); return true; })
+    .sort((a,b) => a.data.localeCompare(b.data));
+}
+
+function abrirEnviarParaAguardando() {
+  const old = document.getElementById('modal-massa'); if (old) old.remove();
+  const m = document.createElement('div'); m.id = 'modal-massa';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+  m.innerHTML = '<div style="background:white;border-radius:16px;padding:24px;max-width:440px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:90vh;overflow:auto;">'
+    + '<div style="font-size:16px;font-weight:800;color:#1a2332;margin-bottom:6px;">Mandar o resto para aguardando</div>'
+    + '<div style="font-size:13px;color:#666;margin-bottom:14px;">Escolha até que dia as instalações <b>continuam como estão</b>. Todas as que estiverem <b>depois</b> desse dia ficam sem data, em "Aguardando agendamento". Nada é apagado, e dá para desfazer.</div>'
+    + '<label style="font-size:12px;font-weight:600;color:#666;display:block;margin-bottom:6px;">MANTER ATÉ (inclusive)</label>'
+    + '<input type="date" id="massa-corte" style="width:100%;padding:10px;border:1.5px solid #1e5f74;border-radius:8px;font-size:14px;font-weight:700;box-sizing:border-box;margin-bottom:12px;">'
+    + '<div id="massa-previa" style="font-size:12.5px;color:#444;background:#f7f4ec;border-radius:8px;padding:10px 12px;margin-bottom:14px;">Escolha a data para ver quais pedidos serão enviados.</div>'
+    + '<div style="display:flex;gap:10px;"><button id="massa-ok" disabled style="flex:1;background:#B8860B;color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;opacity:.5;">Enviar para aguardando</button>'
+    + '<button id="massa-cancel" style="background:#eee;color:#333;border:none;padding:12px 16px;border-radius:8px;font-size:14px;cursor:pointer;">Cancelar</button></div></div>';
+  document.body.appendChild(m);
+  const inp = m.querySelector('#massa-corte'), prev = m.querySelector('#massa-previa'), ok = m.querySelector('#massa-ok');
+  const atualiza = () => {
+    const lista = _calcEnvioAguardando(inp.value);
+    m._lista = lista;
+    if (!inp.value) { prev.textContent = 'Escolha a data para ver quais pedidos serão enviados.'; ok.disabled = true; ok.style.opacity = .5; return; }
+    prev.innerHTML = lista.length
+      ? '<b>' + lista.length + ' pedido(s)</b> vão para aguardando:<div style="margin-top:6px;max-height:170px;overflow:auto;">' + lista.map(x => agEsc(x.data.split('-').reverse().slice(0,2).join('/')) + ' · ' + agEsc(x.cliente||x.id)).join('<br>') + '</div>'
+      : 'Nenhuma instalação depois desse dia.';
+    ok.disabled = !lista.length; ok.style.opacity = lista.length ? 1 : .5;
+  };
+  inp.oninput = atualiza; inp.onchange = atualiza;
+  m.querySelector('#massa-cancel').onclick = () => m.remove();
+  ok.onclick = async () => {
+    const lista = m._lista || [];
+    if (!lista.length) return;
+    if (!confirm('Enviar ' + lista.length + ' pedido(s) para "Aguardando agendamento"?\n\nEles ficam sem data até você agendar de novo.')) return;
+    // cópia de segurança das datas antes de mexer
+    try { localStorage.setItem('mf_backup_aguardando', JSON.stringify({ quando: new Date().toISOString(), itens: lista.map(x => ({ id: x.id, data: x.data, cliente: x.cliente })) })); } catch(e) {}
+    showLoading('Enviando ' + lista.length + ' pedido(s)...');
+    let feitos = 0, falhas = [];
+    for (const x of lista) {
+      try { await _definirDataPedido(x.id, null); feitos++; } catch(e) { falhas.push((x.cliente||x.id) + ': ' + (e.message||e)); }
+    }
+    hideLoading(); m.remove();
+    try { registrarErroSistema('agenda_massa', 'Enviados para aguardando: ' + feitos + '/' + lista.length, falhas.join(' | ')); } catch(e) {}
+    renderAgendaInstalacao();
+    showNotif(falhas.length ? (feitos + ' enviados, ' + falhas.length + ' deram erro (veja o aviso)') : feitos + ' pedido(s) enviados para aguardando ✓', falhas.length ? 'error' : 'success');
+    if (falhas.length) alert('Não foi possível enviar:\n' + falhas.join('\n'));
+  };
+}
+
+async function desfazerEnvioAguardando() {
+  let b = null; try { b = JSON.parse(localStorage.getItem('mf_backup_aguardando') || 'null'); } catch(e) {}
+  if (!b || !b.itens || !b.itens.length) { showNotif('Nada para desfazer.', 'error'); return; }
+  if (!confirm('Devolver as datas de ' + b.itens.length + ' pedido(s) ao que eram antes do último envio?\n\nPedidos que você já reagendou depois NÃO serão alterados.')) return;
+  showLoading('Restaurando datas...');
+  let feitos = 0;
+  for (const it of b.itens) {
+    const ord = orders.find(o => o.id === it.id);
+    const semData = !ord || !(ord.dataentrega || '').toString().trim();
+    if (!semData) continue;
+    try { await _definirDataPedido(it.id, it.data); feitos++; } catch(e) {}
+  }
+  hideLoading();
+  try { localStorage.removeItem('mf_backup_aguardando'); } catch(e) {}
+  renderAgendaInstalacao();
+  showNotif(feitos + ' pedido(s) voltaram para a data anterior ✓', 'success');
+}
+
 // Pedidos em produção/fechados, com instalação, que estão SEM data (foram deslocados de um dia ocupado)
 function getAguardandoAgendamento() {
   const stagesAgenda = ['fechado','corte','acabamento','pronto'];
@@ -12126,7 +12200,7 @@ function renderAgendaInstalacao() {
     <div class="fp-card" style="margin-bottom:16px;">
       <div class="fp-head">
         <div><div class="fp-title">Instalações</div><div class="fp-sub">Próximos 45 dias úteis</div></div>
-        ${podeEditar ? `<button class="fp-btn ok" onclick="abrirModalAgendarInstalacao()">+ Agendar instalação</button>` : ''}
+        ${podeEditar ? `<div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="fp-btn" onclick="abrirEnviarParaAguardando()">Mandar o resto para aguardando</button><button class="fp-btn ok" onclick="abrirModalAgendarInstalacao()">+ Agendar instalação</button></div>` : ''}
       </div>
       <div class="fp-kpis">
         <div class="fp-kpi"><div class="fp-kl">Dias livres</div><div class="fp-kv" style="color:#4A7C59;">${livres}</div><div class="fp-ks">disponíveis para agendar</div></div>
@@ -12162,7 +12236,7 @@ function renderAgendaInstalacao() {
     </div>
 
     ${aguardando.length ? `<div class="fp-card" style="margin-bottom:16px;border-left:4px solid #B8860B;">
-      <div class="fp-head"><div><div class="fp-title" style="color:#8a6d00;">Aguardando agendamento</div><div class="fp-sub">${aguardando.length} pedido(s) sem data — clique em Agendar e escolha um dia</div></div><span class="fp-tag amber">${aguardando.length}</span></div>
+      <div class="fp-head"><div><div class="fp-title" style="color:#8a6d00;">Aguardando agendamento</div><div class="fp-sub">${aguardando.length} pedido(s) sem data — clique em Agendar e escolha um dia</div></div><span style="display:flex;gap:8px;align-items:center;">${(podeEditar && _temBackupAguardando()) ? '<button class="fp-link" onclick="desfazerEnvioAguardando()">Desfazer último envio</button>' : ''}<span class="fp-tag amber">${aguardando.length}</span></span></div>
       ${linhasAg}
     </div>` : ''}
     <div class="fp-card" style="margin-bottom:16px;">

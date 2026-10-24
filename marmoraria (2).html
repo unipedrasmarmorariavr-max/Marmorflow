@@ -1034,7 +1034,7 @@ function toggleFiltroAv() {
 <div class="notif" id="notif"></div>
 
 <script>
-const MF_VERSAO = '24/10 · v6.3 (painel da equipe aberto)'; // conferir em cada aparelho se já está com o arquivo novo
+const MF_VERSAO = '24/10 · v6.4 (tempo de produção da obra)'; // conferir em cada aparelho se já está com o arquivo novo
 // Código curto deste aparelho/navegador (ex.: #A3F9). Fica guardado no navegador e aparece na lateral do
 // sistema, nos erros registrados e em cada orçamento gravado — assim sabemos QUAL aparelho fez o quê.
 function mfAparelho() {
@@ -1600,9 +1600,86 @@ function getStagesFiltradosPerfil() {
 
 // ── CONTROLE DE PRODUÇÃO (Serrador / Acabador) ───────────────────────────────
 
+// ── FICHA DE PRODUÇÃO: tempo que o pessoal tem para produzir a obra ──────────
+// Serrador = "Tempo de Serra". Acabador = o resto da produção interna (sem descarga/instalação).
+function _hm(h) { var t = Math.round((h||0)*60); return Math.floor(t/60) + 'h' + String(t%60).padStart(2,'0'); }
+
+function _montarFicha(itens) {
+  var lista = (itens || []).filter(function(it){ return it && it.calc; }).map(function(it, i) {
+    var tot = parseFloat(it.calc.tempoProdInterno) || 0;
+    var serra = Math.min(tot, parseFloat(it.calc.tSerra) || 0);
+    return { nome: it.peca || it.nome || ('Item ' + (i+1)), serra: serra, acabamento: Math.max(0, tot - serra), total: tot };
+  });
+  function soma(k) { return lista.reduce(function(a, x){ return a + x[k]; }, 0); }
+  return { itens: lista, serra: soma('serra'), acabamento: soma('acabamento'), total: soma('total'), criadoEm: new Date().toISOString() };
+}
+
+var _fichaCache = {};
+function getFichaProducao(order) {
+  try {
+    if (!order) return null;
+    if (order.ficha_producao) {
+      var f = typeof order.ficha_producao === 'string' ? JSON.parse(order.ficha_producao) : order.ficha_producao;
+      if (f && f.total > 0) return f;
+    }
+    var c = _fichaCache[order.id];
+    if (c && Date.now() - c.ts < 5000) return c.f;
+    var f2 = null;
+    var b = _baseId(order.id);
+    var itens = (order.itens_aprovados && order.itens_aprovados.length) ? order.itens_aprovados : null;
+    if (!itens) {
+      var orc = (typeof getOrcamentos === 'function' ? getOrcamentos() : []).find(function(o){
+        return _baseId(o.pedidoId) === b || _baseId(String(o.pedidoKey || '').replace(/^ORC_/, '')) === b;
+      });
+      itens = orc && orc.itens;
+    }
+    if (itens) { f2 = _montarFicha(itens); if (!(f2.total > 0)) f2 = null; else f2.origem = 'calculada'; }
+    _fichaCache[order.id] = { ts: Date.now(), f: f2 };
+    // Congela no pedido (uma vez por sessão) quando a coluna já existe no banco
+    if (f2 && ('ficha_producao' in order) && !order._fichaSalva && (_ehGestorProd() || currentUser === 'comercial')) {
+      order._fichaSalva = true;
+      salvarFichaProducao(order.id, f2);
+    }
+    return f2;
+  } catch(e) { return null; }
+}
+
+async function salvarFichaProducao(pedidoId, ficha) {
+  try {
+    var ids = _idsDoPedido(pedidoId);
+    for (var i = 0; i < ids.length; i++) {
+      var r = await getSB().from('pedidos').update({ ficha_producao: ficha }).eq('id', ids[i]);
+      if (r && r.error) { try { registrarErroSistema('ficha_producao', r.error.message, 'pedido ' + ids[i]); } catch(e) {} return false; }
+      var oo = orders.find(function(o){ return o.id === ids[i]; }); if (oo) oo.ficha_producao = ficha;
+    }
+    return true;
+  } catch(e) { return false; }
+}
+
+function _htmlFichaProducao(order) {
+  var f = getFichaProducao(order);
+  if (!f || !(f.total > 0)) return '';
+  var corte = order.stage === 'corte';
+  var k = corte ? 'serra' : 'acabamento';
+  var tot = f[k];
+  if (!(tot > 0)) return '';
+  var linhas = (f.itens || []).filter(function(x){ return x[k] > 0; }).map(function(x){ return _escH(x.nome) + ' ' + _hm(x[k]); }).join(' · ');
+  return '<div style="background:#FFF8E1;border:1px solid #f0dca0;border-radius:8px;padding:8px 10px;margin-bottom:6px;">'
+    + '<div style="font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#8a6d00;">Tempo para ' + (corte ? 'cortar' : 'acabar') + '</div>'
+    + '<div style="font-size:21px;font-weight:800;color:#1a2332;">' + _hm(tot) + '</div>'
+    + (f.itens && f.itens.length > 1 ? '<div style="font-size:11px;color:#6b5a1a;margin-top:2px;line-height:1.35;">' + linhas + '</div>' : '')
+    + '</div>';
+}
+
 function getTemposPrevistosOrcamento(orderId) {
   try {
     var order = orders ? orders.find(function(o){return o.id===orderId;}) : null;
+
+    // 0. Ficha de produção (congelada no fechamento ou calculada do orçamento)
+    var fich = order ? getFichaProducao(order) : null;
+    if (fich && fich.total > 0) {
+      return { serrador: fich.serra * 3600000, acabador: fich.acabamento * 3600000 };
+    }
 
     // 1. Campos diretos no pedido (se colunas criadas no Supabase)
     if (order && (order.tempo_serrador || order.tempo_acabador)) {
@@ -1735,7 +1812,7 @@ function renderProdBotoes(order, prod) {
     if (order.stage !== 'corte' && order.stage !== 'acabamento') return '';
     if (!ehGestor && order.stage !== estagio) return '';
 
-    var html = '';
+    var html = _htmlFichaProducao(order);
     var oid = order.id;
     var tempos = getTemposPrevistosOrcamento(oid);
     var prevMs = _prevMsEtapa(order, tempos);
@@ -5130,7 +5207,7 @@ function ativarSessao(perfil) {
       _kanbanAba = localStorage.getItem('mf_kanban_aba') || 'comercial';
     }
     // Serrador carrega orçamentos antes de renderizar kanban
-    if (currentUser === 'serrador') {
+    if (currentUser === 'serrador' || currentUser === 'producao') {
       if (typeof carregarOrcamentosDoSupabase === 'function') {
         carregarOrcamentosDoSupabase().then(function(){
           renderKanban();
@@ -13162,6 +13239,11 @@ async function confirmarFechamentoComData() {
   hideLoading();
   closeModal('modal-confirmar-data');
   await loadOrders();
+  try {
+    var _itF = itensAprovados.length ? itensAprovados : (window._orcFechamento ? window._orcFechamento.itens : []);
+    var _fi = _montarFicha(_itF);
+    if (_fi.total > 0) { _fi.origem = 'fechamento'; await salvarFichaProducao(id, _fi); }
+  } catch(eF) {}
   renderKanban(document.getElementById('search-kanban').value);
 
   if (!dataEscolhida) { showNotif('Pedido fechado e enviado para "Aguardando agendamento" (Agenda → Instalações).', 'success'); return; }
@@ -14816,7 +14898,7 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
   const pedra = resolverPedra(pedras, item);
   const calc = item.calc;
   const areaTotal = calcAreaTotalItem(item);
-  const fmtH = v => { const h=Math.floor(v||0); const m=Math.round(((v||0)-h)*60); return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); };
+  const fmtH = v => { const t=Math.round((v||0)*60); return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0'); };
   const { custoHoraEmpresa, custoHoraHomem } = calcularCustoHora();
 
   // ── CUSTOS E TEMPOS (idêntico ao Marmoprice) ──────────────────────────────
@@ -15062,8 +15144,8 @@ function renderItemTelaOrc(item, idx, pedras, cfg, orderId) {
             if (item.tempoInstalManual && item.tempoInstalManual !== '0' && item.tempoInstalManual !== '') {
               currentVal = item.tempoInstalManual;
             } else if (calc) {
-              const h=Math.floor(calc.tempoInstalEntrega||0); const m=Math.round(((calc.tempoInstalEntrega||0)-h)*60);
-              currentVal = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+              const _t=Math.round((calc.tempoInstalEntrega||0)*60);
+              currentVal = String(Math.floor(_t/60)).padStart(2,'0')+':'+String(_t%60).padStart(2,'0');
             } else { currentVal = '00:00'; }
           }
           if (isAutoPessoas) {
@@ -15201,7 +15283,7 @@ function recalcularTelaOrc(orderId) {
   const pedras = getPedrasCadastradas();
   const cfg = {...getConfigOrc(), transito: orcamentoAtual.transito};
   const { custoHoraEmpresa } = calcularCustoHora();
-  const fmtH = v => { const h=Math.floor(v||0); const m=Math.round(((v||0)-h)*60); return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); };
+  const fmtH = v => { const t=Math.round((v||0)*60); return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0'); };
 
   orcamentoAtual.itens.forEach((item, idx) => {
     const pedra = resolverPedra(pedras, item);

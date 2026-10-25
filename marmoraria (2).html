@@ -1034,7 +1034,7 @@ function toggleFiltroAv() {
 <div class="notif" id="notif"></div>
 
 <script>
-const MF_VERSAO = '24/10 · v6.4 (tempo de produção da obra)'; // conferir em cada aparelho se já está com o arquivo novo
+const MF_VERSAO = '25/10 · v6.5 (dono altera datas)'; // conferir em cada aparelho se já está com o arquivo novo
 // Código curto deste aparelho/navegador (ex.: #A3F9). Fica guardado no navegador e aparece na lateral do
 // sistema, nos erros registrados e em cada orçamento gravado — assim sabemos QUAL aparelho fez o quê.
 function mfAparelho() {
@@ -3729,6 +3729,7 @@ function createCard(o) {
     menuItens += `<div class="card-menu-item" onclick="definirResponsavelInstalacao('${o.id}','${o.dataentrega||''}','pedido');event.stopPropagation()">🔧 ${o.responsavel_instalacao || 'Definir Responsável'}</div>`;
   }
   if (showFechar) menuItens += `<div class="card-menu-item" onclick="abrirFecharPedido('${o.id}');event.stopPropagation()">💼 Dados Comerciais</div>`;
+  if (currentUser === 'dono' && ['fechado','corte','acabamento','pronto'].includes(o.stage)) menuItens += `<div class="card-menu-item" onclick="abrirAlterarData('${o.id}');event.stopPropagation()">📅 ${o.dataentrega ? 'Alterar data' : 'Definir data'}</div>`;
   // Ver orçamento — disponível em todos os estágios quando há orçamento salvo
   if (currentUser === 'dono' || currentUser === 'comercial') {
     menuItens += `<div class="card-menu-item" onclick="abrirTelaOrcamentoPedido('${o.id}');event.stopPropagation()">📋 Ver Orçamento</div>`;
@@ -3751,7 +3752,7 @@ function createCard(o) {
       <div class="card-menu-dropdown" id="menu-${o.id}">${menuItens}</div>
     </div>
     ${o.urgente==='sim'?`<div class="card-tag" style="background:#FDEAEA;color:#B85A4A;">⚠️ URGENTE</div>`:''}
-    ${urg?`<div class="prazo-badge" style="background:${urg.bg};color:${urg.color};">⏱ ${urg.label}${o.dataentrega?' · '+formatDate(o.dataentrega):''}</div>`:''}
+    ${urg?`<div class="prazo-badge" ${(currentUser==='dono' && ['fechado','corte','acabamento','pronto'].includes(o.stage)) ? `onclick="abrirAlterarData('${o.id}');event.stopPropagation()" title="Clique para alterar a data" style="cursor:pointer;background:${urg.bg};color:${urg.color};"` : `style="background:${urg.bg};color:${urg.color};"`}>⏱ ${urg.label}${o.dataentrega?' · '+formatDate(o.dataentrega):''}${currentUser==='dono' && ['fechado','corte','acabamento','pronto'].includes(o.stage) ? ' ✎' : ''}</div>`:''}
     ${proximaMedicao?`<div style="background:${medicaoHoje?'#FFF3CD':'#f0f7ff'};border:1px solid ${medicaoHoje?'#8B6914':'#006382'};border-radius:6px;padding:5px 8px;margin-bottom:6px;font-size:11px;font-weight:600;color:${medicaoHoje?'#8B6914':'#006382'};">📐 ${medicaoHoje?'HOJE':'Medição'} ${proximaMedicao.horario||''} · ${proximaMedicao.data.substring(8,10)+'/'+proximaMedicao.data.substring(5,7)}</div>`:''}
     <div class="card-id">${o.ref_fechado || o.id}</div>
     <div class="card-client">${o.cliente}</div>
@@ -11453,6 +11454,76 @@ async function desfazerEnvioAguardando() {
   try { localStorage.removeItem('mf_backup_aguardando'); } catch(e) {}
   renderAgendaInstalacao();
   showNotif(feitos + ' pedido(s) voltaram para a data anterior ✓', 'success');
+}
+
+// ── ALTERAR DATA (só o dono): vale para o pedido e a cópia da produção ───────
+function abrirAlterarData(orderId) {
+  if (currentUser !== 'dono') { showNotif('Só o dono pode alterar datas.', 'error'); return; }
+  var order = orders.find(function(o){ return o.id === orderId; });
+  if (!order) return;
+  if (!['fechado','corte','acabamento','pronto'].includes(order.stage)) { showNotif('Só pedidos fechados, em produção ou prontos.', 'error'); return; }
+  var old = document.getElementById('modal-alterar-data'); if (old) old.remove();
+  var atual = (order.dataentrega || '').toString().substring(0,10);
+  var instal = !['so_entrega','retirada'].includes(order.tipoentrega);
+  var m = document.createElement('div');
+  m.id = 'modal-alterar-data';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+  m.innerHTML = '<div style="background:white;border-radius:16px;padding:24px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">'
+    + '<div style="font-size:16px;font-weight:800;color:#1a2332;margin-bottom:4px;">📅 ' + (atual ? 'Alterar data' : 'Definir data') + '</div>'
+    + '<div style="font-size:13px;color:#888;margin-bottom:16px;">' + _escH(order.ref_fechado || order.id) + ' — ' + _escH(order.cliente || '') + '</div>'
+    + '<div style="margin-bottom:14px;"><label style="font-size:12px;font-weight:600;color:#666;display:block;margin-bottom:6px;">DATA ATUAL</label>'
+    + '<div style="font-size:14px;font-weight:700;color:' + (atual && atual < agHojeStr() ? '#B85A4A' : '#1a2332') + ';padding:10px;background:#f7f4ec;border-radius:8px;">' + (atual ? formatarDataBR(atual) + (atual < agHojeStr() ? '  · atrasado' : '') : 'sem data') + '</div></div>'
+    + '<div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;color:#666;display:block;margin-bottom:6px;">NOVA DATA</label>'
+    + '<input type="date" id="alt-data" value="' + atual + '" style="width:100%;padding:10px;border:1.5px solid #1e5f74;border-radius:8px;font-size:14px;font-weight:700;box-sizing:border-box;color:#1a2332;"></div>'
+    + '<div id="alt-aviso" style="margin:0 0 14px;font-size:12px;color:#8a6d00;background:#FFF8E1;border-radius:8px;padding:8px 10px;display:none;"></div>'
+    + '<div style="display:flex;gap:10px;"><button id="alt-ok" style="flex:1;background:#1e5f74;color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✓ Confirmar</button>'
+    + '<button id="alt-cancel" style="background:#eee;color:#333;border:none;padding:12px 16px;border-radius:8px;font-size:14px;cursor:pointer;">Cancelar</button></div>'
+    + (instal && atual ? '<button id="alt-semdata" style="margin-top:10px;width:100%;background:none;border:none;color:#8a6d00;font-size:12.5px;cursor:pointer;text-decoration:underline;">Tirar a data (mandar para "Aguardando agendamento")</button>' : '')
+    + '</div>';
+  document.body.appendChild(m);
+  var inp = m.querySelector('#alt-data'), av = m.querySelector('#alt-aviso');
+  var base = _baseId(orderId);
+  var aviso = function() {
+    var d = inp.value, msgs = [];
+    if (d && !isDiaUtil(new Date(d + 'T12:00:00'))) msgs.push('Fim de semana.');
+    if (d && instal) {
+      var q = getDiasOcupados().filter(function(x){ return x.data === d && _baseId(x.id) !== base; });
+      if (q.length) msgs.push('Já tem instalação neste dia: ' + q.map(function(x){ return x.cliente || x.id; }).join(', ') + '.');
+    }
+    av.textContent = msgs.join(' '); av.style.display = msgs.length ? 'block' : 'none';
+  };
+  inp.oninput = aviso; inp.onchange = aviso;
+  m.querySelector('#alt-cancel').onclick = function(){ m.remove(); };
+  m.addEventListener('mousedown', function(e){ if (e.target === m) m.remove(); });
+  m.querySelector('#alt-ok').onclick = function(){ confirmarAlterarData(orderId, inp.value); };
+  var sd = m.querySelector('#alt-semdata'); if (sd) sd.onclick = function(){ confirmarAlterarData(orderId, ''); };
+}
+
+async function confirmarAlterarData(orderId, novaData) {
+  if (currentUser !== 'dono') return;
+  var order = orders.find(function(o){ return o.id === orderId; });
+  if (!order) return;
+  if (!novaData && !confirm('Tirar a data deste pedido? Ele vai para "Aguardando agendamento".')) return;
+  var velha = (order.dataentrega || '').toString().substring(0,10);
+  if (novaData === velha) { var mm = document.getElementById('modal-alterar-data'); if (mm) mm.remove(); return; }
+  var instal = !['so_entrega','retirada'].includes(order.tipoentrega);
+  var deslocar = [], perdeuODia = false;
+  if (novaData && instal) {
+    var q = await _perguntarQuemFica(novaData, orderId, order.cliente);
+    if (q.acao === 'cancelar') return;
+    if (q.acao === 'manter') { deslocar = q.deslocar || []; perdeuODia = !q.manterNovo; }
+  }
+  showLoading('Alterando data...');
+  try {
+    for (var i = 0; i < deslocar.length; i++) await _definirDataPedido(deslocar[i], null);
+    await _definirDataPedido(orderId, (perdeuODia || !novaData) ? null : novaData);
+  } catch(e) { hideLoading(); showNotif('Erro: ' + (e.message || e), 'error'); return; }
+  hideLoading();
+  try { registrarErroSistema('data_alterada', 'Data alterada pelo dono', 'pedido ' + _baseId(orderId) + ' | de ' + (velha || 'sem data') + ' para ' + ((perdeuODia || !novaData) ? 'sem data' : novaData) + (deslocar.length ? ' | liberou o dia de: ' + deslocar.join(', ') : '')); } catch(e) {}
+  var m = document.getElementById('modal-alterar-data'); if (m) m.remove();
+  renderKanban(document.getElementById('search-kanban') ? document.getElementById('search-kanban').value : '');
+  if (document.getElementById('painel-agenda-instalacao')) { try { renderAgendaInstalacao(); } catch(e) {} }
+  showNotif((perdeuODia || !novaData) ? 'Pedido foi para "Aguardando agendamento" ✓' : 'Data alterada para ' + formatarDataBR(novaData) + ' ✓', 'success');
 }
 
 // Pedidos em produção/fechados, com instalação, que estão SEM data (foram deslocados de um dia ocupado)

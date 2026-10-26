@@ -1034,7 +1034,7 @@ function toggleFiltroAv() {
 <div class="notif" id="notif"></div>
 
 <script>
-const MF_VERSAO = '25/10 · v6.6 (voltar p/ corte)'; // conferir em cada aparelho se já está com o arquivo novo
+const MF_VERSAO = '26/10 · v6.7 (equipe em todos aparelhos)'; // conferir em cada aparelho se já está com o arquivo novo
 // Código curto deste aparelho/navegador (ex.: #A3F9). Fica guardado no navegador e aparece na lateral do
 // sistema, nos erros registrados e em cada orçamento gravado — assim sabemos QUAL aparelho fez o quê.
 function mfAparelho() {
@@ -13599,11 +13599,14 @@ async function loadConfigFromSupabase(chave) {
 }
 
 async function carregarConfigsDoSupabase() {
-  const chaves = ['config_orcamento', 'pedras_cadastradas', 'pedras_extras', 'mf_bancos', 'gastos_marmorflow', 'mf_estoque', 'mf_instalacoes'];
+  const chaves = ['config_orcamento', 'pedras_cadastradas', 'pedras_extras', 'mf_bancos', 'gastos_marmorflow', 'mf_estoque', 'mf_instalacoes', 'mf_serradores', 'mf_acabadores'];
   for (const chave of chaves) {
     try {
       const val = await loadConfigFromSupabase(chave);
       if (val !== null) localStorage.setItem(chave, JSON.stringify(val));
+      else if ((chave==='mf_serradores'||chave==='mf_acabadores') && localStorage.getItem(chave)) {
+        try { syncConfigToSupabase(chave, JSON.parse(localStorage.getItem(chave))); } catch(e) {}
+      }
     } catch(e) {}
   }
 }
@@ -17013,6 +17016,7 @@ function adicionarSerrador() {
   if (nomes.indexOf(nome) >= 0) { showNotif('Nome já cadastrado!','error'); return; }
   nomes.push(nome);
   localStorage.setItem('mf_serradores', JSON.stringify(nomes));
+  syncConfigToSupabase('mf_serradores', nomes);
   showNotif(nome+' adicionado! ✓','success');
   renderAcabadores();
 }
@@ -17023,6 +17027,7 @@ function removerSerrador(idx) {
   if (!confirm('Remover "'+nome+'" da lista?')) return;
   nomes.splice(idx, 1);
   localStorage.setItem('mf_serradores', JSON.stringify(nomes));
+  syncConfigToSupabase('mf_serradores', nomes);
   showNotif(nome+' removido!','success');
   renderAcabadores();
 }
@@ -17035,6 +17040,7 @@ function adicionarAcabador() {
   if (nomes.includes(nome)) { showNotif('Nome já cadastrado!','error'); return; }
   nomes.push(nome);
   localStorage.setItem('mf_acabadores', JSON.stringify(nomes));
+  syncConfigToSupabase('mf_acabadores', nomes);
   showNotif(nome+' adicionado! ✓','success');
   renderAcabadores();
 }
@@ -17045,6 +17051,7 @@ function removerAcabador(idx) {
   if (!confirm('Remover "'+nome+'" da lista?')) return;
   nomes.splice(idx, 1);
   localStorage.setItem('mf_acabadores', JSON.stringify(nomes));
+  syncConfigToSupabase('mf_acabadores', nomes);
   showNotif(nome+' removido!','success');
   renderAcabadores();
 }

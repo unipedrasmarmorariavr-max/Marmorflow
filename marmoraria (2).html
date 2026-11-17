@@ -1044,7 +1044,7 @@ function toggleFiltroAv() {
 <div class="notif" id="notif"></div>
 
 <script>
-const MF_VERSAO = '04/11 · v7.0 (filtro do histórico)'; // conferir em cada aparelho se já está com o arquivo novo
+const MF_VERSAO = '17/11 · v7.2 (aviso de carga mais tolerante)'; // conferir em cada aparelho se já está com o arquivo novo
 // Código curto deste aparelho/navegador (ex.: #A3F9). Fica guardado no navegador e aparece na lateral do
 // sistema, nos erros registrados e em cada orçamento gravado — assim sabemos QUAL aparelho fez o quê.
 function mfAparelho() {
@@ -1388,9 +1388,10 @@ function mostrarAvisoFalhaCarga() {
       document.body.appendChild(el);
       document.getElementById('mf-aviso-carga-btn').onclick = function() {
         var st = document.getElementById('mf-aviso-carga-st'); if (st) st.textContent = 'tentando...';
-        loadOrders(false).then(function(ok) { var st2 = document.getElementById('mf-aviso-carga-st'); if (st2 && !ok) st2.textContent = 'ainda sem resposta'; });
+        loadOrders(false).then(function(ok) { var st2 = document.getElementById('mf-aviso-carga-st'); if (st2 && !ok) st2.textContent = 'ainda sem resposta — motivo: ' + (window._mfMotivoCarga || '?'); });
       };
     }
+    try { var st0 = document.getElementById('mf-aviso-carga-st'); if (st0 && window._mfMotivoCarga) st0.textContent = 'motivo: ' + window._mfMotivoCarga; } catch(e) {}
     if (!_loadRetryTimer) {
       _loadRetryTimer = setInterval(function() { if (!document.hidden) loadOrders(true); }, 15000); // tenta sozinho a cada 15s
     }
@@ -1407,10 +1408,17 @@ function esconderAvisoFalhaCarga() {
 async function loadOrders(silencioso = false) {
   if (!silencioso) showLoading('Carregando pedidos...');
   let data = null, error = null;
-  try {
-    const r = await getSB().from('pedidos').select('*').order('created_at',{ascending:false}).limit(1000);
-    data = r.data; error = r.error;
-  } catch(e) { error = e || new Error('falha de rede'); }
+  // Até 2 tentativas (a 2ª após 2s) e limite de 30s por tentativa: um soluço de rede não vira aviso vermelho.
+  for (let tentativa = 1; tentativa <= 2; tentativa++) {
+    data = null; error = null;
+    try {
+      const consulta = getSB().from('pedidos').select('*').order('created_at',{ascending:false}).limit(1000);
+      const r = await Promise.race([consulta, new Promise((_, rej) => setTimeout(() => rej(new Error('sem resposta do servidor em 30s')), 30000))]);
+      data = r.data; error = r.error;
+    } catch(e) { error = e || new Error('falha de rede'); }
+    if (!error && Array.isArray(data) && !(data.length === 0 && ((orders && orders.length > 0)))) break;
+    if (tentativa === 1) await new Promise(res => setTimeout(res, 2000));
+  }
   if (!silencioso) hideLoading();
   // Lista vazia vindo do servidor quando já tínhamos pedidos na tela = resposta suspeita (já aconteceu
   // o Kanban esvaziar por uns instantes). Trata como falha: mantém o que está na tela e tenta de novo.
@@ -1418,10 +1426,11 @@ async function loadOrders(silencioso = false) {
   const vazioSuspeito = !error && Array.isArray(data) && data.length === 0 && ((orders && orders.length > 0) || _ultimoTotal > 0);
   if (error || !Array.isArray(data) || vazioSuspeito) {
     _loadFalhasSeguidas++;
+    window._mfMotivoCarga = vazioSuspeito ? 'servidor devolveu lista vazia' : ((error && error.message) ? error.message : String(error || 'sem dados'));
     registrarErroSistema('carga_pedidos', vazioSuspeito ? 'Servidor devolveu lista vazia (suspeito)' : 'Falha ao carregar pedidos: ' + (error && error.message ? error.message : error),
       'silencioso=' + silencioso + ' | falhas seguidas=' + _loadFalhasSeguidas + ' | pedidos na tela=' + (orders ? orders.length : 0));
     // Carga manual/inicial: avisa já. Carga automática (a cada 20s): só avisa na 2ª falha seguida (ignora soluço de rede).
-    if (!silencioso || _loadFalhasSeguidas >= 2) mostrarAvisoFalhaCarga();
+    if (!silencioso || _loadFalhasSeguidas >= 3) mostrarAvisoFalhaCarga();
     return false;
   }
   const recuperou = _loadFalhasSeguidas > 0;

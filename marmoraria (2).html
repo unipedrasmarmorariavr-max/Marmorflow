@@ -1044,7 +1044,7 @@ function toggleFiltroAv() {
 <div class="notif" id="notif"></div>
 
 <script>
-const MF_VERSAO = '17/11 · v7.4 (recebimento conjunto)'; // conferir em cada aparelho se já está com o arquivo novo
+const MF_VERSAO = '17/11 · v7.5 (alivia o banco)'; // conferir em cada aparelho se já está com o arquivo novo
 // Código curto deste aparelho/navegador (ex.: #A3F9). Fica guardado no navegador e aparece na lateral do
 // sistema, nos erros registrados e em cada orçamento gravado — assim sabemos QUAL aparelho fez o quê.
 function mfAparelho() {
@@ -1419,7 +1419,7 @@ function mostrarAvisoFalhaCarga() {
     }
     try { var st0 = document.getElementById('mf-aviso-carga-st'); if (st0 && window._mfMotivoCarga) st0.textContent = 'motivo: ' + window._mfMotivoCarga; } catch(e) {}
     if (!_loadRetryTimer) {
-      _loadRetryTimer = setInterval(function() { if (!document.hidden) loadOrders(true); }, 15000); // tenta sozinho a cada 15s
+      _loadRetryTimer = setInterval(function() { if (!document.hidden) loadOrders(true); }, 45000); // tenta sozinho a cada 45s (mais espaçado, para não sobrecarregar o banco)
     }
   } catch(e) {}
 }
@@ -5408,18 +5408,28 @@ document.addEventListener('focusout', function(e) {
 // ── REALTIME — atualiza só quando há mudança no banco ────────────
 let _realtimeChannel = null;
 
+var _rtPendente = null, _rtTimer = null, _pollAssinatura = null, _pollLeveFalhas = 0, _pollUltimaCompleta = 0;
 function iniciarAutoRefresh() {
   if (_realtimeChannel) return;
+  _pollUltimaCompleta = Date.now();
 
   _realtimeChannel = getSB()
     .channel('marmorflow-changes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, async (payload) => {
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, async function _rtPedidos(payload) {
+      // Junta várias mudanças seguidas (o orçamento salva sozinho a cada 3s) numa única recarga a cada 4s.
+      // Antes, CADA mudança fazia TODOS os aparelhos baixarem todos os pedidos de novo — o que esgotou o disco do banco.
+      if (!payload || !payload.__deb) {
+        _rtPendente = payload || {};
+        if (_rtTimer) return;
+        _rtTimer = setTimeout(function() { _rtTimer = null; var pl = _rtPendente; _rtPendente = null; _rtPedidos(Object.assign({}, pl, { __deb: true })); }, 4000);
+        return;
+      }
       console.log('🔄 Realtime pedidos:', payload?.eventType, payload?.new?.id);
       // Salva data_entregue em memória antes de recarregar
       const dataEntregueMap = {};
       orders.forEach(function(o){ if (o.data_entregue) dataEntregueMap[o.id] = o.data_entregue; });
       // Atualiza os dados em memória sempre
-      await loadOrders();
+      await loadOrders(true);
       // Restaura data_entregue que estava só em memória
       orders.forEach(function(o){ if (!o.data_entregue && dataEntregueMap[o.id]) o.data_entregue = dataEntregueMap[o.id]; });
 
@@ -5462,11 +5472,31 @@ function iniciarAutoRefresh() {
       console.log('Realtime status:', status);
     });
 
-  // Fallback: polling a cada 20s caso Realtime não funcione
+  // Fallback: confere a cada 45s se algo mudou, com uma consulta LEVE (só poucas colunas).
+  // Só baixa todos os pedidos de novo se a assinatura mudou (ou a cada 5 min, por segurança).
   _pollTimer = setInterval(async () => {
+    if (document.hidden) return; // aba em segundo plano não consulta
     if (pedidoOrcAtual) return;
     if (document.querySelector('.modal-overlay.active')) return;
     if (!currentUser) return;
+    let precisaCompleta = (Date.now() - _pollUltimaCompleta) > 300000;
+    try {
+      const r = await Promise.race([
+        getSB().from('pedidos').select('id,stage,valor,updated_at,dataentrega,prod_status').limit(2000),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('sem resposta em 20s')), 20000))
+      ]);
+      if (r.error || !Array.isArray(r.data)) throw (r.error || new Error('sem dados'));
+      const sig = r.data.map(x => [x.id, x.stage, x.valor, x.updated_at, x.dataentrega, x.prod_status ? JSON.stringify(x.prod_status).length : 0].join('|')).sort().join(';');
+      _pollLeveFalhas = 0;
+      if (_pollAssinatura === null) { _pollAssinatura = sig; if (!precisaCompleta) return; }
+      else if (sig !== _pollAssinatura) { _pollAssinatura = sig; precisaCompleta = true; }
+    } catch(e) {
+      _pollLeveFalhas++;
+      if (_pollLeveFalhas < 3) return;   // soluço isolado: ignora
+      precisaCompleta = true;            // 3 falhas seguidas: usa a carga completa, que mostra o aviso vermelho
+    }
+    if (!precisaCompleta) return;
+    _pollUltimaCompleta = Date.now();
     const antes = orders.map(o=>o.id+o.stage+o.valor).join();
     await loadOrders(true); // silencioso — sem mostrar loading
     const depois = orders.map(o=>o.id+o.stage+o.valor).join();
@@ -5477,7 +5507,7 @@ function iniciarAutoRefresh() {
       else if (abaAtiva === 'dashboard') renderDashboard();
       else if (abaAtiva === 'financeiro' && typeof renderFinanceiro==='function') renderFinanceiro();
     }
-  }, 20000);
+  }, 45000);
 }
 
 let _pollTimer = null;
